@@ -2,7 +2,7 @@
 
 End-to-end spatial-genomics workflow for 10x Xenium slides: proseg
 cell-segmentation preprocessing → celltype-marker reference building → RCTD
-deconvolution + SPLIT typing.
+deconvolution + SPLIT processing.
 
 ## Motivation
 
@@ -12,7 +12,7 @@ analysis originally lived across ad-hoc scripts, per-run notebooks, and a
 hand-managed Slurm submit tree; reproducing it on a new sample meant
 recovering local paths and re-deriving intermediate files.
 `xenium-preprocess-pipeline` bundles the chain — proseg → xenium-ranger → RCTD
-reference → RCTD + SPLIT typing — into three publishable packages plus one
+reference → RCTD + SPLIT processing — into three publishable packages plus one
 shell driver, so a new sample runs end-to-end from a single command, with
 every intermediate product traceable to the exact config that built it.
 
