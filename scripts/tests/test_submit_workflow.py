@@ -44,7 +44,14 @@ MOCKS_DIR = Path(__file__).resolve().parent / "mocks"
 def env(tmp_path, monkeypatch):
     """Fresh temp env for each test: an OUTPUT_ROOT under tmp_path, a
     prepped PATH with mocks in front, and log/state files for the mock
-    sbatch."""
+    sbatch.
+
+    Also stubs `micromamba` + `ml` on the fixture's PATH front so the
+    sbatch script's env-activation block (which shells out to micromamba
+    activate + Lmod's `ml`) is a no-op during tests. Otherwise `set -e` +
+    a real micromamba+broken condarc / a missing Lmod would tear the
+    sbatch script down before it ever reaches the mock package CLI.
+    """
     output_root = tmp_path / "runs"
     output_root.mkdir()
 
@@ -53,16 +60,41 @@ def env(tmp_path, monkeypatch):
     state = tmp_path / "sbatch.state"
     state.write_text("1000")
 
+    # Stub micromamba + ml so the sbatch script's env-activation block is
+    # a no-op. `micromamba shell hook --shell bash` must print nothing (so
+    # the `eval "$(...)"` does nothing) and `micromamba activate` +
+    # subsequent commands must exit 0. `ml` must accept any arg (`ml fhR/…`)
+    # and exit 0.
+    stub_bin = tmp_path / "stub_bin"
+    stub_bin.mkdir()
+    micromamba_stub = stub_bin / "micromamba"
+    micromamba_stub.write_text(
+        "#!/usr/bin/env bash\n"
+        "# Test stub: `shell hook` emits nothing (empty eval), everything\n"
+        "# else exits 0 without side effects.\n"
+        "exit 0\n"
+    )
+    micromamba_stub.chmod(0o755)
+    ml_stub = stub_bin / "ml"
+    ml_stub.write_text("#!/usr/bin/env bash\nexit 0\n")
+    ml_stub.chmod(0o755)
+
     original_path = os.environ.get("PATH", "")
-    new_path = f"{MOCKS_DIR}:{original_path}"
+    # Order: MOCKS (xenium-preprocess / ref-build / rctd-split / sbatch)
+    # before stub_bin (micromamba, ml) before the inherited PATH (so the
+    # real micromamba on the host doesn't shadow the stub).
+    new_path = f"{MOCKS_DIR}:{stub_bin}:{original_path}"
 
     e = {
         "PATH": new_path,
         "MOCK_SBATCH_LOG": str(log),
         "MOCK_SBATCH_STATE": str(state),
         "OUTPUT_ROOT": str(output_root),
-        # HOME needs to exist for bash startup; scavenge from parent env.
-        "HOME": os.environ.get("HOME", str(tmp_path)),
+        # HOME points at tmp_path — not the parent's $HOME — because the
+        # sbatch script does `export PATH="$HOME/.local/bin:$PATH"` up
+        # front, which would re-prepend the parent's real micromamba
+        # (from ~/.local/bin) and shadow the stub above.
+        "HOME": str(tmp_path),
     }
     return {
         "env": e,
@@ -851,3 +883,310 @@ def test_start_step_summary_marks_skipped_steps(env, tmp_path):
     # Summary shows step 1 as skipped, step 3 / step 4 as submitted jobids.
     assert "step 1     = skipped" in r.stdout
     assert "start_step = 3" in r.stdout
+
+
+# --------------------------------------------------------------------------
+# Per-step parameter exposure — Tracy's request on
+# settylab/TracyY123-nexus#26 comment 5277569725.
+#
+# Every step's config surface must be regulable at the submit_workflow.sh
+# level via three layers (in precedence order, last wins):
+#   (2) --stepN-config <path>
+#   (3) --override stepN.<dotted.key>=<yaml-val>
+#   (4) --stepN-<param> <value>            (named flag)
+#
+# The tests exercise each layer + the base64 encoding roundtrip that
+# ferries layers 2+3 through slurm's --export=ALL,K=V payload.
+# --------------------------------------------------------------------------
+
+def _step1_log(env, sample, run_id):
+    p = env["output_root"] / sample / f"{sample}_{run_id}" / "logs" / "step1.log"
+    return p.read_text() if p.exists() else ""
+
+
+def _step4_log(env, sample, run_id):
+    p = env["output_root"] / sample / f"{sample}_{run_id}" / "logs" / "step4.log"
+    return p.read_text() if p.exists() else ""
+
+
+# ---- Layer 4: named flags -----------------------------------------------
+
+def test_step1_named_flags_threaded(env, tmp_path):
+    r = _run_driver(env,
+                    "--sample-id", "MH10",
+                    "--flex-h5ad", _flex_h5ad(tmp_path),
+                    "--celltype-marker-json", _marker_json(tmp_path),
+                    "--run-id", "s1flags",
+                    "--step1-x-source", "maxpost_counts",
+                    "--step1-qc-min-counts-cell", "15",
+                    "--step1-gex-only", "false",
+                    "--step1-force-rerun")
+    assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
+    log = _step1_log(env, "MH10", "s1flags")
+    assert "x_source=maxpost_counts" in log
+    assert "qc_min_counts_cell=15" in log
+    assert "gex_only=false" in log
+    assert "force_rerun=1" in log
+
+
+def test_step3_named_flags_threaded(env, tmp_path):
+    target = tmp_path / "target.json"
+    target.write_text("{}")
+    r = _run_driver(env,
+                    "--sample-id", "MH10",
+                    "--flex-h5ad", _flex_h5ad(tmp_path),
+                    "--celltype-marker-json", _marker_json(tmp_path),
+                    "--run-id", "s3flags",
+                    "--step3-donor-borrow-cap", "80",
+                    "--step3-cell-min-instance", "25",
+                    "--step3-min-umi", "15",
+                    "--step3-random-seed", "123",
+                    "--step3-celltype-target-list", str(target))
+    assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
+    log = _step3_log(env, "MH10", "s3flags")
+    assert "donor_borrow_cap=80" in log
+    assert "cell_min_instance=25" in log
+    assert "min_umi=15" in log
+    assert "random_seed=123" in log
+    assert f"celltype_target_list={target}" in log
+
+
+def test_step4_named_flags_threaded(env, tmp_path):
+    r = _run_driver(env,
+                    "--sample-id", "MH10",
+                    "--flex-h5ad", _flex_h5ad(tmp_path),
+                    "--celltype-marker-json", _marker_json(tmp_path),
+                    "--run-id", "s4flags",
+                    "--step4-umi-min", "20",
+                    "--step4-counts-min", "8",
+                    "--step4-cell-min-instance", "30",
+                    "--step4-doublet-mode", "full",
+                    "--step4-postprocess-min-counts", "75",
+                    "--step4-keep-intermediate")
+    assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
+    log = _step4_log(env, "MH10", "s4flags")
+    assert "umi_min=20" in log
+    assert "counts_min=8" in log
+    assert "cell_min_instance=30" in log
+    assert "doublet_mode=full" in log
+    assert "postprocess_min_counts=75" in log
+    assert "keep_intermediate=1" in log
+
+
+def test_named_flags_unset_do_not_thread(env, tmp_path):
+    # Baseline invariant: when no named flags are passed, none of the
+    # STEPN_<PARAM> env vars leak into the --export payload — each step
+    # falls through to its CLI's own default.yaml value.
+    r = _run_driver(env,
+                    "--sample-id", "MH10",
+                    "--flex-h5ad", _flex_h5ad(tmp_path),
+                    "--celltype-marker-json", _marker_json(tmp_path),
+                    "--run-id", "no_flags")
+    assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
+    records = _parse_log(env["log"])
+    for rec in records:
+        for var in (
+            "STEP1_X_SOURCE", "STEP1_QC_MIN_COUNTS_CELL", "STEP1_GEX_ONLY",
+            "STEP1_FORCE_RERUN",
+            "STEP3_DONOR_BORROW_CAP", "STEP3_CELL_MIN_INSTANCE",
+            "STEP3_MIN_UMI", "STEP3_RANDOM_SEED",
+            "STEP3_CELLTYPE_TARGET_LIST",
+            "STEP4_UMI_MIN", "STEP4_COUNTS_MIN", "STEP4_CELL_MIN_INSTANCE",
+            "STEP4_DOUBLET_MODE", "STEP4_POSTPROCESS_MIN_COUNTS",
+            "STEP4_KEEP_INTERMEDIATE",
+            "STEP1_OVERRIDES_B64", "STEP3_OVERRIDES_B64",
+            "STEP4_OVERRIDES_B64",
+        ):
+            assert _export_field(rec, var) is None, (var, rec)
+
+
+# ---- Layer 3: --override (single-key) -----------------------------------
+
+def test_override_single_key_step3(env, tmp_path):
+    r = _run_driver(env,
+                    "--sample-id", "MH10",
+                    "--flex-h5ad", _flex_h5ad(tmp_path),
+                    "--celltype-marker-json", _marker_json(tmp_path),
+                    "--run-id", "ov3",
+                    "--override", "step3.census.random_seed=999")
+    assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
+    # ref-build received --config pointing at a yaml that carries the
+    # override under census.random_seed.
+    log = _step3_log(env, "MH10", "ov3")
+    assert "config_path=" in log
+    assert "config_path=\n" not in log       # non-empty path
+    # The mock cats the yaml; check the merged content.
+    assert "census:" in log
+    assert "random_seed: 999" in log
+
+
+def test_override_nested_list_yaml_parsed(env, tmp_path):
+    # YAML-typed value: a flow-style list — the driver's yaml.safe_load
+    # of the RHS must produce a Python list, and yaml.safe_dump must
+    # emit a valid block list the step CLI's --config loader can read.
+    r = _run_driver(env,
+                    "--sample-id", "MH10",
+                    "--flex-h5ad", _flex_h5ad(tmp_path),
+                    "--celltype-marker-json", _marker_json(tmp_path),
+                    "--run-id", "ov_list",
+                    "--override", "step4.postprocess.leiden.resolutions=[0.5, 0.7, 0.9]")
+    assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
+    log = _step4_log(env, "MH10", "ov_list")
+    assert "postprocess:" in log
+    assert "leiden:" in log
+    assert "resolutions:" in log
+    # Emitted as a YAML block list (default_flow_style=False).
+    assert "- 0.5" in log
+    assert "- 0.7" in log
+    assert "- 0.9" in log
+
+
+def test_override_multiple_keys_merged(env, tmp_path):
+    # Two overrides on the same step get merged into a single yaml.
+    r = _run_driver(env,
+                    "--sample-id", "MH10",
+                    "--flex-h5ad", _flex_h5ad(tmp_path),
+                    "--celltype-marker-json", _marker_json(tmp_path),
+                    "--run-id", "ov_multi",
+                    "--override", "step3.census.random_seed=42",
+                    "--override", "step3.census.donor_borrow_cap=200")
+    assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
+    log = _step3_log(env, "MH10", "ov_multi")
+    assert "random_seed: 42" in log
+    assert "donor_borrow_cap: 200" in log
+
+
+def test_override_wrong_prefix_rejected(env, tmp_path):
+    r = _run_driver(env,
+                    "--sample-id", "MH10",
+                    "--flex-h5ad", _flex_h5ad(tmp_path),
+                    "--celltype-marker-json", _marker_json(tmp_path),
+                    "--override", "step2.foo=1")
+    assert r.returncode != 0
+    assert "step1./step3./step4." in r.stderr
+
+
+def test_override_bare_key_rejected(env, tmp_path):
+    r = _run_driver(env,
+                    "--sample-id", "MH10",
+                    "--flex-h5ad", _flex_h5ad(tmp_path),
+                    "--celltype-marker-json", _marker_json(tmp_path),
+                    "--override", "foo=1")
+    assert r.returncode != 0
+    assert "step1./step3./step4." in r.stderr
+
+
+# ---- Layer 2: --stepN-config <path> -------------------------------------
+
+def test_step_config_yaml_passed_via_config_flag(env, tmp_path):
+    cfg = tmp_path / "step3_user.yaml"
+    cfg.write_text(textwrap.dedent("""\
+        census:
+          cell_min_instance: 33
+        rctd_reference_build:
+          require_int: false
+    """))
+    r = _run_driver(env,
+                    "--sample-id", "MH10",
+                    "--flex-h5ad", _flex_h5ad(tmp_path),
+                    "--celltype-marker-json", _marker_json(tmp_path),
+                    "--run-id", "s3cfg",
+                    "--step3-config", str(cfg))
+    assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
+    log = _step3_log(env, "MH10", "s3cfg")
+    assert "cell_min_instance: 33" in log
+    assert "require_int: false" in log
+
+
+def test_step_config_and_override_merged(env, tmp_path):
+    # Overrides layer on top of --stepN-config's contents. When both touch
+    # the SAME key, the override wins.
+    cfg = tmp_path / "step3_base.yaml"
+    cfg.write_text(textwrap.dedent("""\
+        census:
+          cell_min_instance: 33
+          donor_borrow_cap: 111
+    """))
+    r = _run_driver(env,
+                    "--sample-id", "MH10",
+                    "--flex-h5ad", _flex_h5ad(tmp_path),
+                    "--celltype-marker-json", _marker_json(tmp_path),
+                    "--run-id", "s3merge",
+                    "--step3-config", str(cfg),
+                    "--override", "step3.census.donor_borrow_cap=222",
+                    "--override", "step3.census.random_seed=7")
+    assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
+    log = _step3_log(env, "MH10", "s3merge")
+    # Preserved from --step3-config
+    assert "cell_min_instance: 33" in log
+    # Overridden by --override
+    assert "donor_borrow_cap: 222" in log
+    assert "donor_borrow_cap: 111" not in log
+    # New key from --override alone
+    assert "random_seed: 7" in log
+
+
+# ---- Precedence: named flag beats --override + --stepN-config -----------
+
+def test_named_flag_overrides_config_yaml(env, tmp_path):
+    # --step3-config sets random_seed=1; --step3-random-seed=9 should win.
+    cfg = tmp_path / "seed_cfg.yaml"
+    cfg.write_text("census:\n  random_seed: 1\n")
+    r = _run_driver(env,
+                    "--sample-id", "MH10",
+                    "--flex-h5ad", _flex_h5ad(tmp_path),
+                    "--celltype-marker-json", _marker_json(tmp_path),
+                    "--run-id", "s3prec",
+                    "--step3-config", str(cfg),
+                    "--step3-random-seed", "9")
+    assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
+    log = _step3_log(env, "MH10", "s3prec")
+    # random_seed: 1 is in the yaml but ref-build sees --random-seed 9 too;
+    # our mock records whichever `--random-seed` value ref-build gets last,
+    # which is the CLI-flag one. This mirrors ref-build's own precedence
+    # (CLI flag > user YAML > default.yaml).
+    assert "random_seed=9" in log
+
+
+# ---- Dry-run visibility --------------------------------------------------
+
+def test_dry_run_shows_new_step_env_vars(env, tmp_path):
+    # Under --dry-run the driver prints the sbatch command with the full
+    # --export payload, so operators can eyeball what each step receives
+    # (Tracy's task: "update --dry-run to show what each step would
+    # receive"). No fs side effects.
+    r = _run_driver(env,
+                    "--sample-id", "MH10",
+                    "--flex-h5ad", _flex_h5ad(tmp_path),
+                    "--celltype-marker-json", _marker_json(tmp_path),
+                    "--run-id", "dr_show",
+                    "--step1-qc-min-counts-cell", "50",
+                    "--step3-min-umi", "12",
+                    "--step4-doublet-mode", "full",
+                    "--override", "step4.postprocess.qc.min_counts=99",
+                    "--dry-run")
+    assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
+    combined = r.stdout + r.stderr
+    assert "STEP1_QC_MIN_COUNTS_CELL=50" in combined
+    assert "STEP3_MIN_UMI=12" in combined
+    assert "STEP4_DOUBLET_MODE=full" in combined
+    assert "STEP4_OVERRIDES_B64=" in combined
+    # No submissions.
+    assert _parse_log(env["log"]) == []
+
+
+def test_help_lists_new_flags(env):
+    r = _run_driver(env, "--help")
+    assert r.returncode == 0
+    for flag in (
+        "--step1-x-source", "--step1-qc-min-counts-cell", "--step1-gex-only",
+        "--step1-force-rerun",
+        "--step3-donor-borrow-cap", "--step3-cell-min-instance",
+        "--step3-min-umi", "--step3-random-seed",
+        "--step3-celltype-target-list",
+        "--step4-umi-min", "--step4-counts-min",
+        "--step4-cell-min-instance", "--step4-doublet-mode",
+        "--step4-postprocess-min-counts", "--step4-keep-intermediate",
+        "--stepN-config", "--override",
+    ):
+        assert flag in r.stdout, flag

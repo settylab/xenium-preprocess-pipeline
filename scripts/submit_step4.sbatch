@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #SBATCH --job-name=rs_step4
-#SBATCH --partition=YOUR_PARTITION
+#SBATCH --partition=campus-new
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=256G
 #SBATCH --time=24:00:00
@@ -15,6 +15,19 @@
 #     SAMPLE               (required)  Sample id.
 #     OUTPUT_ROOT          (required)  Root output directory.
 #     RUN_ID               (required)  Shared run id.
+#     MAX_CORES            (optional)  Passed as --max-cores. Default: 12.
+#     STEP4_UMI_MIN        (optional)  Passed as --umi-min.
+#     STEP4_COUNTS_MIN     (optional)  Passed as --counts-min.
+#     STEP4_CELL_MIN_INSTANCE (optional) Passed as --cell-min-instance.
+#     STEP4_DOUBLET_MODE   (optional)  Passed as --doublet-mode.
+#     STEP4_POSTPROCESS_MIN_COUNTS (opt.) Passed as --postprocess-min-counts.
+#     STEP4_KEEP_INTERMEDIATE (optional) If '1', passes --keep-intermediate.
+#     STEP4_OVERRIDES_B64  (optional)  base64-encoded YAML from the driver's
+#                                      --step4-config + --override
+#                                      step4.<key>=<val>. When set, decoded
+#                                      to a tmpfile and passed to `rctd-split
+#                                      run --config <tmp>` before the named
+#                                      flags (so named flags win).
 #
 # Uses the run-scoped layout to locate step-1 test_object.rds and step-3
 # reference.rds automatically:
@@ -35,12 +48,12 @@
 set -euo pipefail
 
 # --- Python + R environments -------------------------------------------------
-# The default env name is `xenium` (internal issue review). Override
+# Tracy's env is named `xenium` (issue #26 comment 5258774668). Override
 # RCTD_SPLIT_ENV in your calling shell (or here) if you use a different env
 # for rctd-split. Tries micromamba first, falls back to conda, so the same
 # block works for either. `ml fhR/4.4.1-foss-2023b` provides Seurat + spacexr
 # + SPLIT for the rctd_run and split_purify R stages (see
-# docs/installation.md).
+# scratch/rctd-split/README.md).
 export PATH="$HOME/.local/bin:$PATH"        # so `micromamba`/`conda` resolves
 _env_name="${RCTD_SPLIT_ENV:-xenium}"
 if command -v micromamba >/dev/null 2>&1; then
@@ -51,15 +64,15 @@ elif command -v conda >/dev/null 2>&1; then
     conda activate "$_env_name"
 else
     echo "error: neither micromamba nor conda found on PATH." >&2
-    echo "       See docs/installation.md." >&2
+    echo "       See scratch/rctd-split/README.md § Installation." >&2
     exit 4
 fi
 ml fhR/4.4.1-foss-2023b
 # fhR pulls in Python/3.11 + SciPy-bundle/2023.11 as deps and sets
 # PYTHONPATH to their python3.11/site-packages. The micromamba env's
 # python (3.13) then imports numpy from that path and crashes on the
-# C-extension mismatch (see (internal issue review) comment
-# (internal issue review)). R has no need for PYTHONPATH — drop it.
+# C-extension mismatch (see settylab/TracyY123-nexus#26 comment
+# 5258986672). R has no need for PYTHONPATH — drop it.
 unset PYTHONPATH
 
 # Diagnostic breadcrumb — makes any downstream failure log self-explaining.
@@ -70,13 +83,13 @@ echo "[step4] rctd-split -> $(command -v rctd-split || echo '<none>')"
 # Without this check a missing install surfaces only as an opaque
 # `rctd-split: command not found` with no hint at the fix.
 _cli="rctd-split"
-_pkg_src="${XENIUM_PREPROCESS_PIPELINE_ROOT:-<path-to-xenium-preprocess-pipeline>}/packages/rctd-split"
+_pkg_src="/fh/fast/setty_m/user/ryang/nexus/nexus-code/scratch/rctd-split"
 if ! command -v "$_cli" >/dev/null 2>&1; then
     cat >&2 <<EOF
 error: '$_cli' is not installed in env '$_env_name'.
        Install it once, from a login node:
            micromamba activate $_env_name
-           uv pip install -e $_pkg_src
+           pip install -e $_pkg_src
        Then re-submit the workflow.
 EOF
     exit 5
@@ -96,8 +109,44 @@ RUN_ID="${RUN_ID:-$SLURM_JOB_ID}"
 # before invoking submit_workflow.sh.
 MAX_CORES="${MAX_CORES:-12}"
 
+# --config passthrough from driver's --step4-config + --override
+# step4.<key>=<val>. When neither was set the driver leaves
+# STEP4_OVERRIDES_B64 unset, and CONFIG_ARGS stays empty.
+CONFIG_ARGS=()
+if [[ -n "${STEP4_OVERRIDES_B64:-}" ]]; then
+    STEP4_TMP_CFG=$(mktemp -t step4_cfg.XXXXXX.yaml)
+    trap 'rm -f "$STEP4_TMP_CFG"' EXIT
+    printf '%s' "$STEP4_OVERRIDES_B64" | base64 -d > "$STEP4_TMP_CFG"
+    CONFIG_ARGS=(--config "$STEP4_TMP_CFG")
+fi
+
+# Named per-step params — each maps 1:1 to an existing rctd-split CLI flag.
+# Materialized AFTER --config so rctd-split's own precedence (CLI flag >
+# user YAML > default.yaml) lets these override the yaml transparently.
+NAMED_ARGS=()
+if [[ -n "${STEP4_UMI_MIN:-}" ]]; then
+    NAMED_ARGS+=(--umi-min "$STEP4_UMI_MIN")
+fi
+if [[ -n "${STEP4_COUNTS_MIN:-}" ]]; then
+    NAMED_ARGS+=(--counts-min "$STEP4_COUNTS_MIN")
+fi
+if [[ -n "${STEP4_CELL_MIN_INSTANCE:-}" ]]; then
+    NAMED_ARGS+=(--cell-min-instance "$STEP4_CELL_MIN_INSTANCE")
+fi
+if [[ -n "${STEP4_DOUBLET_MODE:-}" ]]; then
+    NAMED_ARGS+=(--doublet-mode "$STEP4_DOUBLET_MODE")
+fi
+if [[ -n "${STEP4_POSTPROCESS_MIN_COUNTS:-}" ]]; then
+    NAMED_ARGS+=(--postprocess-min-counts "$STEP4_POSTPROCESS_MIN_COUNTS")
+fi
+if [[ "${STEP4_KEEP_INTERMEDIATE:-0}" == "1" ]]; then
+    NAMED_ARGS+=(--keep-intermediate)
+fi
+
 rctd-split run \
     --sample-id   "$SAMPLE" \
     --output-root "$OUTPUT_ROOT" \
     --run-id      "$RUN_ID" \
-    --max-cores   "$MAX_CORES"
+    --max-cores   "$MAX_CORES" \
+    "${CONFIG_ARGS[@]}" \
+    "${NAMED_ARGS[@]}"

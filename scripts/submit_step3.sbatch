@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #SBATCH --job-name=rb_step3
-#SBATCH --partition=YOUR_PARTITION
+#SBATCH --partition=campus-new
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=64G
 #SBATCH --time=6:00:00
@@ -19,7 +19,7 @@
 #                                      step3.flex_h5ad_path in
 #                                      resolved_config.yaml. NO copy, NO
 #                                      symlink (reference-in-place per
-#                                      comment (internal) §1).
+#                                      comment 5251080220 §1).
 #     CELLTYPE_MARKER_JSON (required)  Marker-gene JSON declaring the
 #                                      expected celltype set; threaded to
 #                                      ref-build run --celltype-marker-json.
@@ -40,6 +40,18 @@
 #                                      `ref-build run`. Unset ⇒ ref-build's
 #                                      config default
 #                                      (Final_level1_celltype_annotation).
+#     STEP3_DONOR_BORROW_CAP     (optional) Passed as --donor-borrow-cap.
+#     STEP3_CELL_MIN_INSTANCE    (optional) Passed as --cell-min-instance.
+#     STEP3_MIN_UMI              (optional) Passed as --min-umi.
+#     STEP3_RANDOM_SEED          (optional) Passed as --random-seed.
+#     STEP3_CELLTYPE_TARGET_LIST (optional) Passed as --celltype-target-list.
+#     STEP3_OVERRIDES_B64        (optional) base64-encoded YAML from the
+#                                      driver's --step3-config +
+#                                      --override step3.<key>=<val>. When
+#                                      set, decoded to a tmpfile and
+#                                      passed to `ref-build run --config
+#                                      <tmp>` before the named flags (so
+#                                      named flags win).
 #
 # Writes:
 #     <OUTPUT_ROOT>/<SAMPLE>/<SAMPLE>_<RUN_ID>/rctd/<SAMPLE>_reference_post_rules.h5ad
@@ -50,11 +62,11 @@
 set -euo pipefail
 
 # --- Python + R environments -------------------------------------------------
-# The default env name is `xenium` (internal issue review). Override
+# Tracy's env is named `xenium` (issue #26 comment 5258774668). Override
 # REF_BUILD_ENV in your calling shell (or here) if you use a different env
 # for ref-build. Tries micromamba first, falls back to conda, so the same
 # block works for either. `ml fhR/4.4.1-foss-2023b` provides Seurat + spacexr
-# for the rctd_reference_build R stage (see docs/installation.md).
+# for the rctd_reference_build R stage (see scratch/ref-build/README.md).
 export PATH="$HOME/.local/bin:$PATH"        # so `micromamba`/`conda` resolves
 _env_name="${REF_BUILD_ENV:-xenium}"
 if command -v micromamba >/dev/null 2>&1; then
@@ -65,15 +77,15 @@ elif command -v conda >/dev/null 2>&1; then
     conda activate "$_env_name"
 else
     echo "error: neither micromamba nor conda found on PATH." >&2
-    echo "       See docs/installation.md." >&2
+    echo "       See scratch/ref-build/README.md § Installation." >&2
     exit 4
 fi
 ml fhR/4.4.1-foss-2023b
 # fhR pulls in Python/3.11 + SciPy-bundle/2023.11 as deps and sets
 # PYTHONPATH to their python3.11/site-packages. The micromamba env's
 # python (3.13) then imports numpy from that path and crashes on the
-# C-extension mismatch (see (internal issue review) comment
-# (internal issue review)). R has no need for PYTHONPATH — drop it.
+# C-extension mismatch (see settylab/TracyY123-nexus#26 comment
+# 5258986672). R has no need for PYTHONPATH — drop it.
 unset PYTHONPATH
 
 # Diagnostic breadcrumb — makes any downstream failure log self-explaining.
@@ -84,13 +96,13 @@ echo "[step3] ref-build -> $(command -v ref-build || echo '<none>')"
 # Without this check a missing install surfaces only as an opaque
 # `ref-build: command not found` with no hint at the fix.
 _cli="ref-build"
-_pkg_src="${XENIUM_PREPROCESS_PIPELINE_ROOT:-<path-to-xenium-preprocess-pipeline>}/packages/ref-build"
+_pkg_src="/fh/fast/setty_m/user/ryang/nexus/nexus-code/scratch/ref-build"
 if ! command -v "$_cli" >/dev/null 2>&1; then
     cat >&2 <<EOF
 error: '$_cli' is not installed in env '$_env_name'.
        Install it once, from a login node:
            micromamba activate $_env_name
-           uv pip install -e $_pkg_src
+           pip install -e $_pkg_src
        Then re-submit the workflow.
 EOF
     exit 5
@@ -126,12 +138,45 @@ if [[ -n "${CELLTYPE_COL_FOR_REF_BUILD:-}" ]]; then
     CELLTYPE_COL_ARGS=(--celltype-col "$CELLTYPE_COL_FOR_REF_BUILD")
 fi
 
+# --config passthrough from driver's --step3-config + --override
+# step3.<key>=<val>. When neither was set the driver leaves
+# STEP3_OVERRIDES_B64 unset, and CONFIG_ARGS stays empty.
+CONFIG_ARGS=()
+if [[ -n "${STEP3_OVERRIDES_B64:-}" ]]; then
+    STEP3_TMP_CFG=$(mktemp -t step3_cfg.XXXXXX.yaml)
+    trap 'rm -f "$STEP3_TMP_CFG"' EXIT
+    printf '%s' "$STEP3_OVERRIDES_B64" | base64 -d > "$STEP3_TMP_CFG"
+    CONFIG_ARGS=(--config "$STEP3_TMP_CFG")
+fi
+
+# Named per-step params — each maps 1:1 to an existing ref-build CLI flag.
+# Materialized AFTER --config so ref-build's own precedence (CLI flag >
+# user YAML > default.yaml) lets these override the yaml transparently.
+NAMED_ARGS=()
+if [[ -n "${STEP3_DONOR_BORROW_CAP:-}" ]]; then
+    NAMED_ARGS+=(--donor-borrow-cap "$STEP3_DONOR_BORROW_CAP")
+fi
+if [[ -n "${STEP3_CELL_MIN_INSTANCE:-}" ]]; then
+    NAMED_ARGS+=(--cell-min-instance "$STEP3_CELL_MIN_INSTANCE")
+fi
+if [[ -n "${STEP3_MIN_UMI:-}" ]]; then
+    NAMED_ARGS+=(--min-umi "$STEP3_MIN_UMI")
+fi
+if [[ -n "${STEP3_RANDOM_SEED:-}" ]]; then
+    NAMED_ARGS+=(--random-seed "$STEP3_RANDOM_SEED")
+fi
+if [[ -n "${STEP3_CELLTYPE_TARGET_LIST:-}" ]]; then
+    NAMED_ARGS+=(--celltype-target-list "$STEP3_CELLTYPE_TARGET_LIST")
+fi
+
 ref-build run \
     --sample-id            "$SAMPLE" \
     --output-root          "$OUTPUT_ROOT" \
     --run-id               "$RUN_ID" \
     --flex-h5ad            "$FLEX_H5AD" \
     --celltype-marker-json "$CELLTYPE_MARKER_JSON" \
+    "${CONFIG_ARGS[@]}" \
     "${CELLTYPE_COL_ARGS[@]}" \
+    "${NAMED_ARGS[@]}" \
     "${DONOR_ARGS[@]}" \
     "${FALLBACK_ARGS[@]}"

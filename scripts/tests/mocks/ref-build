@@ -18,6 +18,14 @@ celltype_marker_json=""
 celltype_col=""
 donors=()
 fallback_donors=()
+config_path=""
+donor_borrow_cap=""
+cell_min_instance=""
+min_umi=""
+random_seed=""
+celltype_target_list=""
+
+raw_argv=("$@")
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -29,6 +37,12 @@ while [[ $# -gt 0 ]]; do
         --celltype-col)           celltype_col="$2"; shift 2 ;;
         --donor-h5ad)             donors+=("$2"); shift 2 ;;
         --fallback-donor-h5ad)    fallback_donors+=("$2"); shift 2 ;;
+        --config)                 config_path="$2"; shift 2 ;;
+        --donor-borrow-cap)       donor_borrow_cap="$2"; shift 2 ;;
+        --cell-min-instance)      cell_min_instance="$2"; shift 2 ;;
+        --min-umi)                min_umi="$2"; shift 2 ;;
+        --random-seed)            random_seed="$2"; shift 2 ;;
+        --celltype-target-list)   celltype_target_list="$2"; shift 2 ;;
         *) shift ;;
     esac
 done
@@ -58,6 +72,18 @@ mkdir -p "$run_dir/rctd" "$run_dir/logs"
     for p in "${donors[@]}"; do echo "donor=$p"; done
     echo "fallback_donors_count=${#fallback_donors[@]}"
     for p in "${fallback_donors[@]}"; do echo "fallback_donor=$p"; done
+    echo "donor_borrow_cap=$donor_borrow_cap"
+    echo "cell_min_instance=$cell_min_instance"
+    echo "min_umi=$min_umi"
+    echo "random_seed=$random_seed"
+    echo "celltype_target_list=$celltype_target_list"
+    echo "config_path=$config_path"
+    if [[ -n "$config_path" && -f "$config_path" ]]; then
+        echo "--- config yaml ---"
+        cat "$config_path"
+        echo "--- end config ---"
+    fi
+    echo "raw_argv=${raw_argv[*]}"
 } > "$run_dir/logs/step3.log"
 
 # Merge step3 key into resolved_config.yaml, preserving siblings.

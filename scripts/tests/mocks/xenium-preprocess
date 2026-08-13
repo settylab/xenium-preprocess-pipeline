@@ -14,12 +14,26 @@ shift
 sample=""
 output_root=""
 run_id=""
+config_path=""
+x_source=""
+qc_min_counts_cell=""
+gex_only=""
+force_rerun=0
+
+# Capture the raw argv so tests can assert on the flags xenium-preprocess
+# receives (in particular for per-step overrides threaded from the driver).
+raw_argv=("$@")
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --sample-id)   sample="$2"; shift 2 ;;
-        --output-root) output_root="$2"; shift 2 ;;
-        --run-id)      run_id="$2"; shift 2 ;;
+        --sample-id)              sample="$2"; shift 2 ;;
+        --output-root)            output_root="$2"; shift 2 ;;
+        --run-id)                 run_id="$2"; shift 2 ;;
+        --config)                 config_path="$2"; shift 2 ;;
+        --x-source)               x_source="$2"; shift 2 ;;
+        --qc-min-counts-cell)     qc_min_counts_cell="$2"; shift 2 ;;
+        --gex-only)               gex_only="$2"; shift 2 ;;
+        --force-rerun)            force_rerun=1; shift ;;
         --proseg-dir|--xenium-cells|--xenium-ranger-dir) shift 2 ;;
         *) shift ;;
     esac
@@ -35,7 +49,20 @@ mkdir -p "$run_dir/spatial_adata" "$run_dir/rctd" "$run_dir/logs"
 : > "$run_dir/spatial_adata/${sample}_proseg_raw.h5ad"
 : > "$run_dir/spatial_adata/${sample}_xenium_ranger.h5ad"
 : > "$run_dir/rctd/${sample}_test_object.rds"
-echo "step1 ok" > "$run_dir/logs/step1.log"
+{
+    echo "step1 ok"
+    echo "x_source=$x_source"
+    echo "qc_min_counts_cell=$qc_min_counts_cell"
+    echo "gex_only=$gex_only"
+    echo "force_rerun=$force_rerun"
+    echo "config_path=$config_path"
+    if [[ -n "$config_path" && -f "$config_path" ]]; then
+        echo "--- config yaml ---"
+        cat "$config_path"
+        echo "--- end config ---"
+    fi
+    echo "raw_argv=${raw_argv[*]}"
+} > "$run_dir/logs/step1.log"
 
 # Merge step1 key into resolved_config.yaml (crude but preserves siblings).
 cfg="$run_dir/resolved_config.yaml"

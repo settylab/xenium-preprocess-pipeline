@@ -13,12 +13,30 @@ shift
 sample=""
 output_root=""
 run_id=""
+config_path=""
+umi_min=""
+counts_min=""
+cell_min_instance=""
+doublet_mode=""
+postprocess_min_counts=""
+keep_intermediate=0
+max_cores=""
+
+raw_argv=("$@")
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --sample-id)   sample="$2"; shift 2 ;;
-        --output-root) output_root="$2"; shift 2 ;;
-        --run-id)      run_id="$2"; shift 2 ;;
+        --sample-id)                 sample="$2"; shift 2 ;;
+        --output-root)               output_root="$2"; shift 2 ;;
+        --run-id)                    run_id="$2"; shift 2 ;;
+        --config)                    config_path="$2"; shift 2 ;;
+        --umi-min)                   umi_min="$2"; shift 2 ;;
+        --counts-min)                counts_min="$2"; shift 2 ;;
+        --cell-min-instance)         cell_min_instance="$2"; shift 2 ;;
+        --doublet-mode)              doublet_mode="$2"; shift 2 ;;
+        --postprocess-min-counts)    postprocess_min_counts="$2"; shift 2 ;;
+        --keep-intermediate)         keep_intermediate=1; shift ;;
+        --max-cores)                 max_cores="$2"; shift 2 ;;
         *) shift ;;
     esac
 done
@@ -44,7 +62,23 @@ mkdir -p "$run_dir/rctd" "$run_dir/spatial_adata" "$run_dir/logs"
 touch "$run_dir/spatial_adata/${sample}_proseg_raw.h5ad"
 touch "$run_dir/spatial_adata/${sample}_xenium_ranger.h5ad"
 
-echo "step4 ok" > "$run_dir/logs/step4.log"
+{
+    echo "step4 ok"
+    echo "umi_min=$umi_min"
+    echo "counts_min=$counts_min"
+    echo "cell_min_instance=$cell_min_instance"
+    echo "doublet_mode=$doublet_mode"
+    echo "postprocess_min_counts=$postprocess_min_counts"
+    echo "keep_intermediate=$keep_intermediate"
+    echo "max_cores=$max_cores"
+    echo "config_path=$config_path"
+    if [[ -n "$config_path" && -f "$config_path" ]]; then
+        echo "--- config yaml ---"
+        cat "$config_path"
+        echo "--- end config ---"
+    fi
+    echo "raw_argv=${raw_argv[*]}"
+} > "$run_dir/logs/step4.log"
 
 cfg="$run_dir/resolved_config.yaml"
 python3 - "$cfg" "$sample" "$run_id" <<'PY'

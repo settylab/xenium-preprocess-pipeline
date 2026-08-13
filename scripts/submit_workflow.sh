@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # submit_workflow.sh — top-level driver for the step-1 → step-3 → step-4
-# spatial-genomics workflow (internal issue review).
+# spatial-genomics workflow (settylab/TracyY123-nexus#26 comment 5251080220).
 #
 # Submits up to three sbatch jobs and chains them with --dependency=afterok:
 #     JOB1 (step 1, xenium-preprocess)
@@ -8,8 +8,8 @@
 #             └── JOB4 (step 4, rctd-split)   afterok:JOB3
 #
 # --start-step lets an operator resume the chain when earlier steps have
-# already produced their outputs in the run folder (internal issue review)
-# comment (internal)). --start-step 3 skips JOB1 (step 3 submits with no
+# already produced their outputs in the run folder (settylab/TracyY123-nexus#26
+# comment 5260289249). --start-step 3 skips JOB1 (step 3 submits with no
 # dependency); --start-step 4 skips JOB1 + JOB3.
 #
 # All submitted jobs share a single RUN_ID, propagated via --export=ALL,RUN_ID=…
@@ -45,21 +45,21 @@
 #         --start-step 3/4 (would wipe the prerequisites we're resuming from).
 #
 # Usage:
-#     ./submit_workflow.sh --sample-id SAMPLE1 --flex-h5ad /path/flex.h5ad \
+#     ./submit_workflow.sh --sample-id MH10 --flex-h5ad /path/flex.h5ad \
 #                          --celltype-marker-json /path/markers.json
 #     # Resume from step 3 (step 1 already ran, keep its outputs):
-#     ./submit_workflow.sh --sample-id SAMPLE1 --flex-h5ad /path/flex.h5ad \
+#     ./submit_workflow.sh --sample-id MH10 --flex-h5ad /path/flex.h5ad \
 #                          --celltype-marker-json /path/markers.json \
 #                          --run-id my_experiment_v2 \
 #                          --start-step 3 --reuse-run-dir
 #     # From-scratch re-run under an existing run-id (destructive):
-#     ./submit_workflow.sh --sample-id SAMPLE1 --flex-h5ad /path/flex.h5ad \
+#     ./submit_workflow.sh --sample-id MH10 --flex-h5ad /path/flex.h5ad \
 #                          --celltype-marker-json /path/markers.json \
 #                          --run-id my_experiment_v2 --force
-#     RUN_ID=my_id ./submit_workflow.sh --sample-id SAMPLE1 \
+#     RUN_ID=my_id ./submit_workflow.sh --sample-id MH10 \
 #                          --flex-h5ad /path/flex.h5ad \
 #                          --celltype-marker-json /path/markers.json
-#     ./submit_workflow.sh --sample-id SAMPLE1 --flex-h5ad /path/flex.h5ad \
+#     ./submit_workflow.sh --sample-id MH10 --flex-h5ad /path/flex.h5ad \
 #                          --celltype-marker-json /path/markers.json \
 #                          --dry-run       # print sbatch commands, don't submit
 #
@@ -72,6 +72,26 @@
 #     args on `ref-build run`. Empty (default) is safe: ref-build's Rule 5
 #     fallback path is skipped when no fallback donors are passed and no
 #     supplementation happens when no donors are passed.
+#
+# Per-step parameter exposure
+# (settylab/TracyY123-nexus#26 comment 5277569725):
+#     Every step's config surface is regulable from this driver via three
+#     layers, applied in this precedence (last wins):
+#         (1) step's own config/default.yaml
+#         (2) --stepN-config <path>              (full user YAML for step N)
+#         (3) --override stepN.<dotted.key>=<yaml-val>   (repeatable)
+#         (4) --stepN-<param> <value>            (named driver flag)
+#     Named flags cover the ~15 params Tracy has historically tuned. The
+#     --override form is a catch-all for any nested config key not covered
+#     by a named flag; values are YAML-parsed (so lists / bools / ints
+#     round-trip via `[0.5, 0.7]` / `true` / `42`).
+#     Threading: each step gets a base64-encoded YAML env var
+#     (STEPN_OVERRIDES_B64) built from layers 2 + 3, decoded in the sbatch
+#     script and passed via `--config`. Named flags (layer 4) are threaded
+#     as env vars (STEPN_<PARAM>=<value>) and materialized as `--flag value`
+#     on the step CLI, whose own precedence order lets them override the
+#     yaml naturally. Base64 encoding sidesteps the comma-in-value trap
+#     with slurm's `--export=ALL,K=V,K=V` payload format.
 
 set -euo pipefail
 
@@ -82,7 +102,7 @@ set -euo pipefail
 # Script dir — location of submit_stepN.sbatch stubs.
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
-DEFAULT_OUTPUT_ROOT=${OUTPUT_ROOT:-}
+DEFAULT_OUTPUT_ROOT=${OUTPUT_ROOT:-/fh/fast/setty_m/user/ryang/workflow_runs}
 
 SAMPLE_ID=""
 FLEX_H5AD=""
@@ -94,7 +114,7 @@ REUSE_RUN_DIR=0
 DRY_RUN=0
 START_STEP=1
 # Optional extra step-1 inputs (all resolved by config/default.yaml if
-# omitted, but the standard flow needs them named).
+# omitted, but Tracy's normal flow needs them named).
 PROSEG_DIR=""
 XENIUM_CELLS=""
 XENIUM_RANGER_DIR=""
@@ -111,13 +131,51 @@ CELLTYPE_COL_FOR_REF_BUILD=""
 # step-4's sbatch alloc (--cpus-per-task=16); larger values will oversubscribe.
 MAX_CORES_OVERRIDE="${MAX_CORES:-}"
 
+# ---------------------------------------------------------------------------
+# Per-step named parameter overrides. Empty ⇒ step CLI's config default.
+# Every entry here maps 1:1 onto a flag the step's own CLI already accepts,
+# so we can thread as env var → materialize as `--flag value` in the sbatch
+# script. Precedence: named flag wins over --override and --stepN-config
+# (matches each step CLI's own precedence).
+# ---------------------------------------------------------------------------
+# Step 1 (xenium-preprocess)
+STEP1_X_SOURCE=""                # --x-source           (maxpost_counts|expected_counts)
+STEP1_QC_MIN_COUNTS_CELL=""      # --qc-min-counts-cell (int)
+STEP1_GEX_ONLY=""                # --gex-only           (bool)
+STEP1_FORCE_RERUN=0              # --force-rerun        (flag)
+# Step 3 (ref-build)
+STEP3_DONOR_BORROW_CAP=""        # --donor-borrow-cap        (int)
+STEP3_CELL_MIN_INSTANCE=""       # --cell-min-instance       (int)
+STEP3_MIN_UMI=""                 # --min-umi                 (int)
+STEP3_RANDOM_SEED=""             # --random-seed             (int)
+STEP3_CELLTYPE_TARGET_LIST=""    # --celltype-target-list    (path)
+# Step 4 (rctd-split)
+STEP4_UMI_MIN=""                 # --umi-min                    (int)
+STEP4_COUNTS_MIN=""              # --counts-min                 (int)
+STEP4_CELL_MIN_INSTANCE=""       # --cell-min-instance          (int)
+STEP4_DOUBLET_MODE=""            # --doublet-mode               (str)
+STEP4_POSTPROCESS_MIN_COUNTS=""  # --postprocess-min-counts     (int)
+STEP4_KEEP_INTERMEDIATE=0        # --keep-intermediate          (flag)
+
+# ---------------------------------------------------------------------------
+# Per-step config file (layer 2) and dotted-key --override list (layer 3).
+# Empty by default ⇒ step falls through to its own default.yaml. See the
+# module docstring's "Per-step parameter exposure" block for precedence.
+# ---------------------------------------------------------------------------
+STEP1_CONFIG=""
+STEP3_CONFIG=""
+STEP4_CONFIG=""
+STEP1_OVERRIDES=()
+STEP3_OVERRIDES=()
+STEP4_OVERRIDES=()
+
 usage() {
     cat <<'EOF'
 Usage: submit_workflow.sh --sample-id <S> --flex-h5ad <path>
                           --celltype-marker-json <path> [OPTIONS]
 
 Required:
-  --sample-id <S>              Sample identifier (e.g. SAMPLE1).
+  --sample-id <S>              Sample identifier (e.g. MH10).
   --flex-h5ad <path>           Flex scRNA h5ad (recorded verbatim under
                                step3.flex_h5ad_path in resolved_config.yaml;
                                no copy / no symlink).
@@ -126,8 +184,9 @@ Required:
                                threaded to ref-build run --celltype-marker-json).
 
 Optional:
-  --output-root <dir>          Root output directory. Required unless
-                               the OUTPUT_ROOT env var is set.
+  --output-root <dir>          Root output directory (default: env
+                               OUTPUT_ROOT, else
+                               /fh/fast/setty_m/user/ryang/workflow_runs).
   --run-id <id>                Explicit run identifier. Precedence:
                                --run-id > $RUN_ID env > JOB1 SLURM_JOB_ID.
                                Required when --start-step > 1.
@@ -172,6 +231,63 @@ Optional:
                                Only meaningful up to step-4's sbatch
                                alloc (--cpus-per-task=16); larger
                                values oversubscribe the R workers.
+
+Per-step named parameters
+(TracyY123-nexus#26 comment 5277569725; every one maps to an existing
+step CLI flag; empty ⇒ step CLI's default.yaml value):
+
+  Step 1 (xenium-preprocess):
+    --step1-x-source <src>            proseg_to_anndata.x_source
+                                      (maxpost_counts|expected_counts).
+                                      Default: maxpost_counts.
+    --step1-qc-min-counts-cell <N>    qc_filter.min_counts_cell (int).
+                                      Default: 10.
+    --step1-gex-only <bool>           xenium_ranger_to_anndata.gex_only.
+                                      Default: true.
+    --step1-force-rerun               Nuke step-1's per-stage sentinels
+                                      and re-run every stage.
+
+  Step 3 (ref-build):
+    --step3-donor-borrow-cap <N>      census.donor_borrow_cap (int).
+                                      Default: 100.
+    --step3-cell-min-instance <N>     census.cell_min_instance (int).
+                                      Default: 20.
+    --step3-min-umi <N>               rctd_reference_build.min_UMI (int).
+                                      Default: 10.
+    --step3-random-seed <N>           census.random_seed (int).
+                                      Default: 42.
+    --step3-celltype-target-list <p>  census.celltype_target_list (path).
+                                      Default: null (marker JSON keys).
+
+  Step 4 (rctd-split):
+    --step4-umi-min <N>               rctd_run.UMI_min (int). Default: 10.
+    --step4-counts-min <N>            rctd_run.counts_MIN (int).
+                                      Default: 10.
+    --step4-cell-min-instance <N>     rctd_run.CELL_MIN_INSTANCE (int).
+                                      Default: 20.
+    --step4-doublet-mode <mode>       rctd_run.doublet_mode (str).
+                                      Default: doublet.
+    --step4-postprocess-min-counts <N>
+                                      postprocess.qc.min_counts (int).
+                                      Default: 50.
+    --step4-keep-intermediate         Keep <run_dir>/intermediate/ after
+                                      step 4 completes. Default: drop.
+
+Per-step catch-all overrides
+(for any nested config key NOT covered by the named flags above):
+
+  --stepN-config <path>        Full YAML for step N (N in 1|3|4). Threaded
+                               as the step CLI's --config <path>. See each
+                               package's config/default.yaml for keys.
+  --override stepN.<key>=<val>
+                               Repeatable. `stepN` in {step1, step3, step4};
+                               `<key>` is a dotted path into that step's
+                               YAML (e.g. `postprocess.leiden.resolutions`);
+                               `<val>` is YAML-parsed (`42`, `true`,
+                               `[0.5, 0.7]`, `some_string`). Merged on top
+                               of --stepN-config (if any); named flags
+                               above still win over --override.
+
   --dry-run                    Print sbatch commands but don't submit.
   -h, --help                   Show this message.
 
@@ -198,6 +314,42 @@ while [[ $# -gt 0 ]]; do
         --celltype-col-for-ref-build)
                                  CELLTYPE_COL_FOR_REF_BUILD="$2"; shift 2 ;;
         --max-cores)             MAX_CORES_OVERRIDE="$2"; shift 2 ;;
+        # Step 1 named params
+        --step1-x-source)                STEP1_X_SOURCE="$2"; shift 2 ;;
+        --step1-qc-min-counts-cell)      STEP1_QC_MIN_COUNTS_CELL="$2"; shift 2 ;;
+        --step1-gex-only)                STEP1_GEX_ONLY="$2"; shift 2 ;;
+        --step1-force-rerun)             STEP1_FORCE_RERUN=1; shift ;;
+        # Step 3 named params
+        --step3-donor-borrow-cap)        STEP3_DONOR_BORROW_CAP="$2"; shift 2 ;;
+        --step3-cell-min-instance)       STEP3_CELL_MIN_INSTANCE="$2"; shift 2 ;;
+        --step3-min-umi)                 STEP3_MIN_UMI="$2"; shift 2 ;;
+        --step3-random-seed)             STEP3_RANDOM_SEED="$2"; shift 2 ;;
+        --step3-celltype-target-list)    STEP3_CELLTYPE_TARGET_LIST="$2"; shift 2 ;;
+        # Step 4 named params
+        --step4-umi-min)                 STEP4_UMI_MIN="$2"; shift 2 ;;
+        --step4-counts-min)              STEP4_COUNTS_MIN="$2"; shift 2 ;;
+        --step4-cell-min-instance)       STEP4_CELL_MIN_INSTANCE="$2"; shift 2 ;;
+        --step4-doublet-mode)            STEP4_DOUBLET_MODE="$2"; shift 2 ;;
+        --step4-postprocess-min-counts)  STEP4_POSTPROCESS_MIN_COUNTS="$2"; shift 2 ;;
+        --step4-keep-intermediate)       STEP4_KEEP_INTERMEDIATE=1; shift ;;
+        # Per-step config files (yaml passthrough)
+        --step1-config)          STEP1_CONFIG="$2"; shift 2 ;;
+        --step3-config)          STEP3_CONFIG="$2"; shift 2 ;;
+        --step4-config)          STEP4_CONFIG="$2"; shift 2 ;;
+        # Per-step --override <stepN.dotted.key=yaml-value>
+        --override)
+            _ov="$2"
+            case "$_ov" in
+                step1.*) STEP1_OVERRIDES+=("${_ov#step1.}") ;;
+                step3.*) STEP3_OVERRIDES+=("${_ov#step3.}") ;;
+                step4.*) STEP4_OVERRIDES+=("${_ov#step4.}") ;;
+                *)
+                    echo "error: --override must be prefixed with step1./step3./step4. (got: $_ov)" >&2
+                    exit 2
+                    ;;
+            esac
+            shift 2
+            ;;
         --force)                 FORCE=1; shift ;;
         --dry-run)               DRY_RUN=1; shift ;;
         -h|--help)               usage; exit 0 ;;
@@ -217,11 +369,6 @@ if [[ -z "$FLEX_H5AD" ]]; then
 fi
 if [[ -z "$CELLTYPE_MARKER_JSON" ]]; then
     echo "error: --celltype-marker-json is required" >&2
-    usage >&2
-    exit 2
-fi
-if [[ -z "$OUTPUT_ROOT" ]]; then
-    echo "error: --output-root is required (or set OUTPUT_ROOT env)" >&2
     usage >&2
     exit 2
 fi
@@ -383,6 +530,133 @@ if [[ -n "$MAX_CORES_OVERRIDE" ]]; then
     COMMON_EXPORTS="$COMMON_EXPORTS,MAX_CORES=$MAX_CORES_OVERRIDE"
 fi
 
+# ---------------------------------------------------------------------------
+# Per-step named-flag exports (STEPN_<PARAM>=<value>) — thread only when set,
+# so each sbatch script's `if [[ -n "$STEPN_..." ]]` gate falls through to the
+# step CLI's own default when the caller omits the flag. Values are always
+# atomic (int / bool-string / short identifier) — never contain commas — so
+# they thread safely through slurm's `--export=ALL,K=V,K=V` payload.
+# ---------------------------------------------------------------------------
+# Step 1
+if [[ -n "$STEP1_X_SOURCE" ]]; then
+    COMMON_EXPORTS="$COMMON_EXPORTS,STEP1_X_SOURCE=$STEP1_X_SOURCE"
+fi
+if [[ -n "$STEP1_QC_MIN_COUNTS_CELL" ]]; then
+    COMMON_EXPORTS="$COMMON_EXPORTS,STEP1_QC_MIN_COUNTS_CELL=$STEP1_QC_MIN_COUNTS_CELL"
+fi
+if [[ -n "$STEP1_GEX_ONLY" ]]; then
+    COMMON_EXPORTS="$COMMON_EXPORTS,STEP1_GEX_ONLY=$STEP1_GEX_ONLY"
+fi
+if [[ "$STEP1_FORCE_RERUN" -eq 1 ]]; then
+    COMMON_EXPORTS="$COMMON_EXPORTS,STEP1_FORCE_RERUN=1"
+fi
+# Step 3
+if [[ -n "$STEP3_DONOR_BORROW_CAP" ]]; then
+    COMMON_EXPORTS="$COMMON_EXPORTS,STEP3_DONOR_BORROW_CAP=$STEP3_DONOR_BORROW_CAP"
+fi
+if [[ -n "$STEP3_CELL_MIN_INSTANCE" ]]; then
+    COMMON_EXPORTS="$COMMON_EXPORTS,STEP3_CELL_MIN_INSTANCE=$STEP3_CELL_MIN_INSTANCE"
+fi
+if [[ -n "$STEP3_MIN_UMI" ]]; then
+    COMMON_EXPORTS="$COMMON_EXPORTS,STEP3_MIN_UMI=$STEP3_MIN_UMI"
+fi
+if [[ -n "$STEP3_RANDOM_SEED" ]]; then
+    COMMON_EXPORTS="$COMMON_EXPORTS,STEP3_RANDOM_SEED=$STEP3_RANDOM_SEED"
+fi
+if [[ -n "$STEP3_CELLTYPE_TARGET_LIST" ]]; then
+    COMMON_EXPORTS="$COMMON_EXPORTS,STEP3_CELLTYPE_TARGET_LIST=$STEP3_CELLTYPE_TARGET_LIST"
+fi
+# Step 4
+if [[ -n "$STEP4_UMI_MIN" ]]; then
+    COMMON_EXPORTS="$COMMON_EXPORTS,STEP4_UMI_MIN=$STEP4_UMI_MIN"
+fi
+if [[ -n "$STEP4_COUNTS_MIN" ]]; then
+    COMMON_EXPORTS="$COMMON_EXPORTS,STEP4_COUNTS_MIN=$STEP4_COUNTS_MIN"
+fi
+if [[ -n "$STEP4_CELL_MIN_INSTANCE" ]]; then
+    COMMON_EXPORTS="$COMMON_EXPORTS,STEP4_CELL_MIN_INSTANCE=$STEP4_CELL_MIN_INSTANCE"
+fi
+if [[ -n "$STEP4_DOUBLET_MODE" ]]; then
+    COMMON_EXPORTS="$COMMON_EXPORTS,STEP4_DOUBLET_MODE=$STEP4_DOUBLET_MODE"
+fi
+if [[ -n "$STEP4_POSTPROCESS_MIN_COUNTS" ]]; then
+    COMMON_EXPORTS="$COMMON_EXPORTS,STEP4_POSTPROCESS_MIN_COUNTS=$STEP4_POSTPROCESS_MIN_COUNTS"
+fi
+if [[ "$STEP4_KEEP_INTERMEDIATE" -eq 1 ]]; then
+    COMMON_EXPORTS="$COMMON_EXPORTS,STEP4_KEEP_INTERMEDIATE=1"
+fi
+
+# ---------------------------------------------------------------------------
+# Per-step config-file passthrough (--stepN-config) and --override
+# base64-encoded yaml payload. The yaml is built by pasting the config file
+# (if any) on top of the empty dict, then walking each `dotted.key=yaml-val`
+# override into a nested dict, then base64-encoding the yaml.safe_dump for
+# safe transport through slurm's comma-separated `--export` payload (yaml
+# lists, string values with commas, and nested dicts round-trip cleanly).
+#
+# Both --stepN-config and --override are OPTIONAL — when neither is set for
+# a step, STEPN_OVERRIDES_B64 is unset and the sbatch script skips the
+# `--config <tmp.yaml>` addendum entirely, so a caller that touches no
+# nested config sees the same CLI invocation as before this feature landed.
+# ---------------------------------------------------------------------------
+
+_encode_step_overrides() {
+    # Print a base64-encoded yaml blob for one step, built from:
+    #   arg 1: --stepN-config path (may be empty)
+    #   arg 2+: --override entries (dotted-key=yaml-val), zero or more
+    # Prints an empty string when there are no overrides at all — the
+    # driver uses that to gate whether to emit STEPN_OVERRIDES_B64.
+    local config_path="$1"; shift
+    if [[ -z "$config_path" && $# -eq 0 ]]; then
+        return 0
+    fi
+    STEP_CONFIG_PATH="$config_path" \
+    STEP_OVERRIDE_COUNT="$#" \
+    STEP_OVERRIDES_JOINED="$(printf '%s\n' "$@")" \
+    python3 - <<'PY'
+import base64, os, sys, yaml
+
+cfg = {}
+config_path = os.environ.get("STEP_CONFIG_PATH", "")
+if config_path:
+    with open(config_path) as f:
+        cfg = yaml.safe_load(f) or {}
+
+# Newline-separated is safe: yaml-parsed override values are printed via
+# `printf '%s\n'`, which never internally emits newlines (values are
+# short scalars / flow-style lists on a single line by driver contract).
+count = int(os.environ.get("STEP_OVERRIDE_COUNT", "0"))
+if count:
+    lines = os.environ.get("STEP_OVERRIDES_JOINED", "").splitlines()
+    assert len(lines) == count, (
+        f"expected {count} override lines, got {len(lines)}: {lines!r}"
+    )
+    for kv in lines:
+        key, _, val = kv.partition("=")
+        parts = key.split(".")
+        d = cfg
+        for p in parts[:-1]:
+            d = d.setdefault(p, {})
+        d[parts[-1]] = yaml.safe_load(val)
+
+blob = yaml.safe_dump(cfg, default_flow_style=False).encode()
+sys.stdout.write(base64.b64encode(blob).decode())
+PY
+}
+
+STEP1_OVERRIDES_B64=$(_encode_step_overrides "$STEP1_CONFIG" "${STEP1_OVERRIDES[@]}")
+if [[ -n "$STEP1_OVERRIDES_B64" ]]; then
+    COMMON_EXPORTS="$COMMON_EXPORTS,STEP1_OVERRIDES_B64=$STEP1_OVERRIDES_B64"
+fi
+STEP3_OVERRIDES_B64=$(_encode_step_overrides "$STEP3_CONFIG" "${STEP3_OVERRIDES[@]}")
+if [[ -n "$STEP3_OVERRIDES_B64" ]]; then
+    COMMON_EXPORTS="$COMMON_EXPORTS,STEP3_OVERRIDES_B64=$STEP3_OVERRIDES_B64"
+fi
+STEP4_OVERRIDES_B64=$(_encode_step_overrides "$STEP4_CONFIG" "${STEP4_OVERRIDES[@]}")
+if [[ -n "$STEP4_OVERRIDES_B64" ]]; then
+    COMMON_EXPORTS="$COMMON_EXPORTS,STEP4_OVERRIDES_B64=$STEP4_OVERRIDES_B64"
+fi
+
 _sbatch() {
     # Wrapper for sbatch that honours --dry-run: prints the command
     # (whitespace-separated) and emits a fake --parsable id when in
@@ -399,8 +673,8 @@ _sbatch() {
 }
 
 # ---------------------------------------------------------------------------
-# Slurm log routing (internal issue review)
-# (internal issue review)). Route step-N stdout/stderr into the run-scoped
+# Slurm log routing (settylab/TracyY123-nexus#26 comments 5259180881 +
+# 5274187257). Route step-N stdout/stderr into the run-scoped
 # <output_root>/<sample_id>/<sample_id>_<run_id>/logs/slurm-<jobid>-<stage>.out
 # where <stage> is the pipeline's package name — xenium-preprocess (step 1),
 # ref-build (step 3), rctd-split (step 4) — not the internal "stepN" label.

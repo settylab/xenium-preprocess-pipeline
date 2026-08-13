@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #SBATCH --job-name=xp_step1
-#SBATCH --partition=YOUR_PARTITION
+#SBATCH --partition=campus-new
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
 #SBATCH --time=12:00:00
@@ -12,7 +12,7 @@
 # submit_step1.sbatch — spatial preprocessing (xenium-preprocess).
 #
 # Reads env vars set by submit_workflow.sh --export:
-#     SAMPLE               (required)  Sample id, e.g. SAMPLE1.
+#     SAMPLE               (required)  Sample id, e.g. MH10.
 #     OUTPUT_ROOT          (required)  Root output directory.
 #     RUN_ID               (optional)  Shared run id; defaults to this
 #                                      job's SLURM_JOB_ID when unset.
@@ -22,6 +22,17 @@
 #     FLEX_H5AD            (unused here) Passed through by the driver so
 #                                      operators inspecting env can trace
 #                                      the origin; step 3 consumes it.
+#     STEP1_X_SOURCE       (optional)  Passed as --x-source.
+#     STEP1_QC_MIN_COUNTS_CELL (opt.)  Passed as --qc-min-counts-cell.
+#     STEP1_GEX_ONLY       (optional)  Passed as --gex-only.
+#     STEP1_FORCE_RERUN    (optional)  If '1', passes --force-rerun.
+#     STEP1_OVERRIDES_B64  (optional)  base64-encoded YAML built from the
+#                                      driver's --step1-config +
+#                                      --override step1.<key>=<val>. When
+#                                      set, decoded to a tmpfile and
+#                                      passed to `xenium-preprocess run
+#                                      --config <tmp>` before the named
+#                                      flags (so named flags win).
 #
 # Writes:
 #     <OUTPUT_ROOT>/<SAMPLE>/<SAMPLE>_<RUN_ID>/spatial_adata/*.h5ad
@@ -32,11 +43,11 @@
 set -euo pipefail
 
 # --- Python + R environments -------------------------------------------------
-# The default env name is `xenium` (internal issue review). Override
+# Tracy's env is named `xenium` (issue #26 comment 5258774668). Override
 # XENIUM_PREPROCESS_ENV in your calling shell (or here) if you named it
 # differently. Tries micromamba first, falls back to conda, so the same block
 # works for either. `ml fhR/4.4.1-foss-2023b` provides Seurat + spacexr for
-# the stage-4 R shell-out (see an internal source pathREADME.md).
+# the stage-4 R shell-out (see scratch/xenium-preprocess/README.md).
 export PATH="$HOME/.local/bin:$PATH"        # so `micromamba`/`conda` resolves
 _env_name="${XENIUM_PREPROCESS_ENV:-xenium}"
 if command -v micromamba >/dev/null 2>&1; then
@@ -47,15 +58,15 @@ elif command -v conda >/dev/null 2>&1; then
     conda activate "$_env_name"
 else
     echo "error: neither micromamba nor conda found on PATH." >&2
-    echo "       See docs/installation.md." >&2
+    echo "       See scratch/xenium-preprocess/README.md § Installation." >&2
     exit 4
 fi
 ml fhR/4.4.1-foss-2023b
 # fhR pulls in Python/3.11 + SciPy-bundle/2023.11 as deps and sets
 # PYTHONPATH to their python3.11/site-packages. The micromamba env's
 # python (3.13) then imports numpy from that path and crashes on the
-# C-extension mismatch (see (internal issue review) comment
-# (internal issue review)). R has no need for PYTHONPATH — drop it.
+# C-extension mismatch (see settylab/TracyY123-nexus#26 comment
+# 5258986672). R has no need for PYTHONPATH — drop it.
 unset PYTHONPATH
 
 # Diagnostic breadcrumb — makes any downstream failure log self-explaining.
@@ -66,16 +77,16 @@ echo "[step1] xenium-preprocess -> $(command -v xenium-preprocess || echo '<none
 
 # Preflight: the step's CLI must actually be installed in the activated env.
 # Without this check a missing install surfaces only as an opaque
-# `xenium-preprocess: command not found` (see (internal issue review)
-# comment (internal)) with no hint at the fix.
+# `xenium-preprocess: command not found` (see settylab/TracyY123-nexus#26
+# comment 5258859987) with no hint at the fix.
 _cli="xenium-preprocess"
-_pkg_src="${XENIUM_PREPROCESS_PIPELINE_ROOT:-<path-to-xenium-preprocess-pipeline>}/packages/xenium-preprocess"
+_pkg_src="/fh/fast/setty_m/user/ryang/nexus/nexus-code/scratch/xenium-preprocess"
 if ! command -v "$_cli" >/dev/null 2>&1; then
     cat >&2 <<EOF
 error: '$_cli' is not installed in env '$_env_name'.
        Install it once, from a login node:
            micromamba activate $_env_name
-           uv pip install -e $_pkg_src
+           pip install -e $_pkg_src
        Then re-submit the workflow.
 EOF
     exit 5
@@ -97,6 +108,33 @@ if [[ -n "${XENIUM_CELLS:-}" ]]; then
 fi
 if [[ -n "${XENIUM_RANGER_DIR:-}" ]]; then
     extra+=(--xenium-ranger-dir "$XENIUM_RANGER_DIR")
+fi
+
+# --config passthrough from driver's --step1-config + --override
+# step1.<key>=<val>. When neither was set the driver leaves
+# STEP1_OVERRIDES_B64 unset, and this block is a no-op.
+if [[ -n "${STEP1_OVERRIDES_B64:-}" ]]; then
+    STEP1_TMP_CFG=$(mktemp -t step1_cfg.XXXXXX.yaml)
+    trap 'rm -f "$STEP1_TMP_CFG"' EXIT
+    printf '%s' "$STEP1_OVERRIDES_B64" | base64 -d > "$STEP1_TMP_CFG"
+    extra+=(--config "$STEP1_TMP_CFG")
+fi
+
+# Named per-step params — each maps 1:1 to an existing xenium-preprocess CLI
+# flag. Materialized AFTER --config so xenium-preprocess's own precedence
+# (CLI flag > user YAML > default.yaml) lets these override the yaml
+# transparently.
+if [[ -n "${STEP1_X_SOURCE:-}" ]]; then
+    extra+=(--x-source "$STEP1_X_SOURCE")
+fi
+if [[ -n "${STEP1_QC_MIN_COUNTS_CELL:-}" ]]; then
+    extra+=(--qc-min-counts-cell "$STEP1_QC_MIN_COUNTS_CELL")
+fi
+if [[ -n "${STEP1_GEX_ONLY:-}" ]]; then
+    extra+=(--gex-only "$STEP1_GEX_ONLY")
+fi
+if [[ "${STEP1_FORCE_RERUN:-0}" == "1" ]]; then
+    extra+=(--force-rerun)
 fi
 
 xenium-preprocess run \
