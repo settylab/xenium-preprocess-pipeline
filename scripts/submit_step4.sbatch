@@ -22,6 +22,15 @@
 #     STEP4_DOUBLET_MODE   (optional)  Passed as --doublet-mode.
 #     STEP4_POSTPROCESS_MIN_COUNTS (opt.) Passed as --postprocess-min-counts.
 #     STEP4_KEEP_INTERMEDIATE (optional) If '1', passes --keep-intermediate.
+#     STEP4_TEST_OBJECT    (optional)  Explicit test_object.rds path. When
+#                                      set, passed as `--test-object <path>`;
+#                                      rctd-split then skips the run-folder
+#                                      layout auto-discovery for the test
+#                                      object. MUTUAL with STEP4_REFERENCE_RDS
+#                                      (both-or-neither, enforced upstream).
+#     STEP4_REFERENCE_RDS  (optional)  Explicit reference.rds path. When set,
+#                                      passed as `--reference-rds <path>`;
+#                                      same semantics as STEP4_TEST_OBJECT.
 #     STEP4_OVERRIDES_B64  (optional)  base64-encoded YAML from the driver's
 #                                      --step4-config + --override
 #                                      step4.<key>=<val>. When set, decoded
@@ -29,8 +38,9 @@
 #                                      run --config <tmp>` before the named
 #                                      flags (so named flags win).
 #
-# Uses the run-scoped layout to locate step-1 test_object.rds and step-3
-# reference.rds automatically:
+# When STEP4_TEST_OBJECT / STEP4_REFERENCE_RDS are unset, rctd-split uses the
+# run-scoped layout to locate step-1 test_object.rds and step-3 reference.rds
+# automatically:
 #     <OUTPUT_ROOT>/<SAMPLE>/<SAMPLE>_<RUN_ID>/rctd/<SAMPLE>_test_object.rds
 #     <OUTPUT_ROOT>/<SAMPLE>/<SAMPLE>_<RUN_ID>/rctd/<SAMPLE>_reference.rds
 #
@@ -141,6 +151,13 @@ if [[ -n "${STEP4_POSTPROCESS_MIN_COUNTS:-}" ]]; then
 fi
 if [[ "${STEP4_KEEP_INTERMEDIATE:-0}" == "1" ]]; then
     NAMED_ARGS+=(--keep-intermediate)
+fi
+# Explicit test_object / reference_rds — MUTUAL both-or-neither (enforced
+# by submit_workflow.sh upstream, so we trust the invariant here and add
+# both flags together when the first is present).
+if [[ -n "${STEP4_TEST_OBJECT:-}" ]]; then
+    NAMED_ARGS+=(--test-object   "$STEP4_TEST_OBJECT"
+                 --reference-rds "$STEP4_REFERENCE_RDS")
 fi
 
 rctd-split run \

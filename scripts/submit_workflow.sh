@@ -73,6 +73,22 @@
 #     fallback path is skipped when no fallback donors are passed and no
 #     supplementation happens when no donors are passed.
 #
+# --test-object / --reference-rds
+# (settylab/TracyY123-nexus#26 comment 5278875595):
+#     Explicit step-4 inputs that bypass the default run-folder
+#     auto-discovery (`<run>/rctd/<sample>_test_object.rds` +
+#     `<run>/rctd/<sample>_reference.rds`). Use this to mix a
+#     test object from one sample with a reference from another
+#     (e.g. `--sample-id MH3 --test-object …MH3….rds
+#           --reference-rds …MH2_scRNA_ref.rds`).
+#     Both flags are OPTIONAL, but MUTUAL — passing only one is
+#     a hard error. When both are set, the driver threads the
+#     paths to submit_step4.sbatch (STEP4_TEST_OBJECT /
+#     STEP4_REFERENCE_RDS), which materialises them as
+#     `rctd-split run --test-object … --reference-rds …`; the
+#     CLI marks them as `source: config` and does NOT touch the
+#     run-folder layout for these two artifacts.
+#
 # Per-step parameter exposure
 # (settylab/TracyY123-nexus#26 comment 5277569725):
 #     Every step's config surface is regulable from this driver via three
@@ -130,6 +146,13 @@ CELLTYPE_COL_FOR_REF_BUILD=""
 # Empty ⇒ submit_step4.sbatch's own default (12). NOTE: only meaningful up to
 # step-4's sbatch alloc (--cpus-per-task=16); larger values will oversubscribe.
 MAX_CORES_OVERRIDE="${MAX_CORES:-}"
+# Optional step-4 explicit inputs — bypass the run-folder layout auto-discovery
+# of test_object.rds + reference.rds. Both are OPTIONAL individually but
+# MUTUAL: passing only one is rejected below. When both are set, they're
+# threaded as STEP4_TEST_OBJECT / STEP4_REFERENCE_RDS and materialised as
+# `rctd-split run --test-object … --reference-rds …`.
+TEST_OBJECT=""
+REFERENCE_RDS=""
 
 # ---------------------------------------------------------------------------
 # Per-step named parameter overrides. Empty ⇒ step CLI's config default.
@@ -231,6 +254,17 @@ Optional:
                                Only meaningful up to step-4's sbatch
                                alloc (--cpus-per-task=16); larger
                                values oversubscribe the R workers.
+  --test-object <path>         Step-4 explicit test_object.rds path.
+                               Bypasses the run-folder layout
+                               auto-discovery. MUTUAL with
+                               --reference-rds — passing only one
+                               is a hard error. Use to mix a test
+                               object from one sample with a
+                               reference from another.
+  --reference-rds <path>       Step-4 explicit reference.rds path.
+                               Bypasses the run-folder layout
+                               auto-discovery. MUTUAL with
+                               --test-object (see above).
 
 Per-step named parameters
 (TracyY123-nexus#26 comment 5277569725; every one maps to an existing
@@ -314,6 +348,8 @@ while [[ $# -gt 0 ]]; do
         --celltype-col-for-ref-build)
                                  CELLTYPE_COL_FOR_REF_BUILD="$2"; shift 2 ;;
         --max-cores)             MAX_CORES_OVERRIDE="$2"; shift 2 ;;
+        --test-object)           TEST_OBJECT="$2"; shift 2 ;;
+        --reference-rds)         REFERENCE_RDS="$2"; shift 2 ;;
         # Step 1 named params
         --step1-x-source)                STEP1_X_SOURCE="$2"; shift 2 ;;
         --step1-qc-min-counts-cell)      STEP1_QC_MIN_COUNTS_CELL="$2"; shift 2 ;;
@@ -370,6 +406,25 @@ fi
 if [[ -z "$CELLTYPE_MARKER_JSON" ]]; then
     echo "error: --celltype-marker-json is required" >&2
     usage >&2
+    exit 2
+fi
+
+# --test-object / --reference-rds: both-or-neither. Passing only one is a
+# hard error — mixing an explicit path with layout-derived discovery for
+# its sibling would be silently wrong most of the time (different sample
+# → wrong reference / wrong test object).
+if [[ -n "$TEST_OBJECT" && -z "$REFERENCE_RDS" ]]; then
+    echo "error: --test-object requires --reference-rds (both-or-neither)." >&2
+    echo "       Passing one explicit input while auto-discovering the other" >&2
+    echo "       from the run folder is silently mismatch-prone. Pass both," >&2
+    echo "       or omit both and let the layout-derived defaults apply." >&2
+    exit 2
+fi
+if [[ -n "$REFERENCE_RDS" && -z "$TEST_OBJECT" ]]; then
+    echo "error: --reference-rds requires --test-object (both-or-neither)." >&2
+    echo "       Passing one explicit input while auto-discovering the other" >&2
+    echo "       from the run folder is silently mismatch-prone. Pass both," >&2
+    echo "       or omit both and let the layout-derived defaults apply." >&2
     exit 2
 fi
 
@@ -528,6 +583,14 @@ fi
 # --max-cores and $MAX_CORES env.
 if [[ -n "$MAX_CORES_OVERRIDE" ]]; then
     COMMON_EXPORTS="$COMMON_EXPORTS,MAX_CORES=$MAX_CORES_OVERRIDE"
+fi
+# Step-4 explicit inputs (--test-object / --reference-rds). Validated
+# both-or-neither above, so either both are set or neither is; the sbatch
+# script gates on `[[ -n "$STEP4_TEST_OBJECT" ]]` and appends the two flags
+# together when they arrive. Unset ⇒ rctd-split's own layout auto-discovery.
+if [[ -n "$TEST_OBJECT" ]]; then
+    COMMON_EXPORTS="$COMMON_EXPORTS,STEP4_TEST_OBJECT=$TEST_OBJECT"
+    COMMON_EXPORTS="$COMMON_EXPORTS,STEP4_REFERENCE_RDS=$REFERENCE_RDS"
 fi
 
 # ---------------------------------------------------------------------------
