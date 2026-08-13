@@ -186,6 +186,12 @@ Stages are sentinel-gated — reruns skip already-done work; pass
 ### Resume a run from a specific step
 
 ```bash
+# Replace the YOUR_PARTITION with your own cluster's partition. At here, campus-new is the example.
+
+grep -rn YOUR_PARTITION scripts/                       # inventory hits
+sed -i 's/YOUR_PARTITION/campus-new/g' scripts/*.sbatch scripts/*.sh
+grep -rn YOUR_PARTITION scripts/                       # should print nothing now
+
 # Step 1 already ran; resume the chain at step 3
 ./scripts/submit_workflow.sh \
     --sample-id             SAMPLE1 \
