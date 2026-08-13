@@ -6,20 +6,31 @@ dependencies:
   # Python — the union of the three package environment specs
   # (packages/xenium-preprocess, packages/ref-build, packages/rctd-split)
   # so one env installs and drives the whole chain.
+  #
+  # Pins are DELIBERATELY LOOSE at the conda layer. The three
+  # `packages/*/pyproject.toml` pin `anndata==0.11.*` and
+  # `scanpy==1.11.*` on the pip side, so `uv pip install -e ...` after
+  # the conda solve is what actually locks those versions. Over-pinning
+  # here just makes the libmamba solve fail against current
+  # conda-forge/bioconda repodata (Aug 2026: `anndata=0.11` /
+  # `scanpy=1.11` + `pyarrow` (no floor) collapses via
+  # `arrow-cpp → c-ares<1.19` — no viable c-ares candidate remains —
+  # and drags `python-igraph → glpk<6` down with it).
   - python=3.11
+  - pip
   - numpy
   - scipy
   - pandas
-  - pyarrow
+  - pyarrow>=18       # floor keeps the solver out of the pyarrow 8–11
+                      # arrow-cpp/c-ares<1.19 dead zone.
   - pyyaml
   - matplotlib
   - seaborn
-  - anndata=0.11
-  - scanpy=1.11
+  - anndata           # pyproject.toml pip-pins to 0.11.* on top.
+  - scanpy            # pyproject.toml pip-pins to 1.11.* on top.
   - umap-learn
   - leidenalg
   - python-igraph
-  - pip
   # R (Seurat, Matrix, spacexr, SPLIT) lives outside conda by default —
   # each Slurm submit template `module load`s fhR/4.4.1-foss-2023b on
   # the Cluster cluster, and `spacexr` + `SPLIT` install into a user
