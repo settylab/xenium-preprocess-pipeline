@@ -261,10 +261,18 @@ Optional:
                                is a hard error. Use to mix a test
                                object from one sample with a
                                reference from another.
+                               When combined with --start-step 4,
+                               also bypasses the run-folder
+                               existence check (the driver mkdir
+                               -p's a fresh <run-dir>/logs/); use
+                               this to run step 4 from external
+                               rds files without having produced
+                               step 1 / step 3 outputs in-tree.
   --reference-rds <path>       Step-4 explicit reference.rds path.
                                Bypasses the run-folder layout
                                auto-discovery. MUTUAL with
-                               --test-object (see above).
+                               --test-object (see above). Same
+                               --start-step 4 bypass semantics.
 
 Per-step named parameters
 (TracyY123-nexus#26 comment 5277569725; every one maps to an existing
@@ -428,6 +436,15 @@ if [[ -n "$REFERENCE_RDS" && -z "$TEST_OBJECT" ]]; then
     exit 2
 fi
 
+# Announce the explicit-rds mode once for the caller (visible in --dry-run
+# too), so the log makes it obvious step 4 will bypass the run-folder
+# layout auto-discovery for test_object.rds / reference.rds.
+if [[ -n "$TEST_OBJECT" ]]; then
+    echo "info: --test-object/--reference-rds → using explicit rds paths (skipping auto-discovery)" >&2
+    echo "      test-object:   $TEST_OBJECT" >&2
+    echo "      reference-rds: $REFERENCE_RDS" >&2
+fi
+
 # ---------------------------------------------------------------------------
 # --start-step validation. Legal values are 1, 3, 4 — matches the pipeline's
 # step numbering (there is no step 2 in this workflow). > 1 needs a
@@ -498,9 +515,20 @@ if [[ -n "$RUN_ID_OVERRIDE" ]]; then
             exit 3
         fi
     elif [[ "$START_STEP" -ne 1 ]]; then
-        echo "error: --start-step $START_STEP but the run folder does not exist: $RUN_DIR" >&2
-        echo "       There is nothing to resume from — did you mean --start-step 1?" >&2
-        exit 3
+        # --start-step 4 with both --test-object and --reference-rds is the
+        # one legal way to resume into a non-existent run folder: the two
+        # artifacts step 4 would normally auto-discover from the run folder
+        # are being replaced by the explicit paths, so there is nothing
+        # step-1/step-3 needs to have produced in-tree. The folder + logs/
+        # get mkdir -p'd below at LOG_DIR creation time.
+        if [[ "$START_STEP" == "4" && -n "$TEST_OBJECT" && -n "$REFERENCE_RDS" ]]; then
+            echo "info: --start-step 4 + explicit --test-object/--reference-rds → creating fresh run folder:" >&2
+            echo "      $RUN_DIR" >&2
+        else
+            echo "error: --start-step $START_STEP but the run folder does not exist: $RUN_DIR" >&2
+            echo "       There is nothing to resume from — did you mean --start-step 1?" >&2
+            exit 3
+        fi
     fi
 fi
 
@@ -533,11 +561,21 @@ if [[ "$START_STEP" == "3" ]]; then
         "$RUN_DIR/spatial_adata/${SAMPLE_ID}_xenium_ranger.h5ad" \
         "$RUN_DIR/rctd/${SAMPLE_ID}_test_object.rds"
 elif [[ "$START_STEP" == "4" ]]; then
-    _check_prereqs \
-        "$RUN_DIR/spatial_adata/${SAMPLE_ID}_proseg_raw.h5ad" \
-        "$RUN_DIR/spatial_adata/${SAMPLE_ID}_xenium_ranger.h5ad" \
-        "$RUN_DIR/rctd/${SAMPLE_ID}_test_object.rds" \
-        "$RUN_DIR/rctd/${SAMPLE_ID}_reference.rds"
+    # Explicit --test-object/--reference-rds bypass ALL step-4 prereq checks:
+    # the two rds files are supplied out-of-band, and the spatial_adata h5ads
+    # step 4 augments in-place may also be brought in externally (or produced
+    # under the fresh run folder created by the mkdir -p at LOG_DIR time).
+    # Downstream failure surfaces immediately in step-4's own log if anything
+    # is actually missing at runtime.
+    if [[ -n "$TEST_OBJECT" && -n "$REFERENCE_RDS" ]]; then
+        :
+    else
+        _check_prereqs \
+            "$RUN_DIR/spatial_adata/${SAMPLE_ID}_proseg_raw.h5ad" \
+            "$RUN_DIR/spatial_adata/${SAMPLE_ID}_xenium_ranger.h5ad" \
+            "$RUN_DIR/rctd/${SAMPLE_ID}_test_object.rds" \
+            "$RUN_DIR/rctd/${SAMPLE_ID}_reference.rds"
+    fi
 fi
 
 # ---------------------------------------------------------------------------
