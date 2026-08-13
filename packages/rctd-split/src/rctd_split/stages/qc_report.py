@@ -25,7 +25,7 @@ Reproducibility:
     (obs_names is the canonical order).
   * UMAP #1 is colored by ``proseg_purified.obs['purification_status']``
     (SPLIT-native categorical). Fail-loud when the column is absent
-    (internal issue review).
+    (settylab/TracyY123-nexus#26 comment 5274781435).
   * The stage does NOT recompute UMAP — it uses the ``X_umap_clipped_norm``
     obsm laid down by ``postprocess`` (fail-loud if missing).
   * Leiden clustering is likewise consumed from ``postprocess`` output —
@@ -34,15 +34,15 @@ Reproducibility:
     filename + HTML legend.
   * Raw-side QC metrics + histogram are computed on
     ``raw.layers['maxpost_counts']`` (proseg emits multiple assays;
-    ``maxpost_counts`` is the argmax-posterior integer matrix that
-    tracks — (internal issue review);
-    canonical layer name confirmed in comment (internal)). Fail-loud
+    ``maxpost_counts`` is the argmax-posterior integer matrix Tracy
+    tracks — settylab/TracyY123-nexus#26 comment 5274767383;
+    canonical layer name confirmed in comment 5274956572). Fail-loud
     when the layer is absent.
   * The three count histograms plot the distribution for ALL cells in
     the source h5ad (no positive-only slice) and overlay a dashed
     vertical line at the upstream filter threshold, read from the
-    merged ``resolved_config.yaml`` (internal issue review)
-    comment (internal)). Thresholds:
+    merged ``resolved_config.yaml`` (settylab/TracyY123-nexus#26
+    comment 5275064492). Thresholds:
       - proseg_raw histogram: ``step1.qc_filter.min_counts_cell``
       - xenium_ranger histogram: no upstream min-counts gate, no line
       - proseg_purified histogram: ``step4.postprocess.qc.min_counts``
@@ -90,7 +90,7 @@ _SPOT_CLASS_CANONICAL_ORDER: tuple[str, ...] = (
     "doublet_uncertain",
     "reject",
 )
-# Display labels for the HTML table. the request (comment (internal))
+# Display labels for the HTML table. Tracy's ask (comment 5275064492)
 # names four categories: singlet / doublet / rejected / uncertain — map
 # them onto RCTD's actual values here.
 _SPOT_CLASS_DISPLAY: dict[str, str] = {
@@ -299,7 +299,8 @@ def _rctd_summary_metrics(raw_adata) -> dict:
 def _read_hist_thresholds(resolved_yaml: Path) -> dict:
     """Read the three per-histogram filter thresholds from the merged
     ``resolved_config.yaml`` so the dashed vertical line on each
-    histogram is data-driven (internal issue review).
+    histogram is data-driven (settylab/TracyY123-nexus#26 comment
+    5275064492).
 
     Missing file / missing key → None (line omitted for that
     histogram). Coerces the config value to ``float`` if possible;
@@ -450,8 +451,9 @@ def _hist_log10_counts(
     ``values`` is a 1D array-like of raw (non-log) counts. Cells with
     non-positive counts are plotted as a separate leftmost
     "did not pass the threshold or generally low count" bar (rather
-    than dropped) so the on-disk plot honors the request for the
-    distribution of ALL cells (internal issue review).
+    than dropped) so the on-disk plot honors Tracy's ask for the
+    distribution of ALL cells (settylab/TracyY123-nexus#26 comment
+    5275064492; label rename per comment 5275253425).
 
     ``threshold``: linear-space cutoff; a dashed vertical line is
     drawn at ``log10(threshold)`` with the raw threshold value in the
@@ -693,7 +695,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   </tbody>
 </table>
 
-<h3>first_type in rejected cells</h3>
+<h3>Broad_cell_type in rejected cells</h3>
 <p class="meta">
   Of the <b>{n_rejected}</b> cells RCTD rejected
   (<code>spot_class == 'reject'</code>), the primary cell-type call
@@ -701,7 +703,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 </p>
 <table>
   <thead><tr>
-    <th>first_type</th>
+    <th>Broad_cell_type</th>
     <th>Cells</th><th>% of rejected</th>
   </tr></thead>
   <tbody>
@@ -755,9 +757,9 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   </div>
 </div>
 
-<h2>UMAP: first_type</h2>
+<h2>UMAP: Broad_cell_type</h2>
 <div class="plot">
-  <img src="{img_first_type}" alt="UMAP by first_type">
+  <img src="{img_first_type}" alt="UMAP by Broad_cell_type">
   <div class="caption">
     From <code>proseg_purified.h5ad</code>, obs column
     <code>first_type</code> (RCTD celltype label). Distinct labels:
@@ -1184,7 +1186,7 @@ def run_qc_report(
     log(f"[qc_report] writing plot {img_first_type}")
     _scatter_umap(
         plt, umap_xy, first_type_values,
-        title=f"{sample_id}: first_type",
+        title=f"{sample_id}: Broad_cell_type",
         out_path=img_first_type,
         categorical=True,
     )

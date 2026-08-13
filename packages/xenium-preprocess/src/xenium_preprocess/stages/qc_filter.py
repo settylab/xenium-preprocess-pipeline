@@ -1,7 +1,7 @@
 """Stage: annotate raw proseg h5ad with `.obs['qc_filtered']`.
 
 Adds a boolean per-cell column to the raw h5ad in place so downstream
-consumers (`split_prep`, `rctd_prep`, and the user's external analysis
+consumers (`split_prep`, `rctd_prep`, and Tracy's external analysis
 scripts) can filter without re-running QC. Strictly additive: no cells
 are removed at this stage — only a marker column is written.
 
@@ -12,8 +12,9 @@ column-summing `.X` in this stage (NOT read from
 `.obs['n_counts']`, which is written by scanpy's `calculate_qc_metrics`
 but not guaranteed to be present on a fresh raw h5ad).
 
-Sentinel: a sibling `qc_filter_done.sentinel` next to the h5ad so a
-re-run of stage 1 alone doesn't force this stage to re-run.
+Sentinel: a sibling `.qc_filter_done.sentinel` (leading dot so it's
+hidden from `ls`) next to the h5ad so a re-run of stage 1 alone
+doesn't force this stage to re-run.
 """
 from __future__ import annotations
 
@@ -46,7 +47,7 @@ def run_qc_filter(
             f"Run the proseg_to_anndata stage first."
         )
 
-    sentinel = raw_h5ad.parent / "qc_filter_done.sentinel"
+    sentinel = raw_h5ad.parent / ".qc_filter_done.sentinel"
     if sentinel_exists(sentinel, force_rerun):
         log(f"[qc_filter] sentinel exists: {sentinel} — skipping "
             f"(pass --force-rerun to re-run).")

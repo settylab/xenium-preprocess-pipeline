@@ -1,13 +1,13 @@
 """Stage: enrich the xenium-ranger AnnData with an NN-mapped proseg cell_id.
 
-Motivation (user request 2026-08-11, (internal issue review) comment
-(internal issue review)): after the big pipeline reorg, we need each xenium-ranger
+Motivation (Tracy request 2026-08-11, TracyY123-nexus#26 comment
+5260213932): after the big pipeline reorg, we need each xenium-ranger
 cell to carry the ID of its spatially-nearest proseg cell — so
 downstream analyses that live on the xenium-ranger side can join back
 to proseg segmentation without a separate lookup.
 
 This is the REVERSE of the pre-2026-08-11 direction (which added an
-independent NN-computed Xenium cell_id to the proseg h5ad). The user
+independent NN-computed Xenium cell_id to the proseg h5ad). Tracy
 flipped it on 2026-08-11: mapping now lives on the xenium-ranger
 adata, keyed by proseg_cell_id.
 
@@ -138,7 +138,7 @@ def run_enrich_xenium_id(
             ) + xenium_ranger_h5ad.suffix
         )
         out_h5ad.parent.mkdir(parents=True, exist_ok=True)
-    sentinel = out_h5ad.parent / "enrich_xenium_id_done.sentinel"
+    sentinel = out_h5ad.parent / ".enrich_xenium_id_done.sentinel"
 
     if sentinel_exists(sentinel, force_rerun):
         log(f"[enrich_xenium_id] sentinel exists: {sentinel} — skipping "

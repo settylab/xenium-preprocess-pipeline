@@ -308,11 +308,17 @@ def test_qc_report_happy_path(tmp_path: Path):
     assert "nCount_Proseg" in body
     assert "resolution = 0.5" in body
     assert "first_type" in body
+    # The user-facing UMAP + rejected-cells section headings use the
+    # display label "Broad_cell_type" (Tracy's ask on #26, comment
+    # 5275819008). The underlying data column is still `first_type`,
+    # which is why the substring above still appears in the body via
+    # the descriptive paragraphs' <code>first_type</code>.
+    assert "Broad_cell_type" in body
     # The raw metrics row records the layer used (maxpost_counts).
     assert "maxpost_counts" in body
-    # RCTD summary section + rejected first_type breakdown.
+    # RCTD summary section + rejected Broad_cell_type breakdown.
     assert "RCTD summary" in body
-    assert "first_type in rejected cells" in body
+    assert "Broad_cell_type in rejected cells" in body
     assert "singlet" in body
     assert "doublet_certain" in body
     assert "doublet_uncertain" in body

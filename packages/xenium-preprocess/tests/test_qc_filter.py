@@ -77,7 +77,7 @@ def test_qc_filter_sentinel_skips_second_run(tmp_path: Path):
     raw = _write_synth_h5ad(tmp_path)
     run_qc_filter(sample_id="SYNTH", raw_h5ad=raw, min_counts_cell=10,
                   force_rerun=False)
-    assert (raw.parent / "qc_filter_done.sentinel").exists()
+    assert (raw.parent / ".qc_filter_done.sentinel").exists()
 
     # Overwrite qc_filtered externally; re-run without force should skip.
     a = anndata.read_h5ad(raw)
