@@ -6,12 +6,7 @@ deconvolution + SPLIT processing.
 
 ## Motivation
 
-This pipeline standardises the workflow that surfaced the initial spatial
-re-typing of Xenium cells against a proseg-purified scRNA reference. That
-analysis originally lived across ad-hoc scripts, per-run notebooks, and a
-hand-managed Slurm submit tree; reproducing it on a new sample meant
-recovering local paths and re-deriving intermediate files.
-`xenium-preprocess-pipeline` bundles the chain — proseg → xenium-ranger → RCTD
+This pipeline standardises the workflow that start from xenium cells to cleaned-up proseg segmented cells via a scRNA reference-based purification method called SPLIT. `xenium-preprocess-pipeline` bundles the chain — proseg → xenium-ranger → RCTD
 reference → RCTD + SPLIT processing — into three publishable packages plus one
 shell driver, so a new sample runs end-to-end from a single command, with
 every intermediate product traceable to the exact config that built it.
