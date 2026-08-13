@@ -1,0 +1,196 @@
+# Default configuration for the rctd-split pipeline (step 4 of the
+# Xenium spatial-data preprocessing pipeline).
+#
+# Every value here can be overridden on the CLI (--key value) or by a
+# user YAML passed with --config user.yaml (only override what you need).
+
+# ----- I/O ----------------------------------------------------------
+sample_id: null                  # REQUIRED on CLI: e.g. SAMPLE1
+run_id: null                     # resolved on CLI (--run-id > $SLURM_JOB_ID > YYYYMMDD_HHMMSS)
+test_object: null                # OPTIONAL: path to the spatial test object RDS
+                                 # (the output of step 1's rctd_prep stage — a Seurat
+                                 # with assay="Proseg", spatial DimReduc "ST_", x/y meta).
+                                 # AUTO-DERIVED from the run-folder layout when null:
+                                 #   <output_root>/<sample>/<sample>_<run_id>/rctd/<sample>_test_object.rds
+                                 # Set this to override with a foreign test-object.
+reference_rds: null              # OPTIONAL: path to the scRNA reference RDS
+                                 # (the output of step 3's rctd_reference_build stage —
+                                 # a `spacexr::Reference` object).
+                                 # AUTO-DERIVED from the run-folder layout when null:
+                                 #   <output_root>/<sample>/<sample>_<run_id>/rctd/<sample>_reference.rds
+                                 # Set this to override with a foreign reference.
+output_root: null                # REQUIRED on CLI: root output directory
+force_rerun: false               # nuke per-stage sentinels and re-run
+keep_intermediate: false         # keep <run_dir>/intermediate/ after the
+                                 # terminal stage (qc_report) finishes.
+                                 # Default (false) mirrors ref-build (step 3) —
+                                 # working artifacts under `intermediate/` are
+                                 # dropped once the full pipeline succeeds.
+                                 # Set true for debugging / QC access to the
+                                 # intermediate R RDS + mtx bundles + unpurified h5ad.
+
+# ----- Cross-stage R config -----------------------------------------
+# R library paths prepended to the child Rscript's `R_LIBS_USER`. Set
+# this to the renv/user-library dir containing spacexr + SPLIT + Seurat.
+# Leave empty to use the environment's default R library search path
+# (e.g., after `ml fhR/4.4.1-foss-2023b` + a user library at
+# ~/R/x86_64-pc-linux-gnu-library/4.4).
+r_lib_paths: []
+
+# ----- Stage 1: rctd_run --------------------------------------------
+rctd_run:
+  rscript_bin: Rscript
+  assay_name: Proseg
+  spatial_reduction: spatial
+  UMI_min: 10
+  counts_MIN: 10
+  UMI_min_sigma: 100
+  max_cores: 4
+  CELL_MIN_INSTANCE: 20
+  doublet_mode: doublet
+  label_slash_replacement: "_"
+
+# ----- Stage 2: split_purify ----------------------------------------
+split_purify:
+  rscript_bin: Rscript
+  assay_name: Proseg
+  DO_purify_singlets: true
+
+# ----- Stage 3: export_mtx ------------------------------------------
+export_mtx:
+  rscript_bin: Rscript
+  gzip_outputs: true
+  assay_name: Proseg
+
+# ----- Stage 4: mtx_to_h5ad -----------------------------------------
+mtx_to_h5ad:
+  h5ad_compression: gzip
+
+# ----- Stage 5: filter_status ---------------------------------------
+filter_status:
+  # Also augment the intermediate unpurified.h5ad .obs in place.
+  # Sidecar CSV is written either way.
+  write_inplace: true
+  inplace_columns:
+    - passed_rctd
+    - passed_split_purify
+    - filtered_by_purification
+  first_type_column: first_type
+  h5ad_compression: gzip
+
+# ----- Stage 6: postprocess -----------------------------------------
+postprocess:
+  qc:
+    min_counts: 50
+  normalize:
+    minprop: 1.0e-3
+    positive_x: true
+  neighbors:
+    n_neighbors: 15
+    random_state: 0
+  leiden:
+    resolutions: [0.5, 0.7]
+    random_state: 0
+  process_unpurified_layer: true
+  h5ad_compression: gzip
+
+# ----- Stage 7: writeback_to_step1_raw ------------------------------
+# Writes filter-status columns + step4_unpurified.h5ad .obs back
+# onto step-1's <S>_proseg_raw.h5ad. Idempotent — running twice
+# overwrites in place, no double-write.
+writeback_to_step1_raw:
+  # Path to step-1's raw h5ad. Defaults to
+  # <output_root>/<sample>/<sample>_<run_id>/spatial_adata/<sample>_proseg_raw.h5ad
+  # (the merged run-folder layout).
+  raw_h5ad: null
+
+  # step-1 .obs column carrying the qc_filtered boolean written by
+  # step-1's qc_filter stage. Cells absent from filter_status.csv
+  # MUST be marked qc_filtered=False on step-1's side; anything else
+  # is a fail-loud "unaccounted-for cells" invariant.
+  qc_filtered_col: qc_filtered
+
+  # Columns NOT re-copied from step4_unpurified.h5ad's .obs onto
+  # raw.h5ad. They are NEITHER removed from unpurified.obs NOR removed
+  # from raw.obs — they simply stay on raw as step-1 wrote them.
+  # Two reasons to skip:
+  #   1. Duplicate-of-step-1: proseg / qc_filter / enrich_xenium_id
+  #      already wrote the full (all-cells) version onto raw.obs;
+  #      folding unpurified would overwrite it with a QC-passed subset.
+  #      `qc_filtered` is included here for the same reason — it's a
+  #      step-1 bool that unpurified only carries True values for
+  #      (internal issue review).
+  #   2. Written by Part 1's filter_status writeback above: the three
+  #      `passed_*` / `filtered_by_*` bool cols.
+  exclude_obs_cols:
+    - cell
+    - original_cell_id
+    - centroid_x
+    - centroid_y
+    - centroid_z
+    - fov
+    - cluster
+    - volume
+    - scale
+    - population
+    - xenium_cell_id_nn
+    - xenium_id_nn_distance
+    - xenium_id_nn_note
+    - xenium_id_match
+    - qc_filtered
+    - passed_rctd
+    - passed_split_purify
+    - filtered_by_purification
+
+  h5ad_compression: gzip
+
+# ----- Stage 8: celltype_writeback ----------------------------------
+# NN-maps celltype from step4_proseg_purified.h5ad onto step-1's
+# xenium_ranger.h5ad using .obsm['spatial'] as the query. Pure NN;
+# NO direct-cell-id-assign; NO mark_unassigned (per (request on
+# (internal issue review).
+celltype_writeback:
+  # Path to step-1's xenium_ranger.h5ad. Defaults to
+  # <output_root>/<sample>/<sample>_<run_id>/spatial_adata/<sample>_xenium_ranger.h5ad
+  xenium_ranger_h5ad: null
+
+  # reference (source of celltype) — step 4 purified.h5ad. Resolved
+  # from the run-folder layout automatically.
+  reference_label_col: first_type
+  reference_x_col: centroid_x
+  reference_y_col: centroid_y
+
+  # NN parameters.
+  k: 1
+  algorithm: auto
+  metric: euclidean
+  tiebreak: min_dist
+  distance_threshold: null           # no threshold by default
+  unmatched_policy: nearest_label    # no mark_unassigned default
+
+  # Column names written back onto the xenium-ranger adata.
+  celltype_col: celltype
+  distance_col: celltype_source_distance
+
+  h5ad_compression: gzip
+
+# ----- Stage 9: qc_report ------------------------------------------
+# Terminal QC step. Reads the three persisted h5ads under
+# spatial_adata/ (never modifies them) and writes an HTML report +
+# UMAP plot PNGs + a metrics CSV under <run_dir>/qc/.
+#
+# Because qc_report is now the terminal stage, `_drop_intermediate_outputs`
+# fires AFTER it — keep_intermediate=true still opts out.
+qc_report:
+  # Column on proseg_purified.obs carrying the SPLIT purification
+  # status categorical used to color UMAP #1. This is a SPLIT-native
+  # column emitted by SPLIT::purify (internal issue review)
+  # comment (internal)). Fail-loud when the column is absent.
+  purification_status_column: purification_status
+  # Layer on proseg_raw.h5ad whose matrix drives the raw-side QC
+  # metrics row + log10 count histogram. proseg emits multiple assays;
+  # `maxpost_counts` is the argmax-posterior integer counts (per pipeline convention
+  # explicitly named the maxpost matrix — (internal issue review)
+  # comment (internal); canonical layer name confirmed against step-1
+  # proseg export in comment (internal)). Fail loud when absent.
+  raw_layer: maxpost_counts

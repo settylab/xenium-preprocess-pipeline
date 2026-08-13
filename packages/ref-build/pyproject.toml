@@ -1,0 +1,61 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ref-build"
+version = "0.1.0"
+description = "scRNA reference-dataset builder for RCTD (via spacexr / SPLIT): primary + donor pool → per-celltype adaptive migration → 10X-style mtx bundle → spacexr Reference .rds."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+authors = [
+    { name = "xenium-preprocess-pipeline contributors" },
+]
+keywords = [
+    "scRNA-seq",
+    "reference-dataset",
+    "RCTD",
+    "spacexr",
+    "SPLIT",
+    "spatial-transcriptomics",
+    "celltype-annotation",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+
+# Same pinning discipline as xenium-preprocess and flex-preprocess:
+# what the user has been running her ref-build notebooks against.
+# `environment.yml` carries the full conda-side set, including the R
+# side (spacexr / Seurat), which is not installable via `pip`.
+dependencies = [
+    "numpy",
+    "scipy",
+    "pandas",
+    "pyyaml",
+    "anndata==0.11.*",
+    "scanpy==1.11.*",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[project.scripts]
+ref-build = "ref_build.cli:main"
+
+[project.urls]
+Homepage = "https://example.org/ref-build"
+Issues = "https://example.org/ref-build/issues"
+
+[tool.setuptools.package-data]
+ref_build = ["r/*.R", "../../config/default.yaml"]
+
+[tool.setuptools.packages.find]
+where = ["src"]

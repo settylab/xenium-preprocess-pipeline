@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+# Mock sbatch for the integration test.
+#
+# Behavior:
+#   * Parses --parsable, --dependency=afterok:JOBid, --export=…, and the
+#     positional sbatch script.
+#   * Emits a monotonically-increasing fake job id on stdout (only when
+#     --parsable is present — matches real sbatch).
+#   * Appends a line to $MOCK_SBATCH_LOG per invocation, so the test can
+#     assert the exact chain, dependencies, and env propagation.
+#   * Executes the sbatch script SYNCHRONOUSLY with the parsed --export
+#     env vars set, plus SLURM_JOB_ID=<fake_id>. Exits 0 if the script
+#     exits 0. Records the exit code in the log too.
+#   * afterok:<id> deps: since we execute synchronously, upstream is
+#     ALWAYS complete by the time we're called. If the log records a
+#     non-zero exit for the upstream job id, we still execute (Slurm
+#     would refuse, but for the test we want the failure to propagate
+#     visibly — the test can assert on the recorded exit codes).
+#
+# Env in:
+#   MOCK_SBATCH_LOG   Path to append log lines to (required).
+#   MOCK_SBATCH_STATE Path to the counter file for job ids (required).
+set -euo pipefail
+
+: "${MOCK_SBATCH_LOG:?MOCK_SBATCH_LOG must be set}"
+: "${MOCK_SBATCH_STATE:?MOCK_SBATCH_STATE must be set}"
+
+parsable=0
+dependency=""
+export_payload=""
+output_path=""
+sbatch_script=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --parsable) parsable=1; shift ;;
+        --dependency=*) dependency="${1#--dependency=}"; shift ;;
+        --dependency) dependency="$2"; shift 2 ;;
+        --export=*) export_payload="${1#--export=}"; shift ;;
+        --export) export_payload="$2"; shift 2 ;;
+        --output=*) output_path="${1#--output=}"; shift ;;
+        --output) output_path="$2"; shift 2 ;;
+        -J|--job-name|--partition|--cpus-per-task|--mem|--time)
+            # Ignore these (may be passed via #SBATCH directives or as CLI).
+            shift 2 ;;
+        --*=*)
+            # Any other --flag=value: single arg, skip once.
+            shift ;;
+        --*)
+            # Unknown flags: skip and best-effort skip the following value
+            # if it doesn't start with a dash.
+            if [[ "${2:-}" && "${2:-}" != -* ]]; then shift 2; else shift; fi ;;
+        *) sbatch_script="$1"; shift ;;
+    esac
+done
+
+# Allocate next job id.
+next=$(( $(cat "$MOCK_SBATCH_STATE") + 1 ))
+echo "$next" > "$MOCK_SBATCH_STATE"
+
+# Log the invocation.
+{
+    echo "---"
+    echo "jobid: $next"
+    echo "dependency: $dependency"
+    echo "script: $sbatch_script"
+    echo "export: $export_payload"
+    echo "output: $output_path"
+} >> "$MOCK_SBATCH_LOG"
+
+# Execute the sbatch script synchronously with parsed env vars.
+declare -a env_kv=()
+env_kv+=("SLURM_JOB_ID=$next")
+
+# Strip an "ALL," prefix if present (--export=ALL,K=V,… form).
+payload="${export_payload#ALL,}"
+payload="${payload#ALL}"     # bare "ALL" case (unlikely with commas).
+
+if [[ -n "$payload" ]]; then
+    IFS=',' read -r -a kvs <<< "$payload"
+    for kv in "${kvs[@]}"; do
+        [[ -n "$kv" ]] && env_kv+=("$kv")
+    done
+fi
+
+exit_code=0
+env "${env_kv[@]}" bash "$sbatch_script" >> "$MOCK_SBATCH_LOG.job$next.out" 2>&1 || exit_code=$?
+
+echo "exit: $exit_code" >> "$MOCK_SBATCH_LOG"
+
+# Emit the parsable id (real sbatch does this only when --parsable is
+# passed — the driver ALWAYS passes it, but be faithful anyway).
+if [[ "$parsable" -eq 1 ]]; then
+    echo "$next"
+fi
+
+# Real sbatch always exits 0 if the job was accepted, regardless of the
+# eventual job outcome. Match that so a failing inner script doesn't
+# break the chain-submission logic in the driver.
+exit 0

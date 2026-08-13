@@ -1,0 +1,35 @@
+name: xenium
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  # Python — the union of the three package environment specs
+  # (packages/xenium-preprocess, packages/ref-build, packages/rctd-split)
+  # so one env installs and drives the whole chain.
+  - python=3.11
+  - numpy
+  - scipy
+  - pandas
+  - pyarrow
+  - pyyaml
+  - matplotlib
+  - seaborn
+  - anndata=0.11
+  - scanpy=1.11
+  - umap-learn
+  - leidenalg
+  - python-igraph
+  - pip
+  # R (Seurat, Matrix, spacexr, SPLIT) lives outside conda by default —
+  # each Slurm submit template `module load`s fhR/4.4.1-foss-2023b on
+  # the Cluster cluster, and `spacexr` + `SPLIT` install into a user
+  # R library (see environments/README.md and docs/installation.md).
+  #
+  # For an off-cluster conda-native R install, uncomment the block
+  # below (heavy solve; ~30–60 min):
+  #
+  # - r-base=4.4
+  # - r-seurat
+  # - r-matrix
+  # - r-readr
+  # - bioconductor-spatialexperiment

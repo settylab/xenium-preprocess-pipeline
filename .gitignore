@@ -1,0 +1,59 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+.eggs/
+wheels/
+pip-wheel-metadata/
+
+# Virtual environments
+.venv/
+venv/
+env/
+.python-version
+
+# Package caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+
+# Editors / OS
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Direnv / env files
+.envrc
+.env
+.env.local
+
+# Slurm output logs (accumulate in checkout)
+slurm-*.out
+*.slurm.out
+
+# Local staging areas outside of source
+reports/
+scratch/
+logs/
+
+# Local run outputs — the pipeline's `--output-root` should point outside
+# the repo, but guard against accidental in-tree runs.
+workflow_runs/
+run_outputs/

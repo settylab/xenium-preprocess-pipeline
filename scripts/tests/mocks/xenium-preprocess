@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# Mock xenium-preprocess CLI — creates the step-1 target artifacts and
+# writes step1 keys into resolved_config.yaml. Only understands the
+# subset of flags submit_step1.sbatch invokes.
+set -euo pipefail
+
+cmd="${1:-}"
+if [[ "$cmd" != "run" ]]; then
+    echo "mock xenium-preprocess: only 'run' subcommand supported" >&2
+    exit 2
+fi
+shift
+
+sample=""
+output_root=""
+run_id=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --sample-id)   sample="$2"; shift 2 ;;
+        --output-root) output_root="$2"; shift 2 ;;
+        --run-id)      run_id="$2"; shift 2 ;;
+        --proseg-dir|--xenium-cells|--xenium-ranger-dir) shift 2 ;;
+        *) shift ;;
+    esac
+done
+
+: "${sample:?--sample-id required}"
+: "${output_root:?--output-root required}"
+: "${run_id:?--run-id required}"
+
+run_dir="$output_root/$sample/${sample}_${run_id}"
+mkdir -p "$run_dir/spatial_adata" "$run_dir/rctd" "$run_dir/logs"
+
+: > "$run_dir/spatial_adata/${sample}_proseg_raw.h5ad"
+: > "$run_dir/spatial_adata/${sample}_xenium_ranger.h5ad"
+: > "$run_dir/rctd/${sample}_test_object.rds"
+echo "step1 ok" > "$run_dir/logs/step1.log"
+
+# Merge step1 key into resolved_config.yaml (crude but preserves siblings).
+cfg="$run_dir/resolved_config.yaml"
+python3 - "$cfg" "$sample" "$run_id" <<'PY'
+import sys, os
+cfg_path, sample, run_id = sys.argv[1], sys.argv[2], sys.argv[3]
+lines = []
+if os.path.exists(cfg_path):
+    with open(cfg_path) as f:
+        lines = f.readlines()
+
+# Simple in-place "replace or append the step1: block".
+out = []
+skip = False
+for line in lines:
+    if skip:
+        if line and not line[0].isspace() and line.strip() != "":
+            skip = False
+        else:
+            continue
+    if line.startswith("step1:"):
+        skip = True
+        continue
+    out.append(line)
+out.append(f"step1:\n  sample_id: {sample}\n  run_id: {run_id}\n")
+
+with open(cfg_path, "w") as f:
+    f.writelines(out)
+PY

@@ -1,0 +1,37 @@
+name: xeniumPreprocess
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  # ----- Python side ------------------------------------------------
+  # Behaviour of the Python stages was validated against these versions
+  # (matching the notebooks the reference pipeline uses in production).
+  - python=3.11
+  - numpy
+  - scipy
+  - pandas
+  - pyarrow
+  - pyyaml
+  - matplotlib
+  - seaborn
+  - anndata=0.11
+  - scanpy=1.11
+  - umap-learn
+  - leidenalg
+  - python-igraph
+  # ----- R side (rctd_prep stage) -----------------------------------
+  # By default the Slurm submit wrapper `module load`s
+  # fhR/4.4.1-foss-2023b instead of using conda-side R — that module
+  # has Seurat + spacexr preinstalled and matches the reference
+  # workflow in the RCTD Rmd. If you don't have that module, uncomment
+  # the block below to install a conda-native R with the same packages
+  # (heavy solve; ~30-60 minutes on Gizmo). See docs/install.md.
+  #
+  # - r-base=4.4
+  # - r-seurat
+  # - r-matrix
+  # - bioconductor-spatialexperiment
+  # - bioconductor-zellkonverter
+  # (spacexr is not on conda; install after solve via BiocManager or
+  #  remotes::install_github("dmcable/spacexr").)
+  - pip

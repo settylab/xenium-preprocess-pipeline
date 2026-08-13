@@ -1,0 +1,102 @@
+# Default configuration for the xenium-preprocess pipeline (step 1
+# of the Xenium spatial-data preprocessing pipeline).
+#
+# Every value here can be overridden on the CLI (--key value) or by a
+# user YAML passed with --config user.yaml (only override what you need).
+
+# ----- I/O ----------------------------------------------------------
+sample_id: null                  # REQUIRED on CLI: e.g. SAMPLE1
+proseg_dir: null                 # REQUIRED on CLI: directory holding the proseg output
+                                 # (count matrix parquet/csv + cell metadata parquet/csv)
+output_root: null                # REQUIRED on CLI: root output directory
+force_rerun: false               # nuke per-stage sentinels and re-run
+
+# ----- Run-scoped layout (locked (internal issue review) -
+# Outputs land under:
+#   <output_root>/<sample_id>/<sample_id>_<run_id>/{spatial_adata,rctd}/
+# `run_id` precedence is bound in the CLI (`_resolve_run_id`):
+#   --run-id  >  $SLURM_JOB_ID  >  YYYYMMDD_HHMMSS timestamp fallback.
+# Leaving `run_id: null` here means the CLI resolves it at invocation.
+run_id: null
+
+# ----- Stage 1: proseg_to_anndata ---------------------------------
+# Adapted from the internal proseg-to-anndata reference script.
+proseg_to_anndata:
+  count_matrix_glob: "expected-counts*"
+  maxpost_matrix_glob: "maxpost_counts*"
+  cell_metadata_glob: "cell-metadata*"
+  # Which layer `.X` mirrors — `maxpost_counts` (integer MAP counts) is
+  # the default; falls back to `expected_counts` with a WARN when the
+  # maxpost layer isn't loaded.
+  x_source: maxpost_counts
+  centroid_x_col: centroid_x
+  centroid_y_col: centroid_y
+  cell_id_col: cell
+  proseg_run_script: null
+
+# ----- Stage: enrich_xenium_id ------------------------------------
+# Additive-only enrichment of the xenium-ranger h5ad with an NN-mapped
+# proseg cell_id (internal issue review). Runs after
+# xenium_ranger_to_anndata so both source h5ads exist on disk.
+enrich_xenium_id:
+  enabled: true
+  nn_k: 1
+  distance_threshold: null
+  nn_id_col: proseg_cell_id_nn
+  distance_col: proseg_id_nn_distance
+  note_col: proseg_id_nn_note
+  write_back_h5ad: true
+
+# ----- Stage: qc_filter -------------------------------------------
+# Annotates the raw h5ad with .obs['qc_filtered'] bool. Downstream
+# consumers (split_prep, rctd_prep, external analysis scripts) can then
+# filter without re-running QC. Strictly additive — no cells removed here.
+qc_filter:
+  min_counts_cell: 10          # matches the pre-refactor preprocess/split_prep gate
+  qc_filtered_col: qc_filtered # column name written to .obs
+
+# ----- Stage: xenium_ranger_to_anndata ----------------------------
+# Reads the xenium-ranger bundle (cell_feature_matrix.h5 + cells.csv.gz)
+# and writes <S>_xenium_ranger.h5ad under spatial_adata/.
+xenium_ranger_to_anndata:
+  xenium_ranger_dir: null       # REQUIRED on CLI: --xenium-ranger-dir <path>
+  gex_only: true                # 5001 features (vs 10029 incl. controls) on the reference fixture
+  cells_csv_name: "cells.csv.gz"
+  cell_feature_matrix_name: "cell_feature_matrix.h5"
+
+# ----- Stage: preprocess (DEPRECATED, kept for reversibility) ------
+# Not in DEFAULT_STAGES. Opt in with `--stages ... preprocess ...`.
+# Writes to <run_dir>/legacy_preprocess/<S>_preprocessed.h5ad so the
+# locked spatial_adata/ + rctd/ layout stays clean.
+preprocess:
+  dual_matrix_mode: true
+  qc_percent_top: [10, 20, 50, 150]
+  min_counts_cell: 10
+  min_prop: 0.001
+  positive_x: true
+  n_neighbors: 15
+  random_state: 0
+  leiden_resolution: 0.4
+  use_leiden_weights: false
+  global_non_tumor_json: null
+  global_tumor_json: null
+  tumor_type: null
+  threshold_global: -0.005
+  low_count_label: "low count"
+  global_level1_celltype_col: "global_level1_celltype"
+  umap_dpi: 200
+  umap_figsize: [7, 6]
+
+# ----- Stage: split_prep ------------------------------------------
+split_prep:
+  layer: maxpost_counts
+  name_suffix: "_lowCountThreshold"
+  gzip_outputs: true
+  min_counts_cell: 10
+
+# ----- Stage: rctd_prep -------------------------------------------
+rctd_prep:
+  source_layer: maxpost_counts
+  rscript_bin: Rscript
+  assay_name: Proseg
+  spatial_key: "ST_"

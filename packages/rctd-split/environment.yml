@@ -1,0 +1,35 @@
+name: rctdSplit
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  # ----- Python side ------------------------------------------------
+  # Behaviour of the Python stages (mtx_to_h5ad, the Python shell-out
+  # wrappers) was validated against these versions — matching the
+  # downstream analysis notebooks that consume the h5ad outputs
+  # (the noGeneFilter reference notebooks, a reference noGeneFilter notebook).
+  - python=3.11
+  - numpy
+  - scipy
+  - pandas
+  - pyyaml
+  - anndata=0.11
+  - scanpy=1.11
+  # ----- R side (rctd_run + split_purify + export_mtx stages) --------
+  # By default the Slurm submit wrapper `module load`s
+  # fhR/4.4.1-foss-2023b instead of using conda-side R — that module
+  # has Seurat + Matrix + SpatialExperiment + readr preinstalled but
+  # NOT spacexr or SPLIT (see docs/install.md for the one-time
+  # user-local install at ~/.claude/r_libs/4.4.1). If you don't have
+  # the fhR module, uncomment the block below to install a conda-native
+  # R (heavy solve; ~30-60 minutes on Gizmo). See docs/install.md.
+  #
+  # - r-base=4.4
+  # - r-seurat
+  # - r-matrix
+  # - r-readr
+  # - bioconductor-spatialexperiment
+  # (spacexr and SPLIT are not on conda; install via
+  #  remotes::install_github("dmcable/spacexr") and
+  #  remotes::install_github("bdsc-tds/SPLIT").)
+  - pip

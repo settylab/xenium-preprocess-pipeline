@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+# Mock ref-build CLI — creates step-3 target artifacts and merges step3
+# key into resolved_config.yaml (preserving step1: sibling).
+set -euo pipefail
+
+cmd="${1:-}"
+if [[ "$cmd" != "run" ]]; then
+    echo "mock ref-build: only 'run' subcommand supported" >&2
+    exit 2
+fi
+shift
+
+sample=""
+output_root=""
+run_id=""
+flex_h5ad=""
+celltype_marker_json=""
+celltype_col=""
+donors=()
+fallback_donors=()
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --sample-id)              sample="$2"; shift 2 ;;
+        --output-root)            output_root="$2"; shift 2 ;;
+        --run-id)                 run_id="$2"; shift 2 ;;
+        --flex-h5ad)              flex_h5ad="$2"; shift 2 ;;
+        --celltype-marker-json)   celltype_marker_json="$2"; shift 2 ;;
+        --celltype-col)           celltype_col="$2"; shift 2 ;;
+        --donor-h5ad)             donors+=("$2"); shift 2 ;;
+        --fallback-donor-h5ad)    fallback_donors+=("$2"); shift 2 ;;
+        *) shift ;;
+    esac
+done
+
+: "${sample:?--sample-id required}"
+: "${output_root:?--output-root required}"
+: "${run_id:?--run-id required}"
+: "${flex_h5ad:?--flex-h5ad required}"
+: "${celltype_marker_json:?--celltype-marker-json required}"
+
+run_dir="$output_root/$sample/${sample}_${run_id}"
+
+# Step 3 depends on step 1's output folder existing (dependency chain).
+if [[ ! -d "$run_dir" ]]; then
+    echo "mock ref-build: run folder does not exist — step 1 missed? $run_dir" >&2
+    exit 3
+fi
+
+mkdir -p "$run_dir/rctd" "$run_dir/logs"
+
+: > "$run_dir/rctd/${sample}_reference_post_rules.h5ad"
+: > "$run_dir/rctd/${sample}_reference.rds"
+{
+    echo "step3 ok flex=$flex_h5ad markers=$celltype_marker_json"
+    echo "celltype_col=${celltype_col}"
+    echo "donors_count=${#donors[@]}"
+    for p in "${donors[@]}"; do echo "donor=$p"; done
+    echo "fallback_donors_count=${#fallback_donors[@]}"
+    for p in "${fallback_donors[@]}"; do echo "fallback_donor=$p"; done
+} > "$run_dir/logs/step3.log"
+
+# Merge step3 key into resolved_config.yaml, preserving siblings.
+cfg="$run_dir/resolved_config.yaml"
+python3 - "$cfg" "$sample" "$run_id" "$flex_h5ad" <<'PY'
+import sys, os
+cfg_path, sample, run_id, flex = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+lines = []
+if os.path.exists(cfg_path):
+    with open(cfg_path) as f:
+        lines = f.readlines()
+
+out = []
+skip = False
+for line in lines:
+    if skip:
+        if line and not line[0].isspace() and line.strip() != "":
+            skip = False
+        else:
+            continue
+    if line.startswith("step3:"):
+        skip = True
+        continue
+    out.append(line)
+out.append(f"step3:\n  sample_id: {sample}\n  run_id: {run_id}\n  flex_h5ad_path: {flex}\n")
+
+with open(cfg_path, "w") as f:
+    f.writelines(out)
+PY

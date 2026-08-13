@@ -1,0 +1,165 @@
+# Default configuration for the ref-build pipeline (step 3 of the
+# Xenium spatial-data preprocessing pipeline).
+#
+# Every value here can be overridden on the CLI (--key value) or by a
+# user YAML passed with --config user.yaml (only override what you need).
+
+# ----- I/O ----------------------------------------------------------
+sample_id: null                       # REQUIRED on CLI: primary sample id (e.g. SAMPLE1)
+primary_h5ad: null                    # REQUIRED on CLI: path to the primary's
+                                      # preprocessed scRNA h5ad. Historically produced by
+                                      # step 2 (flex-preprocess); step 2 was DEPRECATED
+                                      # on 2026-08-10 (internal issue review),
+                                      # and this path now typically points at manual
+                                      # scRNA prep. Input contract: .obs[celltype_col]
+                                      # populated (default Final_level1_celltype_annotation);
+                                      # counts source layers["counts"] → layers["raw_count"]
+                                      # → .X (first present wins) and MUST be integer.
+donor_h5ads: []                       # OPTIONAL: list of same-primary-tumor-type donor
+                                      # preprocessed-scRNA h5ad paths (same input contract
+                                      # as primary_h5ad). Empty list is allowed (sample-only
+                                      # build; per the user's #8/#9 directives).
+fallback_donor_h5ads: []              # OPTIONAL: list of FALLBACK donor h5ad paths
+                                      # (Rule 5; locked spec on (internal issue review)
+                                      # comment (internal)). Consulted when Rule 2 LOW
+                                      # total (primary + donor supplement) is still
+                                      # below census.cell_min_instance for a target-list
+                                      # celltype — assemble tops up from fallback to
+                                      # reach census.donor_borrow_cap. Intended source
+                                      # for immune cells (B/Plasma, T/NK, rbc) that flex
+                                      # data commonly misses across an entire sample set.
+                                      # Rules 1-4 IGNORE these; Rule 5 is the only path
+                                      # cells from these files can enter the reference.
+                                      # Column resolution on the fallback h5ad is
+                                      # auto-detected (Final_level1_celltype_annotation,
+                                      # refined_celltype, refined_celltype_update_lymphocyes).
+output_root: null                     # REQUIRED on CLI: root output directory
+celltype_marker_json: null            # REQUIRED on CLI: marker-gene JSON declaring
+                                      # the expected celltype set (same shape as step
+                                      # 1's --global-non-tumor-json; expected set =
+                                      # keys with trailing "_marker" stripped)
+tumor_type: null                      # OPTIONAL cosmetic label for logging + provenance
+                                      # (e.g. Bladder, Prostate, Breast, LiverBenign)
+                                      # Also feeds the refbuild_<sample>_<tumor>/
+                                      # folder name below when set.
+force_rerun: false                    # nuke per-stage sentinels and re-run
+
+# Explicit run identifier. Bound by cli._resolve_run_id at invoke time:
+#   --run-id > $SLURM_JOB_ID > YYYYMMDD_HHMMSS  (locked in
+#   (internal issue review). Names the run folder
+#   <output_root>/<sample_id>/<sample_id>_<run_id>/ under which the
+#   final `rctd/` outputs land.
+run_id: null
+
+# --flex-h5ad — the flex-preprocessed scRNA h5ad. Reference-in-place:
+# recorded verbatim under `step3.flex_h5ad_path` in the merged
+# resolved_config.yaml. No copy / no symlink. When null, no path is
+# recorded. If --primary-h5ad is not set, the flex path is used as
+# the primary input.
+flex_h5ad_path: null
+
+# ----- Per-stage knobs --------------------------------------------
+
+# Stage 1 — load_primary_and_donors
+# Adapted from the shared Stage-B backbone in ref-build-summary-v3.md
+# (Stage B, steps 1-3): read each file, concat with join="outer",
+# fill_value=0, attach a sample_ID column.
+load_primary_and_donors:
+  celltype_col: Final_level1_celltype_annotation
+                                      # Per-cell celltype-annotation column in .obs.
+                                      # Same column across primary + all donors.
+  # If `celltype_col` is not present in an AnnData's .obs, walk this
+  # fallback list in order and copy the first present into `celltype_col`
+  # (audit-logged). Downstream stages therefore always see `celltype_col`.
+  celltype_col_fallbacks:
+    - global_level1_celltype_annotation
+
+# Stage 2 — census
+# Applies the user's hybrid rule set (locked spec on
+# (internal issue review) per celltype declared in
+# celltype_marker_json.
+census:
+  celltype_col: Final_level1_celltype_annotation
+  donor_borrow_cap: 100               # Single cap serving three roles:
+                                      #   Rule 1 gate  — primary_count > this
+                                      #                  → primary_only.
+                                      #   Rule 2 LOW   — total donor supplement
+                                      #                  cap.
+                                      #   Rule 5       — top-up target when
+                                      #                  Rule 2 LOW total is
+                                      #                  still below
+                                      #                  cell_min_instance.
+  cell_min_instance: 20               # Rule 2 branch selector + Rule 5 trigger.
+                                      # primary_count >= this → Rule 2 HIGH
+                                      # (per-donor cap = primary_count).
+                                      # primary_count <  this → Rule 2 LOW
+                                      # (total cap = donor_borrow_cap).
+                                      # Name borrowed from downstream RCTD's
+                                      # CELL_MIN_INSTANCE.
+  # Optional overrides for the "required celltype set" — the list of
+  # celltypes Rules 1-5 iterate over. Two ways it can be declared:
+  #   - default (both null): the marker JSON's keys ARE the target list
+  #     (behavior since the balanced-donor variant landed). Backwards-
+  #     compatible.
+  #   - celltype_target_list: <path>: read celltype keys from THIS JSON
+  #     instead. Same {celltype: [markers]} shape as the marker JSON;
+  #     `_marker` / `_markers` suffix optional. Use when the marker JSON
+  #     and the labeling JSON aren't the same file.
+  #   - celltype_target_key: <str>: if the target-list JSON is nested
+  #     (`{tissue: {celltype: markers}}`), pick which tissue block to
+  #     read. Omit for a flat JSON.
+  celltype_target_list: null
+  celltype_target_key: null
+  primary_only_celltypes: [tumor, liver]
+                                      # These celltypes always come exclusively from
+                                      # the primary — guards summary Caveat §1
+                                      # (union-not-intersection recombine leak).
+  random_seed: 42                     # Seed for balanced + hybrid samplers.
+                                      # `random_state` is accepted as a deprecated
+                                      # alias for backwards compat with pre-#21 configs.
+  # Fuzzy celltype-label matching (from user request 2026-07-10 comment
+  # (internal issue review)). See ref_build._internal.celltype_match for the three
+  # match rules. Both flags default true — matches spatial-preprocessing's
+  # composite/unknown_maybe labelling convention. Set both to false for
+  # the pre-2026-07-10 strict-equality behaviour.
+  fuzzy_matching: true                # rule 3 — composite delimited (e.g.
+                                      # `B/Plasma_T/NK_rbc` matches `T/NK`).
+                                      # from user request 2026-07-10 comment (internal)
+  include_unknown_maybe: true         # rule 2 — `unknown_maybe_{X}` also matches X.
+                                      # from user request 2026-07-10 comment (internal)
+
+# Stage 3 — assemble
+# Materialises the census decision. Inherits the fuzzy-matching flags
+# from `census` — a cell selected here matches under the SAME rules the
+# census counted with. Composite-labelled cells that match multiple
+# celltypes are deduped by cell id at the end (kept once, original
+# label preserved).
+assemble:
+  celltype_col: Final_level1_celltype_annotation
+
+# Stage 4 — export_mtx
+# 10X-style bundle for the R side (Stage C) and any downstream RCTD
+# workflow to consume.
+export_mtx:
+  gzip_outputs: true                  # gzip the .mtx / .tsv writes to match
+                                      # the notebook family's export shape.
+  # Layer to export. The Stage-B notebooks stash raw integer counts in
+  # layers["counts"] (or, in some builds, layers["raw_count"]). We try
+  # `counts` first and fall back to `raw_count`, then to `.X`.
+  layer: counts
+
+# Stage 5 — rctd_reference_build
+# Stage C: shell out to Rscript to build the spacexr::Reference .rds.
+rctd_reference_build:
+  # Which R interpreter to use. Two forms:
+  #   `Rscript`           — plain PATH lookup (works if `module load fhR/…`
+  #                          has been done in the surrounding shell)
+  #   `/path/to/Rscript`  — explicit binary (skips PATH lookup)
+  rscript_bin: Rscript
+  # spacexr::Reference() knobs — see ref-build-summary-v3.md Stage C.
+  min_UMI: 10                         # drop cells with total UMI below this
+  require_int: true                   # enforce integer counts (belt + braces
+                                      # vs the export_mtx int32 cast)
+  # cell-type label sanitisation — spacexr factor levels reject '/'
+  # (e.g. B/Plasma_T/NK_rbc becomes B_Plasma_T_NK_rbc).
+  label_slash_replacement: "_"

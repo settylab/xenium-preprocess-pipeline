@@ -1,0 +1,33 @@
+name: refBuild
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  # ----- Python side ------------------------------------------------
+  # Behaviour of the reference build was validated against these
+  # versions (matching the notebook families the summary is written
+  # from — 260612_new_ref_creation_MH{2,3,6,7,8_1,8_2,9,10}_no_genes_filtering.ipynb
+  # and the reference rebuild scripts).
+  - python=3.11
+  - numpy
+  - scipy
+  - pandas
+  - pyyaml
+  - anndata=0.11
+  - scanpy=1.11
+  - pip
+  # ----- R side (Stage C: spacexr Reference .rds conversion) --------
+  # By default the Slurm submit wrapper `module load`s
+  # fhR/4.4.1-foss-2023b which carries Seurat + Matrix + readr
+  # preinstalled. `spacexr` (RCTD) is not shipped by that module — see
+  # docs/install.md for the one-time user-local install into
+  # ~/.claude/r_libs/4.4.1 that the user's ref-build workflow uses.
+  #
+  # Uncomment the block below for a conda-native R install (heavy
+  # solve; ~30-60 minutes on Gizmo). `spacexr` still needs a manual
+  # `remotes::install_github("dmcable/spacexr")` — see docs/install.md.
+  #
+  # - r-base=4.4
+  # - r-seurat
+  # - r-matrix
+  # - r-readr

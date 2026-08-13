@@ -1,0 +1,34 @@
+cff-version: 1.2.0
+title: "ref-build: scRNA reference-dataset builder for RCTD (spacexr) — primary + donor pool → adaptive migration → 10X-style mtx bundle → Reference .rds"
+message: "If you use this software, please cite it using the metadata from this file."
+type: software
+authors:
+  - name: "xenium-preprocess-pipeline contributors"
+version: 0.1.0
+date-released: "2026-07-09"
+# doi: "10.5281/zenodo.PLACEHOLDER"                    # TODO after Zenodo mint
+url: "https://example.org/ref-build"
+repository-code: "https://example.org/ref-build"
+license: MIT
+keywords:
+  - scRNA-seq
+  - reference-dataset
+  - RCTD
+  - spacexr
+  - SPLIT
+  - spatial-transcriptomics
+  - celltype-annotation
+abstract: >-
+  ref-build is step 3 of the Xenium spatial-data preprocessing
+  pipeline. It takes a primary sample's preprocessed scRNA AnnData and a
+  pool of same-primary-tumor-type donor scRNA AnnData files, applies
+  per-celltype adaptive migration rules (rule 1: primary-
+  only when the primary's cell count for a celltype > 100; rule 2:
+  borrow from donors that HAVE the missing celltype; the intermediate
+  case supplements the primary via donor-balanced sampling capped at
+  the primary's per-celltype count), emits a per-celltype
+  audit-trail CSV, writes a 10X-style {counts.mtx, features.tsv,
+  barcodes.tsv, metadata.csv} bundle, and finally shells out to
+  Rscript to build the spacexr::Reference .rds object that RCTD's
+  create.RCTD consumes as its reference side. Adapted from an
+  internal SPLIT/Proseg workflow.

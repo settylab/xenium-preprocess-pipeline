@@ -1,0 +1,58 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "xenium-preprocess"
+version = "0.1.0"
+description = "Proseg → adata → preprocessed adata + UMAP → SPLIT mtx/features/barcodes → RCTD test object pipeline."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+authors = [
+    { name = "xenium-preprocess-pipeline contributors" },
+]
+keywords = ["xenium", "spatial-transcriptomics", "proseg", "SPLIT", "RCTD"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+
+# Same pinning discipline as hexenium: what the user has been running
+# production against. `environment.yml` carries the full set, including
+# the R side (spacexr / Seurat), which is not installable via `pip`.
+dependencies = [
+    "numpy",
+    "scipy",
+    "pandas",
+    "pyarrow",
+    "pyyaml",
+    "matplotlib",
+    "seaborn",
+    "anndata==0.11.*",
+    "scanpy==1.11.*",
+    "umap-learn",
+    "leidenalg",
+    "igraph",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[project.scripts]
+xenium-preprocess = "xenium_preprocess.cli:main"
+
+[project.urls]
+Homepage = "https://example.org/xenium-preprocess"
+Issues = "https://example.org/xenium-preprocess/issues"
+
+[tool.setuptools.package-data]
+xenium_preprocess = ["r/*.R", "../../config/default.yaml"]
+
+[tool.setuptools.packages.find]
+where = ["src"]

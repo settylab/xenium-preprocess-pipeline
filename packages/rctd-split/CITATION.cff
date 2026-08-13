@@ -1,0 +1,30 @@
+cff-version: 1.2.0
+title: "rctd-split: RCTD + SPLIT typing pipeline (Stage D) with mtx + h5ad export"
+message: "If you use this software, please cite it using the metadata from this file."
+type: software
+authors:
+  - name: "xenium-preprocess-pipeline contributors"
+version: 0.1.0
+date-released: "2026-07-09"
+# doi: "10.5281/zenodo.PLACEHOLDER"                    # TODO after Zenodo mint
+url: "https://example.org/rctd-split"
+repository-code: "https://example.org/rctd-split"
+license: MIT
+keywords:
+  - xenium
+  - spatial-transcriptomics
+  - RCTD
+  - SPLIT
+  - celltype-annotation
+  - spacexr
+abstract: >-
+  rctd-split is step 4 of the Xenium spatial-data preprocessing
+  pipeline. It runs RCTD (via spacexr) against a spatial test object
+  (Stage A/step 1 output) and a scRNA reference (Stage C/step 3
+  output), then applies SPLIT::run_post_process_RCTD (unpurified) and
+  SPLIT::purify (purified). Deliverables per sample: the RCTD results
+  RDS, unpurified and purified Seurat RDS, matched 10x-style mtx bundles
+  (counts + features + barcodes + metadata + spatial coordinates), and
+  the same two variants materialised as .h5ad AnnData files ready for
+  downstream Python analysis. Adapted from an internal SPLIT/Proseg
+  workflow.
