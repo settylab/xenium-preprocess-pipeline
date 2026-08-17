@@ -615,7 +615,7 @@ def test_slurm_output_routed_to_run_logs_with_run_id(env, tmp_path):
 
     run_logs = env["output_root"] / "MH10" / "MH10_log_relocate" / "logs"
     for suffix, rec in zip(_STAGE_LOG_SUFFIXES, records):
-        assert rec["output"] == str(run_logs / f"slurm-%j-{suffix}.out"), rec
+        assert rec["output"] == str(run_logs / f"slurm-%j-{suffix}.log"), rec
     # And the logs directory was created before submission.
     assert run_logs.is_dir()
 
@@ -633,13 +633,13 @@ def test_slurm_output_uses_jobid_when_run_id_auto(env, tmp_path):
     # slot (SAMPLE_<jobid>) and the filename slot — expanded on the compute
     # node when the log file is opened.
     assert records[0]["output"] == str(
-        env["output_root"] / "MH10" / "MH10_%j" / "logs" / "slurm-%j-xenium-preprocess.out"
+        env["output_root"] / "MH10" / "MH10_%j" / "logs" / "slurm-%j-xenium-preprocess.log"
     ), records[0]
 
     # JOB3 and JOB4 (RUN_ID bound to JOB1's parsable id) get the explicit path.
     run_logs = env["output_root"] / "MH10" / f"MH10_{j1_id}" / "logs"
-    assert records[1]["output"] == str(run_logs / "slurm-%j-ref-build.out"), records[1]
-    assert records[2]["output"] == str(run_logs / "slurm-%j-rctd-split.out"), records[2]
+    assert records[1]["output"] == str(run_logs / "slurm-%j-ref-build.log"), records[1]
+    assert records[2]["output"] == str(run_logs / "slurm-%j-rctd-split.log"), records[2]
     # The parent <sample> dir was created up front; the run-scoped logs/
     # dir was created immediately after JOB1's id came back (before JOB3/4
     # submit).

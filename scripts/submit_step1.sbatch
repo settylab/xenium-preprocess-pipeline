@@ -7,7 +7,7 @@
 # NOTE: --output is set by submit_workflow.sh at submission time so the log
 #       lands under <output_root>/<sample>/<sample>_<run_id>/logs/, not the
 #       driver's CWD. A direct `sbatch submit_step1.sbatch` invocation will
-#       fall through to slurm's default (slurm-<jobid>.out in the caller's
+#       fall through to slurm's default (slurm-<jobid>.log in the caller's
 #       CWD) — invoke via submit_workflow.sh instead.
 # submit_step1.sbatch — spatial preprocessing (xenium-preprocess).
 #

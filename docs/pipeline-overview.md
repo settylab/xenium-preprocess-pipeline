@@ -92,7 +92,7 @@ step 4 depends on both.
 
 `scripts/submit_step{1,3,4}.sbatch` are the per-step Slurm templates
 the driver submits. Each writes a per-step log to
-`<run-dir>/logs/slurm-<jobid>-<step>.out`; the driver itself writes
+`<run-dir>/logs/slurm-<jobid>-<step>.log`; the driver itself writes
 `workflow-submit.log` recording the dependency chain.
 
 Resume:

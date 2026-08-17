@@ -776,7 +776,7 @@ _sbatch() {
 # ---------------------------------------------------------------------------
 # Slurm log routing (settylab/TracyY123-nexus#26 comments 5259180881 +
 # 5274187257). Route step-N stdout/stderr into the run-scoped
-# <output_root>/<sample_id>/<sample_id>_<run_id>/logs/slurm-<jobid>-<stage>.out
+# <output_root>/<sample_id>/<sample_id>_<run_id>/logs/slurm-<jobid>-<stage>.log
 # where <stage> is the pipeline's package name — xenium-preprocess (step 1),
 # ref-build (step 3), rctd-split (step 4) — not the internal "stepN" label.
 # The step-numbering variables in this script (JOB1/JOB3/JOB4, --start-step,
@@ -798,11 +798,11 @@ if [[ -n "$RUN_ID_OVERRIDE" ]]; then
     if [[ "$DRY_RUN" -eq 0 ]]; then
         mkdir -p "$LOG_DIR"
     fi
-    JOB1_OUTPUT="$LOG_DIR/slurm-%j-xenium-preprocess.out"
+    JOB1_OUTPUT="$LOG_DIR/slurm-%j-xenium-preprocess.log"
 else
     # LOG_DIR is only knowable AFTER JOB1's --parsable id comes back.
     LOG_DIR=""
-    JOB1_OUTPUT="$OUTPUT_ROOT/$SAMPLE_ID/${SAMPLE_ID}_%j/logs/slurm-%j-xenium-preprocess.out"
+    JOB1_OUTPUT="$OUTPUT_ROOT/$SAMPLE_ID/${SAMPLE_ID}_%j/logs/slurm-%j-xenium-preprocess.log"
     if [[ "$DRY_RUN" -eq 0 ]]; then
         mkdir -p "$OUTPUT_ROOT/$SAMPLE_ID"
     fi
@@ -854,7 +854,7 @@ if [[ "$START_STEP" -le 3 ]]; then
     fi
     JOB3=$(_sbatch --parsable \
         "${_dep_args[@]}" \
-        --output="$LOG_DIR/slurm-%j-ref-build.out" \
+        --output="$LOG_DIR/slurm-%j-ref-build.log" \
         --export="$DOWNSTREAM_EXPORTS" \
         "$SCRIPT_DIR/submit_step3.sbatch")
 fi
@@ -870,7 +870,7 @@ if [[ -n "$JOB3" ]]; then
 fi
 JOB4=$(_sbatch --parsable \
     "${_dep_args[@]}" \
-    --output="$LOG_DIR/slurm-%j-rctd-split.out" \
+    --output="$LOG_DIR/slurm-%j-rctd-split.log" \
     --export="$DOWNSTREAM_EXPORTS" \
     "$SCRIPT_DIR/submit_step4.sbatch")
 

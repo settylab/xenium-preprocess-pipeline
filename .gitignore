@@ -45,8 +45,8 @@ htmlcov/
 .env.local
 
 # Slurm output logs (accumulate in checkout)
-slurm-*.out
-*.slurm.out
+slurm-*.log
+*.slurm.log
 
 # Local staging areas outside of source
 reports/

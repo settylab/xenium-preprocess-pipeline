@@ -245,9 +245,9 @@ All three steps write into a single run folder:
 │   └── <sample>_rctd_split.rds           # step 4 — RCTD + SPLIT typing result
 ├── resolved_config.yaml                  # merged effective config across the three steps
 └── logs/
-    ├── slurm-<jobid>-xenium-preprocess.out
-    ├── slurm-<jobid>-ref-build.out
-    ├── slurm-<jobid>-rctd-split.out
+    ├── slurm-<jobid>-xenium-preprocess.log
+    ├── slurm-<jobid>-ref-build.log
+    ├── slurm-<jobid>-rctd-split.log
     ├── step1.log  step3.log  step4.log   # per-step app logs
     └── workflow-submit.log               # authoritative record of jobids + dep chain
 ```
