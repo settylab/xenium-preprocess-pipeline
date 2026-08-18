@@ -37,6 +37,14 @@
 #     STEP4_REFERENCE_RDS  (optional)  Explicit reference.rds path. When set,
 #                                      passed as `--reference-rds <path>`;
 #                                      same semantics as STEP4_TEST_OBJECT.
+#     STEP4_RCTD_RESULTS_RDS (optional) Explicit rctd_results.rds path. When
+#                                      set, passed as `--rctd-results-rds
+#                                      <path>`; rctd-split auto-drops the
+#                                      `rctd_run` stage (external RCTD
+#                                      result supplied) and feeds the file
+#                                      straight into split_purify.
+#                                      Standalone (not mutual with the
+#                                      test_object/reference pair).
 #     STEP4_OVERRIDES_B64  (optional)  base64-encoded YAML from the driver's
 #                                      --step4-config + --override
 #                                      step4.<key>=<val>. When set, decoded
@@ -167,6 +175,11 @@ fi
 if [[ -n "${STEP4_TEST_OBJECT:-}" ]]; then
     NAMED_ARGS+=(--test-object   "$STEP4_TEST_OBJECT"
                  --reference-rds "$STEP4_REFERENCE_RDS")
+fi
+# Explicit rctd_results.rds — standalone; rctd-split's CLI auto-drops
+# the rctd_run stage on its side when this is set.
+if [[ -n "${STEP4_RCTD_RESULTS_RDS:-}" ]]; then
+    NAMED_ARGS+=(--rctd-results-rds "$STEP4_RCTD_RESULTS_RDS")
 fi
 
 # Expand the numbered STEP4_STAGE_* env vars set by submit_workflow.sh

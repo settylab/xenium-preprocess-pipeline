@@ -89,6 +89,20 @@
 #     CLI marks them as `source: config` and does NOT touch the
 #     run-folder layout for these two artifacts.
 #
+# --rctd-results-rds
+# (settylab/TracyY123-nexus#26 comment 5334078468, #15 comment
+# 5334076919):
+#     Explicit step-4 input that bypasses the default run-folder
+#     auto-discovery of `<run>/rctd/<sample>_rctd_results.rds`.
+#     Points step 4 at an existing RCTD result from another run
+#     folder — the rctd-split CLI auto-drops the `rctd_run`
+#     stage (external result supplied) and feeds the file straight
+#     into split_purify. Standalone flag (not mutual with
+#     --test-object / --reference-rds; reference_rds is only
+#     needed by rctd_run, which is dropped). Threaded to
+#     submit_step4.sbatch as STEP4_RCTD_RESULTS_RDS →
+#     `rctd-split run --rctd-results-rds …`.
+#
 # Per-step parameter exposure
 # (settylab/TracyY123-nexus#26 comment 5277569725):
 #     Every step's config surface is regulable from this driver via three
@@ -153,6 +167,12 @@ MAX_CORES_OVERRIDE="${MAX_CORES:-}"
 # `rctd-split run --test-object … --reference-rds …`.
 TEST_OBJECT=""
 REFERENCE_RDS=""
+# Optional step-4 explicit input — bypass the run-folder layout auto-discovery
+# of rctd_results.rds. Standalone (not mutual with --test-object/--reference-rds
+# — the rctd-split CLI auto-drops rctd_run when this is set, and reference_rds
+# is only needed by rctd_run). Threaded as STEP4_RCTD_RESULTS_RDS →
+# `rctd-split run --rctd-results-rds …`.
+RCTD_RESULTS_RDS=""
 # Optional per-step conda env-name overrides
 # (settylab/TracyY123-nexus#26 comment 5333808085). Each sbatch script
 # already reads its own `_env_name="${VAR:-xenium}"` (submit_step1 →
@@ -315,6 +335,7 @@ emit("FLEX_H5AD",              cfg.get("flex_h5ad"))
 emit("CELLTYPE_MARKER_JSON",   cfg.get("celltype_marker_json"))
 emit("TEST_OBJECT",            cfg.get("test_object"))
 emit("REFERENCE_RDS",          cfg.get("reference_rds"))
+emit("RCTD_RESULTS_RDS",       cfg.get("rctd_results_rds"))
 emit("PROSEG_DIR",             cfg.get("proseg_dir"))
 emit("XENIUM_CELLS",           cfg.get("xenium_cells"))
 emit("XENIUM_RANGER_DIR",      cfg.get("xenium_ranger_dir"))
@@ -391,6 +412,7 @@ Optional:
                                `sample_id`, `run_id`, `output_root`,
                                `flex_h5ad`, `celltype_marker_json`,
                                `test_object`, `reference_rds`,
+                               `rctd_results_rds`,
                                `proseg_dir`, `xenium_cells`,
                                `xenium_ranger_dir`,
                                `celltype_col_for_ref_build`, `max_cores`
@@ -478,6 +500,22 @@ Optional:
                                auto-discovery. MUTUAL with
                                --test-object (see above). Same
                                --start-step 4 bypass semantics.
+  --rctd-results-rds <path>    Step-4 explicit rctd_results.rds path.
+                               Bypasses the run-folder layout
+                               auto-discovery of
+                               <run>/rctd/<sample>_rctd_results.rds.
+                               The rctd-split CLI auto-drops the
+                               rctd_run stage when this is set (the
+                               RCTD result is already in hand),
+                               feeding the file straight into
+                               split_purify. Standalone flag — not
+                               mutual with --test-object / --reference-rds,
+                               and --reference-rds is not required
+                               when this is set (rctd_run is the only
+                               consumer of the reference and gets
+                               dropped). Use to re-run split/purify
+                               and downstream stages against an RCTD
+                               result from another run folder.
   --env-name <name>            Convenience: set the conda env name
                                for ALL three steps at once
                                (xenium-preprocess, ref-build,
@@ -615,6 +653,7 @@ while [[ $# -gt 0 ]]; do
         --max-cores)             MAX_CORES_OVERRIDE="$2"; shift 2 ;;
         --test-object)           TEST_OBJECT="$2"; shift 2 ;;
         --reference-rds)         REFERENCE_RDS="$2"; shift 2 ;;
+        --rctd-results-rds)      RCTD_RESULTS_RDS="$2"; shift 2 ;;
         # Per-step conda env-name overrides. --env-name sets all three at once
         # (the common case). Placed BEFORE the per-step flags so a caller can
         # `--env-name shared --ref-build-env alt` and get {shared, alt, shared}
@@ -737,6 +776,14 @@ if [[ -n "$TEST_OBJECT" ]]; then
     echo "info: --test-object/--reference-rds → using explicit rds paths (skipping auto-discovery)" >&2
     echo "      test-object:   $TEST_OBJECT" >&2
     echo "      reference-rds: $REFERENCE_RDS" >&2
+fi
+# Announce the explicit rctd_results.rds mode. rctd-split auto-drops the
+# rctd_run stage on its side; we note it here so the operator sees why
+# the step-4 log will show one fewer stage than DEFAULT_STAGES.
+if [[ -n "$RCTD_RESULTS_RDS" ]]; then
+    echo "info: --rctd-results-rds → using explicit rctd_results.rds path (skipping auto-discovery)" >&2
+    echo "      rctd-results-rds: $RCTD_RESULTS_RDS" >&2
+    echo "      rctd-split will auto-drop the 'rctd_run' stage; --reference-rds is not required." >&2
 fi
 
 # ---------------------------------------------------------------------------
@@ -876,8 +923,18 @@ elif [[ "$START_STEP" == "4" ]]; then
     # under the fresh run folder created by the mkdir -p at LOG_DIR time).
     # Downstream failure surfaces immediately in step-4's own log if anything
     # is actually missing at runtime.
+    #
+    # --rctd-results-rds (without --test-object/--reference-rds) is a lighter
+    # bypass: rctd-split drops the rctd_run stage, so reference.rds is not
+    # needed, but split_purify still reads test_object.rds and the downstream
+    # stages still read the run folder's h5ads.
     if [[ -n "$TEST_OBJECT" && -n "$REFERENCE_RDS" ]]; then
         :
+    elif [[ -n "$RCTD_RESULTS_RDS" ]]; then
+        _check_prereqs \
+            "$RUN_DIR/spatial_adata/${SAMPLE_ID}_proseg_raw.h5ad" \
+            "$RUN_DIR/spatial_adata/${SAMPLE_ID}_xenium_ranger.h5ad" \
+            "$RUN_DIR/rctd/${SAMPLE_ID}_test_object.rds"
     else
         _check_prereqs \
             "$RUN_DIR/spatial_adata/${SAMPLE_ID}_proseg_raw.h5ad" \
@@ -951,6 +1008,13 @@ fi
 if [[ -n "$TEST_OBJECT" ]]; then
     COMMON_EXPORTS="$COMMON_EXPORTS,STEP4_TEST_OBJECT=$TEST_OBJECT"
     COMMON_EXPORTS="$COMMON_EXPORTS,STEP4_REFERENCE_RDS=$REFERENCE_RDS"
+fi
+# Step-4 explicit rctd_results.rds input (--rctd-results-rds). Standalone
+# (not mutual with --test-object / --reference-rds — the rctd-split CLI
+# auto-drops the rctd_run stage when this is set). Unset ⇒ rctd-split's
+# own layout auto-discovery of <run>/rctd/<sample>_rctd_results.rds.
+if [[ -n "$RCTD_RESULTS_RDS" ]]; then
+    COMMON_EXPORTS="$COMMON_EXPORTS,STEP4_RCTD_RESULTS_RDS=$RCTD_RESULTS_RDS"
 fi
 
 # ---------------------------------------------------------------------------

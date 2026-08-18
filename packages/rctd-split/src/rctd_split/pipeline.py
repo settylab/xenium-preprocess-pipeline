@@ -103,13 +103,14 @@ def log_invocation_banner(argv: list[str], stages: list[str], cfg: dict) -> None
     log(f"pid:           {os.getpid()}")
     log(f"python:        {sys.executable}")
     log(f"python ver:    {sys.version.splitlines()[0]}")
-    log(f"sample_id:     {cfg.get('sample_id')}")
-    log(f"run_id:        {cfg.get('run_id')}")
-    log(f"test_object:   {cfg.get('test_object')}")
-    log(f"reference_rds: {cfg.get('reference_rds')}")
-    log(f"output_root:   {cfg.get('output_root')}")
-    log(f"stages:        {stages}")
-    log(f"force_rerun:   {cfg.get('force_rerun', False)}")
+    log(f"sample_id:        {cfg.get('sample_id')}")
+    log(f"run_id:           {cfg.get('run_id')}")
+    log(f"test_object:      {cfg.get('test_object')}")
+    log(f"reference_rds:    {cfg.get('reference_rds')}")
+    log(f"rctd_results_rds: {cfg.get('rctd_results_rds')}")
+    log(f"output_root:      {cfg.get('output_root')}")
+    log(f"stages:           {stages}")
+    log(f"force_rerun:      {cfg.get('force_rerun', False)}")
     for name in ("numpy", "yaml", "scipy", "pandas", "scanpy", "anndata"):
         try:
             mod = __import__(name)
@@ -128,13 +129,14 @@ def run(cfg: dict, stages: list[str], argv: list[str]) -> int:
     force_rerun = bool(cfg.get("force_rerun", False))
     keep_intermediate = bool(cfg.get("keep_intermediate", False))
 
-    # `test_object` and `reference_rds` auto-derive from the run-folder
-    # layout convention when not explicitly set — step 1 (rctd_prep)
-    # writes to <run-dir>/rctd/<S>_test_object.rds and step 3
-    # (rctd_reference_build) writes to <run-dir>/rctd/<S>_reference.rds,
-    # so the workflow-driver chain wires up with no explicit paths.
-    # Explicit config values still win (backward compat + one-off
-    # experiments with a foreign test-object or reference).
+    # `test_object`, `reference_rds`, and `rctd_results_rds` auto-derive
+    # from the run-folder layout convention when not explicitly set:
+    # step 1 (rctd_prep) writes <run-dir>/rctd/<S>_test_object.rds, step 3
+    # (rctd_reference_build) writes <run-dir>/rctd/<S>_reference.rds, and
+    # the rctd_run stage in THIS pipeline writes
+    # <run-dir>/rctd/<S>_rctd_results.rds. Explicit config values win
+    # (backward compat + one-off experiments with a foreign test-object,
+    # reference, or RCTD result from another run folder).
     if cfg.get("test_object"):
         test_object = Path(cfg["test_object"]).resolve()
         test_object_source = "config"
@@ -147,16 +149,36 @@ def run(cfg: dict, stages: list[str], argv: list[str]) -> int:
     else:
         reference_rds = rctd_path(output_root, sample_id, run_id, "reference")
         reference_rds_source = "layout"
+    rctd_results_source = "layout"
+    if cfg.get("rctd_results_rds"):
+        rctd_results_rds = Path(cfg["rctd_results_rds"]).resolve()
+        rctd_results_source = "config"
+        # Explicit --rctd-results-rds implies the caller already has the
+        # RCTD result in hand — automatically drop rctd_run from stages
+        # (matches the "just use my file" spirit of --test-object /
+        # --reference-rds, mirrors the both-or-neither ergonomics
+        # settylab/TracyY123-nexus#26 asked for).
+        if "rctd_run" in stages:
+            stages = [s for s in stages if s != "rctd_run"]
+            log("[pipeline] --rctd-results-rds set → dropped 'rctd_run' from "
+                "stages (external RCTD result supplied; the run stage would "
+                "otherwise overwrite it at the layout path).")
+    else:
+        rctd_results_rds = rctd_path(
+            output_root, sample_id, run_id, "rctd_results",
+        )
 
     # Record the resolved paths back into cfg so the invocation banner
     # and merged resolved_config snapshot show what was actually used.
     cfg = dict(cfg)
     cfg["test_object"] = str(test_object)
     cfg["reference_rds"] = str(reference_rds)
+    cfg["rctd_results_rds"] = str(rctd_results_rds)
 
     log_invocation_banner(argv, stages, cfg)
-    log(f"[pipeline] test_object   source: {test_object_source}")
-    log(f"[pipeline] reference_rds source: {reference_rds_source}")
+    log(f"[pipeline] test_object      source: {test_object_source}")
+    log(f"[pipeline] reference_rds    source: {reference_rds_source}")
+    log(f"[pipeline] rctd_results_rds source: {rctd_results_source}")
 
     if not test_object.exists():
         _raise_missing_input(
@@ -166,13 +188,28 @@ def run(cfg: dict, stages: list[str], argv: list[str]) -> int:
             producer="step 1's rctd_prep",
             override_flag="--test-object",
         )
-    if not reference_rds.exists():
+    # reference_rds is ONLY read by rctd_run. Skip the existence check
+    # when rctd_run isn't scheduled — a caller passing --rctd-results-rds
+    # (with rctd_run auto-dropped above) shouldn't need to also supply a
+    # reference file they don't use.
+    if "rctd_run" in stages and not reference_rds.exists():
         _raise_missing_input(
             path=reference_rds,
             source=reference_rds_source,
             layout_hint="<output_root>/<sample>/<sample>_<run_id>/rctd/<sample>_reference.rds",
             producer="step 3's rctd_reference_build",
             override_flag="--reference-rds",
+        )
+    # rctd_results_rds is required only when split_purify runs but
+    # rctd_run does not (rctd_run would produce it in-tree).
+    if ("split_purify" in stages and "rctd_run" not in stages
+            and not rctd_results_rds.exists()):
+        _raise_missing_input(
+            path=rctd_results_rds,
+            source=rctd_results_source,
+            layout_hint="<output_root>/<sample>/<sample>_<run_id>/rctd/<sample>_rctd_results.rds",
+            producer="this pipeline's rctd_run stage",
+            override_flag="--rctd-results-rds",
         )
 
     # Materialise the run folder up front.
@@ -228,7 +265,7 @@ def run(cfg: dict, stages: list[str], argv: list[str]) -> int:
         )
         banner(f"stage {idx}/{n_stages}: rctd_run — complete in {time.time()-t0:.1f}s")
 
-    rctd_results_rds = rctd_path(output_root, sample_id, run_id, "rctd_results")
+    # rctd_results_rds resolved above (layout path or explicit --rctd-results-rds).
 
     # --- Stage 2: split_purify --------------------------------------
     if "split_purify" in stages:
@@ -238,8 +275,10 @@ def run(cfg: dict, stages: list[str], argv: list[str]) -> int:
         from rctd_split.stages.split_purify import run_split_purify
         if not rctd_results_rds.exists():
             raise SystemExit(
-                f"split_purify stage requested but rctd_results.rds does not exist: "
-                f"{rctd_results_rds}. Run the rctd_run stage first."
+                f"split_purify stage requested but rctd_results.rds does not "
+                f"exist: {rctd_results_rds}. Run the rctd_run stage first, "
+                f"or pass --rctd-results-rds <path> to point at an existing "
+                f"RCTD result from another run folder."
             )
         unpurified_rds, purified_rds = run_split_purify(
             sample_id=sample_id,

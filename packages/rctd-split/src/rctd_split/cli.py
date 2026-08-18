@@ -106,6 +106,19 @@ def _add_run_args(p: argparse.ArgumentParser) -> None:
                         "<output_root>/<sample>/<sample>_<run_id>/rctd/"
                         "<sample>_reference.rds (the standard workflow "
                         "layout).")
+    p.add_argument("--rctd-results-rds", type=Path,
+                   help="Path to an existing rctd_results.rds "
+                        "(rctd_run stage output — a spacexr::RCTD "
+                        "object). Optional — when omitted, resolves "
+                        "to <output_root>/<sample>/<sample>_<run_id>/"
+                        "rctd/<sample>_rctd_results.rds (the standard "
+                        "workflow layout). When set explicitly, the "
+                        "rctd_run stage is dropped from --stages "
+                        "automatically (the results are already in "
+                        "hand); split_purify reads from the provided "
+                        "path. Mirrors --test-object / --reference-rds "
+                        "so an RCTD result from another run folder "
+                        "can be reused.")
     p.add_argument("--output-root", type=Path,
                    help="Root output directory.")
     p.add_argument("--force-rerun", action="store_true",
@@ -263,6 +276,8 @@ def _resolve_config(args: argparse.Namespace) -> dict:
         overrides["test_object"] = str(args.test_object)
     if args.reference_rds is not None:
         overrides["reference_rds"] = str(args.reference_rds)
+    if args.rctd_results_rds is not None:
+        overrides["rctd_results_rds"] = str(args.rctd_results_rds)
     if args.output_root is not None:
         overrides["output_root"] = str(args.output_root)
     if args.force_rerun:
