@@ -22,6 +22,11 @@
 #     STEP4_DOUBLET_MODE   (optional)  Passed as --doublet-mode.
 #     STEP4_POSTPROCESS_MIN_COUNTS (opt.) Passed as --postprocess-min-counts.
 #     STEP4_KEEP_INTERMEDIATE (optional) If '1', passes --keep-intermediate.
+#     STEP4_STAGE_COUNT    (optional)  Number of --stages entries
+#                                      (default 0 ⇒ rctd-split's DEFAULT_STAGES).
+#     STEP4_STAGE_N        (optional)  Nth stage name (N in 1..COUNT).
+#                                      Each is passed as one positional
+#                                      value to `rctd-split run --stages …`.
 #     STEP4_TEST_OBJECT    (optional)  Explicit test_object.rds path. When
 #                                      set, passed as `--test-object <path>`;
 #                                      rctd-split then skips the run-folder
@@ -160,10 +165,24 @@ if [[ -n "${STEP4_TEST_OBJECT:-}" ]]; then
                  --reference-rds "$STEP4_REFERENCE_RDS")
 fi
 
+# Expand the numbered STEP4_STAGE_* env vars set by submit_workflow.sh
+# --step4-stages into a single `--stages s1 s2 ...` block. COUNT=0 (or
+# unset) yields zero extra args — rctd-split falls through to its
+# DEFAULT_STAGES.
+STAGES_ARGS=()
+if (( ${STEP4_STAGE_COUNT:-0} > 0 )); then
+    STAGES_ARGS=(--stages)
+    for i in $(seq 1 "${STEP4_STAGE_COUNT}"); do
+        var="STEP4_STAGE_$i"
+        STAGES_ARGS+=("${!var}")
+    done
+fi
+
 rctd-split run \
     --sample-id   "$SAMPLE" \
     --output-root "$OUTPUT_ROOT" \
     --run-id      "$RUN_ID" \
     --max-cores   "$MAX_CORES" \
     "${CONFIG_ARGS[@]}" \
-    "${NAMED_ARGS[@]}"
+    "${NAMED_ARGS[@]}" \
+    "${STAGES_ARGS[@]}"

@@ -26,6 +26,12 @@
 #     STEP1_QC_MIN_COUNTS_CELL (opt.)  Passed as --qc-min-counts-cell.
 #     STEP1_GEX_ONLY       (optional)  Passed as --gex-only.
 #     STEP1_FORCE_RERUN    (optional)  If '1', passes --force-rerun.
+#     STEP1_STAGE_COUNT    (optional)  Number of --stages entries
+#                                      (default 0 ⇒ xenium-preprocess's
+#                                      DEFAULT_STAGES).
+#     STEP1_STAGE_N        (optional)  Nth stage name (N in 1..COUNT).
+#                                      Each is passed as one positional
+#                                      value to `xenium-preprocess run --stages …`.
 #     STEP1_OVERRIDES_B64  (optional)  base64-encoded YAML built from the
 #                                      driver's --step1-config +
 #                                      --override step1.<key>=<val>. When
@@ -135,6 +141,18 @@ if [[ -n "${STEP1_GEX_ONLY:-}" ]]; then
 fi
 if [[ "${STEP1_FORCE_RERUN:-0}" == "1" ]]; then
     extra+=(--force-rerun)
+fi
+
+# Expand the numbered STEP1_STAGE_* env vars set by submit_workflow.sh
+# --step1-stages into a single `--stages s1 s2 ...` block. COUNT=0 (or
+# unset) yields zero extra args — xenium-preprocess falls through to its
+# DEFAULT_STAGES.
+if (( ${STEP1_STAGE_COUNT:-0} > 0 )); then
+    extra+=(--stages)
+    for i in $(seq 1 "${STEP1_STAGE_COUNT}"); do
+        var="STEP1_STAGE_$i"
+        extra+=("${!var}")
+    done
 fi
 
 xenium-preprocess run \

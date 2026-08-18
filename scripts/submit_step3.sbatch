@@ -45,6 +45,11 @@
 #     STEP3_MIN_UMI              (optional) Passed as --min-umi.
 #     STEP3_RANDOM_SEED          (optional) Passed as --random-seed.
 #     STEP3_CELLTYPE_TARGET_LIST (optional) Passed as --celltype-target-list.
+#     STEP3_STAGE_COUNT          (optional) Number of --stages entries
+#                                      (default 0 ⇒ ref-build's DEFAULT_STAGES).
+#     STEP3_STAGE_N              (optional) Nth stage name (N in 1..COUNT).
+#                                      Each is passed as one positional
+#                                      value to `ref-build run --stages …`.
 #     STEP3_OVERRIDES_B64        (optional) base64-encoded YAML from the
 #                                      driver's --step3-config +
 #                                      --override step3.<key>=<val>. When
@@ -169,6 +174,19 @@ if [[ -n "${STEP3_CELLTYPE_TARGET_LIST:-}" ]]; then
     NAMED_ARGS+=(--celltype-target-list "$STEP3_CELLTYPE_TARGET_LIST")
 fi
 
+# Expand the numbered STEP3_STAGE_* env vars set by submit_workflow.sh
+# --step3-stages into a single `--stages s1 s2 ...` block. COUNT=0 (or
+# unset) yields zero extra args — ref-build falls through to its
+# DEFAULT_STAGES (the full stage list).
+STAGES_ARGS=()
+if (( ${STEP3_STAGE_COUNT:-0} > 0 )); then
+    STAGES_ARGS=(--stages)
+    for i in $(seq 1 "${STEP3_STAGE_COUNT}"); do
+        var="STEP3_STAGE_$i"
+        STAGES_ARGS+=("${!var}")
+    done
+fi
+
 ref-build run \
     --sample-id            "$SAMPLE" \
     --output-root          "$OUTPUT_ROOT" \
@@ -178,5 +196,6 @@ ref-build run \
     "${CONFIG_ARGS[@]}" \
     "${CELLTYPE_COL_ARGS[@]}" \
     "${NAMED_ARGS[@]}" \
+    "${STAGES_ARGS[@]}" \
     "${DONOR_ARGS[@]}" \
     "${FALLBACK_ARGS[@]}"

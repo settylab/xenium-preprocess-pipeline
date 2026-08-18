@@ -181,6 +181,18 @@ STEP4_POSTPROCESS_MIN_COUNTS=""  # --postprocess-min-counts     (int)
 STEP4_KEEP_INTERMEDIATE=0        # --keep-intermediate          (flag)
 
 # ---------------------------------------------------------------------------
+# Per-step --stages subset (settylab/TracyY123-nexus#26 comment 5332436239).
+# Each step CLI accepts `--stages <s1> <s2> ...` to run a subset of its
+# internal stages. Empty here ⇒ step CLI's DEFAULT_STAGES (the full list).
+# Comma-separated on the driver CLI (--step3-stages census,assemble,…),
+# threaded to the sbatch script as COUNT + numbered vars so multi-value
+# passthrough is safe under slurm's comma-delimited --export payload.
+# ---------------------------------------------------------------------------
+STEP1_STAGES=()                  # --stages (subset of VALID_STAGES)
+STEP3_STAGES=()                  # --stages (subset of VALID_STAGES)
+STEP4_STAGES=()                  # --stages (subset of VALID_STAGES)
+
+# ---------------------------------------------------------------------------
 # Per-step config file (layer 2) and dotted-key --override list (layer 3).
 # Empty by default ⇒ step falls through to its own default.yaml. See the
 # module docstring's "Per-step parameter exposure" block for precedence.
@@ -264,6 +276,23 @@ def emit_flag(name, value):
         v = str(value)
     print(f"{name}={shlex.quote(v)}")
 
+def emit_stages(name, value):
+    # YAML `stages:` list (or single-string comma-separated form) → a bash
+    # array declaration the driver eval's. Each stage identifier is short
+    # (a-z_+) so we don't bother shell-escaping. Skips emission when the
+    # value is missing / empty so the driver's own empty-array default holds.
+    if value is None:
+        return
+    if isinstance(value, str):
+        parts = [s.strip() for s in value.split(",") if s.strip()]
+    elif isinstance(value, (list, tuple)):
+        parts = [str(s).strip() for s in value if str(s).strip()]
+    else:
+        sys.exit(f"error: --config: {name.lower()} must be a list or comma-separated string, got {type(value).__name__}")
+    if not parts:
+        return
+    print(f"{name}=({' '.join(shlex.quote(p) for p in parts)})")
+
 # Driver top-level scalars. Accept `sample` as alias for `sample_id`
 # (matches the memo Tracy uses in issue-thread discussion).
 emit("SAMPLE_ID",              cfg.get("sample_id") or cfg.get("sample"))
@@ -296,27 +325,30 @@ for legacy in ("step1", "step3", "step4"):
 # the YAML key mirrors the flag name with underscores.
 xp = cfg.get("xenium_preprocess") or {}
 if isinstance(xp, dict):
-    emit(     "STEP1_X_SOURCE",           xp.get("x_source"))
-    emit(     "STEP1_QC_MIN_COUNTS_CELL", xp.get("qc_min_counts_cell"))
-    emit(     "STEP1_GEX_ONLY",           xp.get("gex_only"))
-    emit_flag("STEP1_FORCE_RERUN",        xp.get("force_rerun"))
+    emit(       "STEP1_X_SOURCE",           xp.get("x_source"))
+    emit(       "STEP1_QC_MIN_COUNTS_CELL", xp.get("qc_min_counts_cell"))
+    emit(       "STEP1_GEX_ONLY",           xp.get("gex_only"))
+    emit_flag(  "STEP1_FORCE_RERUN",        xp.get("force_rerun"))
+    emit_stages("STEP1_STAGES",             xp.get("stages"))
 
 rb = cfg.get("ref_build") or {}
 if isinstance(rb, dict):
-    emit("STEP3_DONOR_BORROW_CAP",     rb.get("donor_borrow_cap"))
-    emit("STEP3_CELL_MIN_INSTANCE",    rb.get("cell_min_instance"))
-    emit("STEP3_MIN_UMI",              rb.get("min_umi"))
-    emit("STEP3_RANDOM_SEED",          rb.get("random_seed"))
-    emit("STEP3_CELLTYPE_TARGET_LIST", rb.get("celltype_target_list"))
+    emit(       "STEP3_DONOR_BORROW_CAP",     rb.get("donor_borrow_cap"))
+    emit(       "STEP3_CELL_MIN_INSTANCE",    rb.get("cell_min_instance"))
+    emit(       "STEP3_MIN_UMI",              rb.get("min_umi"))
+    emit(       "STEP3_RANDOM_SEED",          rb.get("random_seed"))
+    emit(       "STEP3_CELLTYPE_TARGET_LIST", rb.get("celltype_target_list"))
+    emit_stages("STEP3_STAGES",               rb.get("stages"))
 
 rs = cfg.get("rctd_split") or {}
 if isinstance(rs, dict):
-    emit(     "STEP4_UMI_MIN",                rs.get("umi_min"))
-    emit(     "STEP4_COUNTS_MIN",             rs.get("counts_min"))
-    emit(     "STEP4_CELL_MIN_INSTANCE",      rs.get("cell_min_instance"))
-    emit(     "STEP4_DOUBLET_MODE",           rs.get("doublet_mode"))
-    emit(     "STEP4_POSTPROCESS_MIN_COUNTS", rs.get("postprocess_min_counts"))
-    emit_flag("STEP4_KEEP_INTERMEDIATE",      rs.get("keep_intermediate"))
+    emit(       "STEP4_UMI_MIN",                rs.get("umi_min"))
+    emit(       "STEP4_COUNTS_MIN",             rs.get("counts_min"))
+    emit(       "STEP4_CELL_MIN_INSTANCE",      rs.get("cell_min_instance"))
+    emit(       "STEP4_DOUBLET_MODE",           rs.get("doublet_mode"))
+    emit(       "STEP4_POSTPROCESS_MIN_COUNTS", rs.get("postprocess_min_counts"))
+    emit_flag(  "STEP4_KEEP_INTERMEDIATE",      rs.get("keep_intermediate"))
+    emit_stages("STEP4_STAGES",                 rs.get("stages"))
 PY
     )
     if [[ -n "$_CONFIG_ASSIGNS" ]]; then
@@ -473,6 +505,27 @@ step CLI flag; empty ⇒ step CLI's default.yaml value):
     --step4-keep-intermediate         Keep <run_dir>/intermediate/ after
                                       step 4 completes. Default: drop.
 
+Sub-step (stage) subsetting
+(TracyY123-nexus#26 comment 5332436239; each step CLI accepts --stages
+<s1> <s2> ... to run a subset of its internal stages. Composes with
+--start-step: --start-step ref-build + --step3-stages census,assemble,…
+resumes ref-build from the census stage. Empty ⇒ that step's DEFAULT_STAGES.
+Per-stage sentinels still short-circuit already-completed stages — combine
+with --override stepN.force_rerun=true to nuke sentinels and re-run.):
+
+  --step1-stages <s1[,s2,...]>       xenium-preprocess stages. Choices:
+                                      proseg_to_anndata, enrich_xenium_id,
+                                      qc_filter, xenium_ranger_to_anndata,
+                                      preprocess, split_prep, rctd_prep.
+  --step3-stages <s1[,s2,...]>       ref-build stages. Choices:
+                                      load_primary_and_donors, census,
+                                      assemble, export_mtx, rctd_reference_build.
+  --step4-stages <s1[,s2,...]>       rctd-split stages. Choices:
+                                      rctd_run, split_purify, export_mtx,
+                                      mtx_to_h5ad, filter_status, postprocess,
+                                      writeback_to_step1_raw,
+                                      celltype_writeback, qc_report.
+
 Per-step catch-all overrides
 (for any nested config key NOT covered by the named flags above):
 
@@ -534,6 +587,22 @@ while [[ $# -gt 0 ]]; do
         --step4-doublet-mode)            STEP4_DOUBLET_MODE="$2"; shift 2 ;;
         --step4-postprocess-min-counts)  STEP4_POSTPROCESS_MIN_COUNTS="$2"; shift 2 ;;
         --step4-keep-intermediate)       STEP4_KEEP_INTERMEDIATE=1; shift ;;
+        # --stepN-stages: comma-separated subset of the step's VALID_STAGES.
+        # Threaded to the step CLI as `--stages s1 s2 ...`. Composes with
+        # --start-step (subsets the started step's stage list). Empty ⇒
+        # step CLI's DEFAULT_STAGES.
+        --step1-stages)
+            IFS=',' read -r -a STEP1_STAGES <<< "$2"
+            shift 2
+            ;;
+        --step3-stages)
+            IFS=',' read -r -a STEP3_STAGES <<< "$2"
+            shift 2
+            ;;
+        --step4-stages)
+            IFS=',' read -r -a STEP4_STAGES <<< "$2"
+            shift 2
+            ;;
         # Driver-level workflow config (already consumed by the pre-scan
         # above; skipped here without an error so the loop stays uniform
         # and later CLI flags — which by policy WIN over YAML — parse
@@ -863,6 +932,32 @@ if [[ -n "$STEP4_POSTPROCESS_MIN_COUNTS" ]]; then
 fi
 if [[ "$STEP4_KEEP_INTERMEDIATE" -eq 1 ]]; then
     COMMON_EXPORTS="$COMMON_EXPORTS,STEP4_KEEP_INTERMEDIATE=1"
+fi
+
+# ---------------------------------------------------------------------------
+# Per-step --stages subset. Threaded as COUNT + numbered vars so multi-value
+# passthrough is safe under slurm's comma-delimited `--export=ALL,K=V,K=V`
+# payload (mirrors the DONOR_H5AD / FALLBACK_H5AD convention). Empty arrays
+# skip the whole block, so the sbatch script's `${STEPN_STAGE_COUNT:-0}` gate
+# falls through to the step CLI's DEFAULT_STAGES.
+# ---------------------------------------------------------------------------
+if (( ${#STEP1_STAGES[@]} > 0 )); then
+    COMMON_EXPORTS="$COMMON_EXPORTS,STEP1_STAGE_COUNT=${#STEP1_STAGES[@]}"
+    for i in "${!STEP1_STAGES[@]}"; do
+        COMMON_EXPORTS="$COMMON_EXPORTS,STEP1_STAGE_$((i+1))=${STEP1_STAGES[$i]}"
+    done
+fi
+if (( ${#STEP3_STAGES[@]} > 0 )); then
+    COMMON_EXPORTS="$COMMON_EXPORTS,STEP3_STAGE_COUNT=${#STEP3_STAGES[@]}"
+    for i in "${!STEP3_STAGES[@]}"; do
+        COMMON_EXPORTS="$COMMON_EXPORTS,STEP3_STAGE_$((i+1))=${STEP3_STAGES[$i]}"
+    done
+fi
+if (( ${#STEP4_STAGES[@]} > 0 )); then
+    COMMON_EXPORTS="$COMMON_EXPORTS,STEP4_STAGE_COUNT=${#STEP4_STAGES[@]}"
+    for i in "${!STEP4_STAGES[@]}"; do
+        COMMON_EXPORTS="$COMMON_EXPORTS,STEP4_STAGE_$((i+1))=${STEP4_STAGES[$i]}"
+    done
 fi
 
 # ---------------------------------------------------------------------------
