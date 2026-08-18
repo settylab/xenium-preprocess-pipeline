@@ -240,6 +240,12 @@ can layer overrides on top of.
 Recommended location: colocated with the run's outputs at
 `<output_root>/<sample>/<sample>_<run_id>/config.yaml`.
 
+Per-step keys use the **semantic step names** (`xenium_preprocess:`,
+`ref_build:`, `rctd_split:`) — never numeric (`step1:` / `step3:` /
+`step4:`). This mirrors `--start-step`, whose semantic-alias migration
+landed alongside this feature. The driver refuses a numeric key
+loudly.
+
 ```yaml
 # runs/MH10/MH10_cap100/config.yaml
 sample_id: MH10
@@ -255,12 +261,12 @@ celltype_marker_json: /fh/fast/setty_m/user/ryang/data/markers.json
 test_object:   /fh/fast/setty_m/user/ryang/other/MH3_test_object.rds
 reference_rds: /fh/fast/setty_m/user/ryang/refs/MH2_scRNA_ref.rds
 
-step1:
+xenium_preprocess:
   x_source: maxpost_counts
   qc_min_counts_cell: 10
-step3:
+ref_build:
   donor_borrow_cap: 100
-step4:
+rctd_split:
   umi_min: 10
   doublet_mode: doublet
 ```

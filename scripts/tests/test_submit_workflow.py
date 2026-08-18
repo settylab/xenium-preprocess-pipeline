@@ -831,7 +831,7 @@ def _write_config(tmp_path, body: str) -> str:
 def test_workflow_config_seeds_driver_defaults(env, tmp_path):
     # --config <path> populates sample_id / flex_h5ad / celltype-marker-json
     # + a per-step named param so the chain runs without repeating them on
-    # the CLI. Assert (1) the run submits, (2) the STEP3 named param
+    # the CLI. Assert (1) the run submits, (2) the ref_build named param
     # threads through to the sbatch --export payload.
     flex = _flex_h5ad(tmp_path)
     marker = _marker_json(tmp_path)
@@ -839,7 +839,7 @@ def test_workflow_config_seeds_driver_defaults(env, tmp_path):
         sample_id: MH10
         flex_h5ad: {flex}
         celltype_marker_json: {marker}
-        step3:
+        ref_build:
           donor_borrow_cap: 137
     """))
     r = _run_driver(env, "--config", cfg)
@@ -858,7 +858,7 @@ def test_workflow_config_cli_wins_over_yaml(env, tmp_path):
         sample_id: WRONG_FROM_YAML
         flex_h5ad: {flex}
         celltype_marker_json: {marker}
-        step3:
+        ref_build:
           donor_borrow_cap: 999
     """))
     r = _run_driver(env, "--config", cfg,
@@ -870,7 +870,7 @@ def test_workflow_config_cli_wins_over_yaml(env, tmp_path):
     # CLI --sample-id wins over YAML sample_id.
     assert "SAMPLE=MH10" in step1["export"]
     step3 = next(r for r in records if r["script"].endswith("submit_step3.sbatch"))
-    # CLI --step3-donor-borrow-cap wins over YAML step3.donor_borrow_cap.
+    # CLI --step3-donor-borrow-cap wins over YAML ref_build.donor_borrow_cap.
     assert "STEP3_DONOR_BORROW_CAP=42" in step3["export"]
 
 
@@ -879,6 +879,59 @@ def test_workflow_config_missing_file_fails_loud(env, tmp_path):
                     "--sample-id", "MH10")
     assert r.returncode != 0
     assert "not found" in r.stderr
+
+
+def test_workflow_config_rejects_numeric_step_keys(env, tmp_path):
+    # settylab/TracyY123-nexus#26 comment 5321822161: the config schema
+    # is semantic-only. Numeric `step1:` / `step3:` / `step4:` at the top
+    # level must fail loud so a typo (or a copy-paste from an older
+    # sketch) doesn't silently no-op the whole section.
+    flex = _flex_h5ad(tmp_path)
+    marker = _marker_json(tmp_path)
+    for legacy in ("step1", "step3", "step4"):
+        cfg = _write_config(tmp_path, textwrap.dedent(f"""\
+            sample_id: MH10
+            flex_h5ad: {flex}
+            celltype_marker_json: {marker}
+            {legacy}:
+              donor_borrow_cap: 100
+        """))
+        r = _run_driver(env, "--config", cfg)
+        assert r.returncode != 0, (
+            f"expected --config to reject `{legacy}:` key; stderr:\n{r.stderr}"
+        )
+        # Error must name both the offending key and the accepted form.
+        assert legacy in r.stderr, r.stderr
+        assert "xenium_preprocess" in r.stderr or "ref_build" in r.stderr \
+            or "rctd_split" in r.stderr, r.stderr
+
+
+def test_workflow_config_accepts_all_three_semantic_step_keys(env, tmp_path):
+    # Round-trip check: xenium_preprocess / ref_build / rctd_split all
+    # thread through to the correct STEP{1,3,4}_* env var on the sbatch
+    # --export payload.
+    flex = _flex_h5ad(tmp_path)
+    marker = _marker_json(tmp_path)
+    cfg = _write_config(tmp_path, textwrap.dedent(f"""\
+        sample_id: MH10
+        flex_h5ad: {flex}
+        celltype_marker_json: {marker}
+        xenium_preprocess:
+          qc_min_counts_cell: 11
+        ref_build:
+          donor_borrow_cap: 33
+        rctd_split:
+          umi_min: 55
+    """))
+    r = _run_driver(env, "--config", cfg)
+    assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
+    records = _parse_log(env["log"])
+    step1 = next(r for r in records if r["script"].endswith("submit_step1.sbatch"))
+    step3 = next(r for r in records if r["script"].endswith("submit_step3.sbatch"))
+    step4 = next(r for r in records if r["script"].endswith("submit_step4.sbatch"))
+    assert "STEP1_QC_MIN_COUNTS_CELL=11" in step1["export"]
+    assert "STEP3_DONOR_BORROW_CAP=33"    in step3["export"]
+    assert "STEP4_UMI_MIN=55"             in step4["export"]
 
 
 def test_start_step_semantic_alias_ref_build(env, tmp_path):

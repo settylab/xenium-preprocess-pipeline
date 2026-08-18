@@ -201,7 +201,13 @@ STEP4_OVERRIDES=()
 # (sample_id, run_id, output_root, flex_h5ad, celltype_marker_json,
 # test_object, reference_rds, proseg_dir, xenium_cells, xenium_ranger_dir,
 # celltype_col_for_ref_build, max_cores) plus per-step scalars nested under
-# step1: / step3: / step4:.
+# the semantic step names — `xenium_preprocess:`, `ref_build:`, `rctd_split:`
+# (settylab/TracyY123-nexus#26 comment 5321822161 — no numeric `step1:` /
+# `step3:` / `step4:` at any level of the schema, consistent with the
+# `--start-step` semantic-alias migration in commit `afaf82c`). Since the
+# config-file surface is brand new in this commit, there is no back-compat
+# obligation to accept `stepN:` keys — the schema is semantic-only from day
+# one.
 #
 # Precedence is "CLI wins over YAML": we pre-scan argv for --config and
 # apply its values as DEFAULTS here, before the arg-parse loop runs; the
@@ -273,31 +279,44 @@ emit("XENIUM_RANGER_DIR",      cfg.get("xenium_ranger_dir"))
 emit("CELLTYPE_COL_FOR_REF_BUILD", cfg.get("celltype_col_for_ref_build"))
 emit("MAX_CORES_OVERRIDE",     cfg.get("max_cores"))
 
-# Per-step scalars. Each of these has a matching --stepN-<param> CLI flag
-# in the driver; the YAML key mirrors the flag name with underscores.
-step1 = cfg.get("step1") or {}
-if isinstance(step1, dict):
-    emit(     "STEP1_X_SOURCE",           step1.get("x_source"))
-    emit(     "STEP1_QC_MIN_COUNTS_CELL", step1.get("qc_min_counts_cell"))
-    emit(     "STEP1_GEX_ONLY",           step1.get("gex_only"))
-    emit_flag("STEP1_FORCE_RERUN",        step1.get("force_rerun"))
+# Per-step scalars. Nested under semantic step names to match
+# commit `afaf82c`'s --start-step alias migration — no numeric
+# `step1:` / `step3:` / `step4:` accepted. Fail loud if the operator
+# uses the numeric form so a typo doesn't silently no-op.
+for legacy in ("step1", "step3", "step4"):
+    if legacy in cfg:
+        sys.exit(
+            f"error: --config {path}: top-level key '{legacy}:' is not "
+            f"accepted; use the semantic step name "
+            f"('xenium_preprocess:' / 'ref_build:' / 'rctd_split:'). "
+            f"See settylab/TracyY123-nexus#26 comment 5321822161."
+        )
 
-step3 = cfg.get("step3") or {}
-if isinstance(step3, dict):
-    emit("STEP3_DONOR_BORROW_CAP",     step3.get("donor_borrow_cap"))
-    emit("STEP3_CELL_MIN_INSTANCE",    step3.get("cell_min_instance"))
-    emit("STEP3_MIN_UMI",              step3.get("min_umi"))
-    emit("STEP3_RANDOM_SEED",          step3.get("random_seed"))
-    emit("STEP3_CELLTYPE_TARGET_LIST", step3.get("celltype_target_list"))
+# Each of these has a matching --stepN-<param> CLI flag in the driver;
+# the YAML key mirrors the flag name with underscores.
+xp = cfg.get("xenium_preprocess") or {}
+if isinstance(xp, dict):
+    emit(     "STEP1_X_SOURCE",           xp.get("x_source"))
+    emit(     "STEP1_QC_MIN_COUNTS_CELL", xp.get("qc_min_counts_cell"))
+    emit(     "STEP1_GEX_ONLY",           xp.get("gex_only"))
+    emit_flag("STEP1_FORCE_RERUN",        xp.get("force_rerun"))
 
-step4 = cfg.get("step4") or {}
-if isinstance(step4, dict):
-    emit(     "STEP4_UMI_MIN",                step4.get("umi_min"))
-    emit(     "STEP4_COUNTS_MIN",             step4.get("counts_min"))
-    emit(     "STEP4_CELL_MIN_INSTANCE",      step4.get("cell_min_instance"))
-    emit(     "STEP4_DOUBLET_MODE",           step4.get("doublet_mode"))
-    emit(     "STEP4_POSTPROCESS_MIN_COUNTS", step4.get("postprocess_min_counts"))
-    emit_flag("STEP4_KEEP_INTERMEDIATE",      step4.get("keep_intermediate"))
+rb = cfg.get("ref_build") or {}
+if isinstance(rb, dict):
+    emit("STEP3_DONOR_BORROW_CAP",     rb.get("donor_borrow_cap"))
+    emit("STEP3_CELL_MIN_INSTANCE",    rb.get("cell_min_instance"))
+    emit("STEP3_MIN_UMI",              rb.get("min_umi"))
+    emit("STEP3_RANDOM_SEED",          rb.get("random_seed"))
+    emit("STEP3_CELLTYPE_TARGET_LIST", rb.get("celltype_target_list"))
+
+rs = cfg.get("rctd_split") or {}
+if isinstance(rs, dict):
+    emit(     "STEP4_UMI_MIN",                rs.get("umi_min"))
+    emit(     "STEP4_COUNTS_MIN",             rs.get("counts_min"))
+    emit(     "STEP4_CELL_MIN_INSTANCE",      rs.get("cell_min_instance"))
+    emit(     "STEP4_DOUBLET_MODE",           rs.get("doublet_mode"))
+    emit(     "STEP4_POSTPROCESS_MIN_COUNTS", rs.get("postprocess_min_counts"))
+    emit_flag("STEP4_KEEP_INTERMEDIATE",      rs.get("keep_intermediate"))
 PY
     )
     if [[ -n "$_CONFIG_ASSIGNS" ]]; then
@@ -328,12 +347,17 @@ Optional:
                                `proseg_dir`, `xenium_cells`,
                                `xenium_ranger_dir`,
                                `celltype_col_for_ref_build`, `max_cores`
-                               plus per-step scalars nested under
-                               `step1:` / `step3:` / `step4:` (each key
-                               mirrors the matching --stepN-<param> CLI
-                               flag with underscores). CLI flags win over
-                               the YAML — the file provides defaults.
-                               Recommended location:
+                               plus per-step scalars nested under the
+                               semantic step names
+                               `xenium_preprocess:` / `ref_build:` /
+                               `rctd_split:` (each key mirrors the
+                               matching --stepN-<param> CLI flag with
+                               underscores). Numeric step names
+                               (`step1:` / `step3:` / `step4:`) are
+                               rejected — use the semantic form
+                               consistent with --start-step. CLI flags
+                               win over the YAML — the file provides
+                               defaults. Recommended location:
                                <output_root>/<sample>/<sample>_<run_id>/config.yaml.
   --output-root <dir>          Root output directory (default: env
                                OUTPUT_ROOT, else
