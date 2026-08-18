@@ -48,6 +48,16 @@ Reproducibility:
       - proseg_purified histogram: ``step4.postprocess.qc.min_counts``
     If the config file or a threshold key is absent, the line is
     omitted — never hard-coded.
+  * The proseg_purified histogram sources its `nCount_Proseg` values
+    from the pre-filter intermediate
+    ``intermediate/adata/<S>_step4_unpurified.h5ad`` when available, so
+    cells that ``postprocess.filter_cells(min_counts=...)`` removed are
+    still visible in the distribution on the left of the dashed
+    threshold line (Tracy's ask on settylab/TracyY123-nexus#26
+    comment 5322401335, item 2). Falls back to the post-filter
+    ``proseg_purified.h5ad`` when the intermediate has already been
+    cleaned up (e.g. a ``--force-rerun qc_report`` on an
+    already-completed + cleaned run).
   * RCTD spot_class summary + first_type-in-rejected tabulation are
     computed from ``proseg_raw.obs`` (``spot_class`` + ``first_type``
     are folded from ``intermediate/adata/step4_unpurified.h5ad`` onto
@@ -1298,9 +1308,42 @@ def run_qc_report(
     hist_xenium_vals = _hist_values_from_obs(
         xenium, "total_counts", "xenium_ranger",
     )
-    hist_purified_vals = _hist_values_from_obs(
-        purified, "nCount_Proseg", "proseg_purified",
+    # Prefer the pre-min_counts population from
+    # `intermediate/adata/<S>_step4_unpurified.h5ad` so cells that
+    # `postprocess.filter_cells(min_counts=...)` removed still appear in
+    # the histogram on the left of the dashed threshold line
+    # (settylab/TracyY123-nexus#26 comment 5322401335, item 2). Fall
+    # back to the post-filter purified.h5ad when the intermediate is
+    # unavailable — e.g. `--force-rerun qc_report` against an
+    # already-cleaned run.
+    unpurified_h5ad_p = intermediate_path(
+        output_root, sample_id, run_id, "unpurified_h5ad",
     )
+    hist_purified_source = "proseg_purified (post-min_counts)"
+    if unpurified_h5ad_p.exists():
+        log(f"[qc_report] reading pre-filter purified population from "
+            f"{unpurified_h5ad_p}")
+        unpurified = ad.read_h5ad(unpurified_h5ad_p)
+        if "nCount_Proseg" in unpurified.obs.columns:
+            hist_purified_vals = _hist_values_from_obs(
+                unpurified, "nCount_Proseg", "step4_unpurified",
+            )
+            hist_purified_source = "step4_unpurified (pre-min_counts)"
+        else:
+            log("[qc_report]   step4_unpurified.h5ad missing "
+                "obs['nCount_Proseg'] — falling back to post-filter "
+                "purified.h5ad for the histogram.")
+            hist_purified_vals = _hist_values_from_obs(
+                purified, "nCount_Proseg", "proseg_purified",
+            )
+    else:
+        log(f"[qc_report] {unpurified_h5ad_p} not found — purified "
+            "histogram will show only cells that survived the "
+            "min_counts filter. Pass --keep-intermediate on the "
+            "original run to preserve the pre-filter source.")
+        hist_purified_vals = _hist_values_from_obs(
+            purified, "nCount_Proseg", "proseg_purified",
+        )
 
     # Also touch layers[raw_layer] to enforce the fail-loud invariant
     # for the histogram source; the layer is guaranteed to exist here
@@ -1384,10 +1427,14 @@ def run_qc_report(
         out_path=img_hist_xenium,
         threshold=thresholds["xenium"],
     )
-    log(f"[qc_report] writing histogram {img_hist_purified}")
+    log(f"[qc_report] writing histogram {img_hist_purified} "
+        f"(source: {hist_purified_source})")
     _hist_log10_counts(
         plt, hist_purified_vals,
-        title=f"{sample_id}: proseg_purified log10(nCount_Proseg)",
+        title=(
+            f"{sample_id}: proseg_purified log10(nCount_Proseg)\n"
+            f"source: {hist_purified_source}"
+        ),
         xlabel="log10(nCount_Proseg)",
         out_path=img_hist_purified,
         threshold=thresholds["purified"],

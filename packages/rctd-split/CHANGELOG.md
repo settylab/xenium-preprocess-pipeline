@@ -6,6 +6,23 @@ All notable changes to rctd-split will be documented here. Follows
 ## [Unreleased]
 
 ### Changed
+- `qc_report` proseg_purified histogram now sources `nCount_Proseg`
+  from `intermediate/adata/<S>_step4_unpurified.h5ad` (the pre-filter
+  intermediate) when available, so cells that
+  `postprocess.filter_cells(min_counts=...)` removed still appear in
+  the distribution on the left of the dashed threshold line. Tracy's
+  ask on `settylab/TracyY123-nexus#26` comment 5322401335 (item 2):
+  "for hist_nCount_Proseg_proseg_purified.png … please also include
+  those cells which are not removed in purified.adata and use the
+  dash line to show the threshold so that we could know which cells
+  are removed." The plot title picks up a `source:` suffix
+  (`step4_unpurified (pre-min_counts)` vs.
+  `proseg_purified (post-min_counts)`) so the reader can tell which
+  population they're looking at. Falls back to the post-filter
+  `proseg_purified.h5ad` when the intermediate has been cleaned up
+  (e.g. a `--force-rerun qc_report` on an already-completed +
+  cleaned run without `--keep-intermediate`).
+
 - `pipeline._drop_intermediate_outputs` now drops the ENTIRE
   `intermediate/` directory after the terminal `qc_report` stage
   succeeds — previously it kept `intermediate/adata/*.h5ad` and
