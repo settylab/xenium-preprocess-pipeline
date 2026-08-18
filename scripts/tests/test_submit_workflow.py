@@ -659,8 +659,8 @@ def test_workflow_submit_log_mirrors_summary(env, tmp_path):
     assert wf_log.exists(), f"missing workflow-submit.log at {wf_log}"
     text = wf_log.read_text()
     assert "Workflow chain submitted" in text
-    assert "sample_id  = MH10" in text
-    assert "run_id     = log_mirror" in text
+    assert "sample_id         = MH10" in text
+    assert "run_id            = log_mirror" in text
     # Job ids show up on the step lines.
     records = _parse_log(env["log"])
     for step, rec in zip((1, 3, 4), records):
@@ -1035,9 +1035,10 @@ def test_start_step_summary_marks_skipped_steps(env, tmp_path):
                     "--start-step", "3",
                     "--run-id", "sum3")
     assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
-    # Summary shows step 1 as skipped, step 3 / step 4 as submitted jobids.
-    assert "step 1     = skipped" in r.stdout
-    assert "start_step = 3" in r.stdout
+    # Summary shows xenium-preprocess as skipped, ref-build / rctd-split
+    # as submitted jobids, and start_step names the resumed step.
+    assert "xenium-preprocess = skipped" in r.stdout
+    assert "start_step        = ref-build" in r.stdout
 
 
 # --------------------------------------------------------------------------

@@ -628,16 +628,26 @@ case "$START_STEP" in
         ;;
 esac
 
+# Semantic name for the normalized START_STEP — used in all user-facing
+# printouts (summary block, error/info messages, skipped-step markers) so
+# operators see the same names they type on --start-step, not the numeric
+# internal representation.
+case "$START_STEP" in
+    1) START_STEP_NAME="xenium-preprocess" ;;
+    3) START_STEP_NAME="ref-build" ;;
+    4) START_STEP_NAME="rctd-split" ;;
+esac
+
 if [[ "$START_STEP" -ne 1 ]]; then
     if [[ -z "$RUN_ID_OVERRIDE" ]]; then
-        echo "error: --start-step $START_STEP requires --run-id (or \$RUN_ID env)." >&2
+        echo "error: --start-step $START_STEP_NAME requires --run-id (or \$RUN_ID env)." >&2
         echo "       Without a bound run-id there is no run folder to resume from." >&2
         exit 2
     fi
     if [[ "$FORCE" -eq 1 ]]; then
-        echo "error: --force is incompatible with --start-step $START_STEP." >&2
-        echo "       --force wipes the run folder, which would delete the step-1" >&2
-        echo "       (and step-3) outputs that --start-step $START_STEP resumes from." >&2
+        echo "error: --force is incompatible with --start-step $START_STEP_NAME." >&2
+        echo "       --force wipes the run folder, which would delete the xenium-preprocess" >&2
+        echo "       (and ref-build) outputs that --start-step $START_STEP_NAME resumes from." >&2
         exit 2
     fi
     # Resume semantics require reusing the existing folder — set the flag
@@ -678,7 +688,7 @@ if [[ -n "$RUN_ID_OVERRIDE" ]]; then
         else
             echo "error: run folder already exists: $RUN_DIR" >&2
             echo "       Pass --reuse-run-dir to keep it (resume-style; new writes overwrite files in place)," >&2
-            echo "       --force to wipe it and re-run from step 1," >&2
+            echo "       --force to wipe it and re-run from xenium-preprocess," >&2
             echo "       or pick a different --run-id." >&2
             exit 3
         fi
@@ -690,11 +700,11 @@ if [[ -n "$RUN_ID_OVERRIDE" ]]; then
         # step-1/step-3 needs to have produced in-tree. The folder + logs/
         # get mkdir -p'd below at LOG_DIR creation time.
         if [[ "$START_STEP" == "4" && -n "$TEST_OBJECT" && -n "$REFERENCE_RDS" ]]; then
-            echo "info: --start-step 4 + explicit --test-object/--reference-rds → creating fresh run folder:" >&2
+            echo "info: --start-step rctd-split + explicit --test-object/--reference-rds → creating fresh run folder:" >&2
             echo "      $RUN_DIR" >&2
         else
-            echo "error: --start-step $START_STEP but the run folder does not exist: $RUN_DIR" >&2
-            echo "       There is nothing to resume from — did you mean --start-step 1?" >&2
+            echo "error: --start-step $START_STEP_NAME but the run folder does not exist: $RUN_DIR" >&2
+            echo "       There is nothing to resume from — did you mean --start-step xenium-preprocess?" >&2
             exit 3
         fi
     fi
@@ -1053,7 +1063,7 @@ JOB4=$(_sbatch --parsable \
 _fmt_step() {
     local jobid="$1" dep="$2"
     if [[ -z "$jobid" ]]; then
-        echo "skipped (--start-step $START_STEP)"
+        echo "skipped (--start-step $START_STEP_NAME)"
     elif [[ -n "$dep" ]]; then
         echo "$jobid   ($dep)"
     else
@@ -1061,20 +1071,22 @@ _fmt_step() {
     fi
 }
 
-_step1_line=$(_fmt_step "$JOB1" "")
-_step3_line=$(_fmt_step "$JOB3" "${JOB1:+afterok:$JOB1}")
-_step4_line=$(_fmt_step "$JOB4" "${JOB3:+afterok:$JOB3}")
+_xp_line=$(_fmt_step "$JOB1" "")
+_rb_line=$(_fmt_step "$JOB3" "${JOB1:+afterok:$JOB1}")
+_rs_line=$(_fmt_step "$JOB4" "${JOB3:+afterok:$JOB3}")
 
+# Column width matches the longest key (`xenium-preprocess`, 17 chars) so
+# the `=` column lines up across every row.
 _summary=$(cat <<EOF
 Workflow chain submitted:
-  sample_id  = $SAMPLE_ID
-  run_id     = $RUN_ID
-  output_dir = $OUTPUT_ROOT/$SAMPLE_ID/${SAMPLE_ID}_${RUN_ID}/
-  start_step = $START_STEP
-  step 1     = $_step1_line
-  step 3     = $_step3_line
-  step 4     = $_step4_line
-  submitted  = $(date -Iseconds 2>/dev/null || date)
+  sample_id         = $SAMPLE_ID
+  run_id            = $RUN_ID
+  output_dir        = $OUTPUT_ROOT/$SAMPLE_ID/${SAMPLE_ID}_${RUN_ID}/
+  start_step        = $START_STEP_NAME
+  xenium-preprocess = $_xp_line
+  ref-build         = $_rb_line
+  rctd-split        = $_rs_line
+  submitted         = $(date -Iseconds 2>/dev/null || date)
 EOF
 )
 echo "$_summary"
