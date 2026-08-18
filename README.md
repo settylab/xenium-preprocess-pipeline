@@ -187,6 +187,25 @@ ref-build run \
     --stages assemble_reference validate_reference
 ```
 
+The driver forwards a per-step `--stages` subset via three semantic
+flags — `--xenium-preprocess-stages`, `--ref-build-stages`,
+`--rctd-split-stages` — each taking a comma-separated stage list.
+Composes with `--start-step`, so e.g.
+
+```bash
+./scripts/submit_workflow.sh \
+    --sample-id            SAMPLE1 \
+    --output-root          /data/workflow_runs \
+    --run-id               demo_v1 \
+    --flex-h5ad            /data/SAMPLE1/scRNA/SAMPLE1_flex.h5ad \
+    --celltype-marker-json /data/markers/markers.json \
+    --start-step           ref-build \
+    --ref-build-stages     census,assemble,export_mtx,rctd_reference_build
+```
+
+resumes the chain at `ref-build` from the `census` stage. Empty ⇒ that
+step's `DEFAULT_STAGES` (the full list).
+
 Stages are sentinel-gated — reruns skip already-done work; pass
 `--force-rerun` to redo.
 

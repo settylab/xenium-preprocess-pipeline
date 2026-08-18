@@ -166,8 +166,8 @@ if [[ -n "${STEP4_TEST_OBJECT:-}" ]]; then
 fi
 
 # Expand the numbered STEP4_STAGE_* env vars set by submit_workflow.sh
-# --step4-stages into a single `--stages s1 s2 ...` block. COUNT=0 (or
-# unset) yields zero extra args — rctd-split falls through to its
+# --rctd-split-stages into a single `--stages s1 s2 ...` block. COUNT=0
+# (or unset) yields zero extra args — rctd-split falls through to its
 # DEFAULT_STAGES.
 STAGES_ARGS=()
 if (( ${STEP4_STAGE_COUNT:-0} > 0 )); then

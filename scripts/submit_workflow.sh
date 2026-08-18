@@ -184,7 +184,7 @@ STEP4_KEEP_INTERMEDIATE=0        # --keep-intermediate          (flag)
 # Per-step --stages subset (settylab/TracyY123-nexus#26 comment 5332436239).
 # Each step CLI accepts `--stages <s1> <s2> ...` to run a subset of its
 # internal stages. Empty here ⇒ step CLI's DEFAULT_STAGES (the full list).
-# Comma-separated on the driver CLI (--step3-stages census,assemble,…),
+# Comma-separated on the driver CLI (--ref-build-stages census,assemble,…),
 # threaded to the sbatch script as COUNT + numbered vars so multi-value
 # passthrough is safe under slurm's comma-delimited --export payload.
 # ---------------------------------------------------------------------------
@@ -508,19 +508,20 @@ step CLI flag; empty ⇒ step CLI's default.yaml value):
 Sub-step (stage) subsetting
 (TracyY123-nexus#26 comment 5332436239; each step CLI accepts --stages
 <s1> <s2> ... to run a subset of its internal stages. Composes with
---start-step: --start-step ref-build + --step3-stages census,assemble,…
+--start-step: --start-step ref-build + --ref-build-stages census,assemble,…
 resumes ref-build from the census stage. Empty ⇒ that step's DEFAULT_STAGES.
 Per-stage sentinels still short-circuit already-completed stages — combine
 with --override stepN.force_rerun=true to nuke sentinels and re-run.):
 
-  --step1-stages <s1[,s2,...]>       xenium-preprocess stages. Choices:
+  --xenium-preprocess-stages <s1[,s2,...]>
+                                     xenium-preprocess stages. Choices:
                                       proseg_to_anndata, enrich_xenium_id,
                                       qc_filter, xenium_ranger_to_anndata,
                                       preprocess, split_prep, rctd_prep.
-  --step3-stages <s1[,s2,...]>       ref-build stages. Choices:
+  --ref-build-stages <s1[,s2,...]>   ref-build stages. Choices:
                                       load_primary_and_donors, census,
                                       assemble, export_mtx, rctd_reference_build.
-  --step4-stages <s1[,s2,...]>       rctd-split stages. Choices:
+  --rctd-split-stages <s1[,s2,...]>  rctd-split stages. Choices:
                                       rctd_run, split_purify, export_mtx,
                                       mtx_to_h5ad, filter_status, postprocess,
                                       writeback_to_step1_raw,
@@ -587,19 +588,20 @@ while [[ $# -gt 0 ]]; do
         --step4-doublet-mode)            STEP4_DOUBLET_MODE="$2"; shift 2 ;;
         --step4-postprocess-min-counts)  STEP4_POSTPROCESS_MIN_COUNTS="$2"; shift 2 ;;
         --step4-keep-intermediate)       STEP4_KEEP_INTERMEDIATE=1; shift ;;
-        # --stepN-stages: comma-separated subset of the step's VALID_STAGES.
+        # Per-step --stages: comma-separated subset of the step's VALID_STAGES.
         # Threaded to the step CLI as `--stages s1 s2 ...`. Composes with
         # --start-step (subsets the started step's stage list). Empty ⇒
-        # step CLI's DEFAULT_STAGES.
-        --step1-stages)
+        # step CLI's DEFAULT_STAGES. Flag names mirror the semantic step
+        # names (--start-step, YAML keys) — no numeric aliases.
+        --xenium-preprocess-stages)
             IFS=',' read -r -a STEP1_STAGES <<< "$2"
             shift 2
             ;;
-        --step3-stages)
+        --ref-build-stages)
             IFS=',' read -r -a STEP3_STAGES <<< "$2"
             shift 2
             ;;
-        --step4-stages)
+        --rctd-split-stages)
             IFS=',' read -r -a STEP4_STAGES <<< "$2"
             shift 2
             ;;

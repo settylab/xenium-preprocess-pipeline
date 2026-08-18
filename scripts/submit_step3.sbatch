@@ -175,8 +175,8 @@ if [[ -n "${STEP3_CELLTYPE_TARGET_LIST:-}" ]]; then
 fi
 
 # Expand the numbered STEP3_STAGE_* env vars set by submit_workflow.sh
-# --step3-stages into a single `--stages s1 s2 ...` block. COUNT=0 (or
-# unset) yields zero extra args — ref-build falls through to its
+# --ref-build-stages into a single `--stages s1 s2 ...` block. COUNT=0
+# (or unset) yields zero extra args — ref-build falls through to its
 # DEFAULT_STAGES (the full stage list).
 STAGES_ARGS=()
 if (( ${STEP3_STAGE_COUNT:-0} > 0 )); then

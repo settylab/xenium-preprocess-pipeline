@@ -144,9 +144,9 @@ if [[ "${STEP1_FORCE_RERUN:-0}" == "1" ]]; then
 fi
 
 # Expand the numbered STEP1_STAGE_* env vars set by submit_workflow.sh
-# --step1-stages into a single `--stages s1 s2 ...` block. COUNT=0 (or
-# unset) yields zero extra args — xenium-preprocess falls through to its
-# DEFAULT_STAGES.
+# --xenium-preprocess-stages into a single `--stages s1 s2 ...` block.
+# COUNT=0 (or unset) yields zero extra args — xenium-preprocess falls
+# through to its DEFAULT_STAGES.
 if (( ${STEP1_STAGE_COUNT:-0} > 0 )); then
     extra+=(--stages)
     for i in $(seq 1 "${STEP1_STAGE_COUNT}"); do
