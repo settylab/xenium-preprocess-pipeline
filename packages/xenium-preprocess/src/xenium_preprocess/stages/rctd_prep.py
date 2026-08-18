@@ -11,7 +11,7 @@ downstream `create.RCTD(spatial_seurat, reference)` calls take this
 as the query side of the deconvolution.
 
 The Rmd's second half (building a spacexr `Reference` from a scRNA
-mtx triple) is OUT OF SCOPE for step 1 — the scRNA reference is user
+mtx triple) is OUT OF SCOPE for xenium-preprocess — the scRNA reference is user
 data, not derived from proseg. That part will land in a later step.
 
 Which anndata layer feeds RCTD: `rctd_prep.source_layer` in the config

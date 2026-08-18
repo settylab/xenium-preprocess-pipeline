@@ -1,6 +1,6 @@
 # workflow-driver
 
-Top-level sbatch driver + step-N stubs for the user's
+Top-level sbatch driver + per-stage stubs for the user's
 `xenium-preprocess` → `ref-build` → `rctd-split` spatial-genomics
 workflow.
 
@@ -32,7 +32,7 @@ Options:
 | Flag | Purpose |
 |---|---|
 | `--sample-id <S>` | Sample id (required). |
-| `--flex-h5ad <path>` | Flex scRNA h5ad — recorded verbatim under `step3.flex_h5ad_path`, no copy, no symlink (required). |
+| `--flex-h5ad <path>` | Flex scRNA h5ad — recorded verbatim under `ref_build.flex_h5ad_path`, no copy, no symlink (required). |
 | `--celltype-marker-json <path>` | Marker-gene JSON declaring the expected celltype set — threaded to `ref-build run --celltype-marker-json` (required by `ref-build`). |
 | `--output-root <dir>` | Root output directory. Required unless the `OUTPUT_ROOT` env var is set. |
 | `--run-id <id>` | Explicit run identifier. Precedence: `--run-id` > `$RUN_ID` env > JOB1's `SLURM_JOB_ID`. |
@@ -42,9 +42,9 @@ Options:
 | `--donor-h5ad <path>` | `ref-build` donor scRNA h5ad. **Repeatable** for multiple donors. Threaded to `ref-build run --donor-h5ad …`. Default: empty (no donor supplementation). |
 | `--fallback-donor-h5ad <path>` | `ref-build` Rule-5 fallback donor h5ad. **Repeatable**. Threaded to `ref-build run --fallback-donor-h5ad …`. Default: empty (Rule 5 skipped). |
 | `--start-step <name>` | Skip earlier steps and start submission at the named step. Accepts `xenium-preprocess` (default; full chain), `ref-build` (submits `ref-build` then `rctd-split`), or `rctd-split` (submits `rctd-split` only). Numeric aliases `1`/`3`/`4` are accepted for one release for backwards compat. Requires `--run-id`. Implies `--reuse-run-dir`. Fails loud if the resumed step's prior inputs are missing. |
-| `--reuse-run-dir` | Proceed even if `<run-dir>` exists, **keeping its contents**. Each step overwrites the files it writes; other files preserved. Recommended for resume flows. Mutually exclusive with `--force`. |
+| `--reuse-run-dir` | Proceed even if `<run-dir>` exists, **keeping its contents**. Each stage overwrites the files it writes; other files preserved. Recommended for resume flows. Mutually exclusive with `--force`. |
 | `--force` | `rm -rf <run-dir>` then proceed. Destructive; intended for from-scratch re-run under an already-used run-id. Rejected with `--start-step ref-build`/`rctd-split` (would wipe the prerequisites). |
-| `--env-name <name>` | Convenience: set the conda env name for **all three** steps at once. Equivalent to passing `--xenium-preprocess-env`/`--ref-build-env`/`--rctd-split-env` with the same value. Default: each `submit_stepN.sbatch`'s own fallback (`xenium`). |
+| `--env-name <name>` | Convenience: set the conda env name for **all three** stages at once. Equivalent to passing `--xenium-preprocess-env`/`--ref-build-env`/`--rctd-split-env` with the same value. Default: each per-stage sbatch script's own fallback (`xenium`). |
 | `--xenium-preprocess-env <name>` | Conda env for `submit_step1.sbatch` (threaded via `XENIUM_PREPROCESS_ENV`). Default: `xenium`. |
 | `--ref-build-env <name>` | Conda env for `submit_step3.sbatch` (threaded via `REF_BUILD_ENV`). Default: `xenium`. |
 | `--rctd-split-env <name>` | Conda env for `submit_step4.sbatch` (threaded via `RCTD_SPLIT_ENV`). Default: `xenium`. |
@@ -169,7 +169,7 @@ explicit user opt-in to fire:
 Three ways to proceed when `<run-dir>` exists:
 
 - Default: **refuse** with exit 3.
-- `--reuse-run-dir`: **keep** the folder. Each step overwrites the files
+- `--reuse-run-dir`: **keep** the folder. Each stage overwrites the files
   it writes; other files preserved. Recommended for resumes.
 - `--force`: **`rm -rf` then proceed**. Destructive; use for
   from-scratch re-run under an already-used run-id. Mutually exclusive

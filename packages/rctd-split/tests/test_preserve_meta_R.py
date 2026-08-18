@@ -6,7 +6,7 @@ self-contained (no SPLIT/spacexr dependency) so it runs anywhere Seurat
 loads.
 
 Exercises _preserve_meta.R (the helper split_purify.R uses to carry
-proseg + Step 1 enrichment metadata onto the purified variant — fix for
+proseg + xenium-preprocess enrichment metadata onto the purified variant — fix for
 TracyY123-nexus#14).
 """
 from __future__ import annotations

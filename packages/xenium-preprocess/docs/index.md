@@ -9,7 +9,7 @@
 
 Every stage is resumable via a sentinel-file existence check; every run snapshots its resolved config to disk for traceability.
 
-This is **step 1** of the Xenium spatial-data preprocessing pipeline. Later steps (celltype-curation, deconvolution, differential expression, spatial pattern discovery) will land in sibling packages.
+This is **xenium-preprocess** of the Xenium spatial-data preprocessing pipeline. Later steps (celltype-curation, deconvolution, differential expression, spatial pattern discovery) will land in sibling packages.
 
 ## Pipeline shape
 

@@ -2,17 +2,17 @@
 
 Merge invariant (from (internal issue review):
 each pipeline reads the current `config.yaml`, writes back
-ONLY its own top-level key (`step1:` / `step3:` / `step4:` / `driver:`),
-and PRESERVES all sibling top-level keys. This lets the three pipelines
-run in sequence under a shared `--run-id` folder without any pipeline
-clobbering another's section.
+ONLY its own top-level key (`xenium_preprocess:` / `ref_build:` /
+`rctd_split:` / `driver:`), and PRESERVES all sibling top-level keys.
+This lets the three pipelines run in sequence under a shared `--run-id`
+folder without any pipeline clobbering another's section.
 
 Duplicated per repo by design — there is no shared parent package the
-three pipelines depend on. Workers 2 (`ref-build`) and 3 (`rctd-split`)
-each ship an identical copy of this file under their own `_internal/`.
-The test in `tests/test_merge_config.py` covers the invariant; the
-sister repos MUST carry a parallel test so a regression in any one
-pipeline is caught locally.
+three pipelines depend on. `ref-build` and `rctd-split` each ship an
+identical copy of this file under their own `_internal/`. The test in
+`tests/test_merge_config.py` covers the invariant; the sister repos
+MUST carry a parallel test so a regression in any one pipeline is
+caught locally.
 """
 from __future__ import annotations
 
@@ -22,7 +22,12 @@ from pathlib import Path
 import yaml
 
 
-VALID_TOP_LEVEL_KEYS = ("driver", "step1", "step3", "step4")
+VALID_TOP_LEVEL_KEYS = (
+    "driver",
+    "xenium_preprocess",
+    "ref_build",
+    "rctd_split",
+)
 
 
 def merge_config(
@@ -37,7 +42,7 @@ def merge_config(
     the sibling keys that survived.
 
     Refuses `step_key` values outside `VALID_TOP_LEVEL_KEYS` so a
-    typo (`step2`, `Step1`) can't silently land a phantom section.
+    typo can't silently land a phantom section.
     """
     if step_key not in VALID_TOP_LEVEL_KEYS:
         raise SystemExit(

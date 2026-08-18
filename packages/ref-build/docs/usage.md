@@ -12,7 +12,7 @@ The four required-at-runtime flags:
 |---|---|
 | `--sample-id`            | Primary sample identifier (e.g. `SAMPLE1`). Names the output subdirectory + the `.rds`. |
 | `--primary-h5ad`         | Path to the primary's `_preprocessed_scRNA.h5ad` (from step 2 `flex-preprocess`). |
-| `--celltype-marker-json` | Marker-gene JSON declaring the expected celltype set. Same shape as step 1's `--global-non-tumor-json`. |
+| `--celltype-marker-json` | Marker-gene JSON declaring the expected celltype set. Same shape as xenium-preprocess's `--global-non-tumor-json`. |
 | `--output-root`          | Root output directory. Per-sample results land at `<output_root>/<sample_id>/`. |
 
 Every other flag has a default in `config/default.yaml`. Override precedence: CLI flag > user YAML (`--config user.yaml`) > default YAML.

@@ -16,7 +16,7 @@
 #     OUTPUT_ROOT          (required)  Root output directory.
 #     FLEX_H5AD            (required)  Absolute path to the flex scRNA h5ad;
 #                                      recorded verbatim under
-#                                      step3.flex_h5ad_path in
+#                                      ref_build.flex_h5ad_path in
 #                                      resolved_config.yaml. NO copy, NO
 #                                      symlink (reference-in-place per
 #                                      comment 5251080220 §1).
@@ -52,8 +52,8 @@
 #                                      Each is passed as one positional
 #                                      value to `ref-build run --stages …`.
 #     STEP3_OVERRIDES_B64        (optional) base64-encoded YAML from the
-#                                      driver's --step3-config +
-#                                      --override step3.<key>=<val>. When
+#                                      driver's --ref-build-config +
+#                                      --override ref_build.<key>=<val>. When
 #                                      set, decoded to a tmpfile and
 #                                      passed to `ref-build run --config
 #                                      <tmp>` before the named flags (so
@@ -144,8 +144,8 @@ if [[ -n "${CELLTYPE_COL_FOR_REF_BUILD:-}" ]]; then
     CELLTYPE_COL_ARGS=(--celltype-col "$CELLTYPE_COL_FOR_REF_BUILD")
 fi
 
-# --config passthrough from driver's --step3-config + --override
-# step3.<key>=<val>. When neither was set the driver leaves
+# --config passthrough from driver's --ref-build-config + --override
+# ref_build.<key>=<val>. When neither was set the driver leaves
 # STEP3_OVERRIDES_B64 unset, and CONFIG_ARGS stays empty.
 CONFIG_ARGS=()
 if [[ -n "${STEP3_OVERRIDES_B64:-}" ]]; then

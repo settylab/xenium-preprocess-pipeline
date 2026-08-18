@@ -72,7 +72,7 @@ def test_resolve_run_id_precedence(monkeypatch):
 def test_stages_flag_accepts_writeback_only_subset():
     """Tracy on `settylab/TracyY123-nexus#26` comment 5260916505: she
     wants to rerun ONLY the writeback stages after a completed SPLIT.
-    Prove the CLI parses `--stages writeback_to_step1_raw
+    Prove the CLI parses `--stages writeback_to_raw
     celltype_writeback` cleanly."""
     from rctd_split.cli import build_parser
 
@@ -83,9 +83,9 @@ def test_stages_flag_accepts_writeback_only_subset():
         "--test-object", "/tmp/test.rds",
         "--reference-rds", "/tmp/ref.rds",
         "--output-root", "/tmp/out",
-        "--stages", "writeback_to_step1_raw", "celltype_writeback",
+        "--stages", "writeback_to_raw", "celltype_writeback",
     ])
-    assert args.stages == ["writeback_to_step1_raw", "celltype_writeback"]
+    assert args.stages == ["writeback_to_raw", "celltype_writeback"]
 
 
 def test_stages_flag_rejects_unknown_stage():

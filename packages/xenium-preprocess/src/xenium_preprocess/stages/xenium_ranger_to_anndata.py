@@ -19,8 +19,8 @@ Content:
                     `cell_area`, `nucleus_area`, `nucleus_count`, `segmentation_method`).
 
 The stage is minimal-at-build (no cell-type, no NN mapping). The
-post-step-4 `celltype_writeback` stage augments this file in place with
-`.obs['celltype']` derived from step-4 outputs — see
+post-rctd-split `celltype_writeback` stage augments this file in place with
+`.obs['celltype']` derived from rctd-split outputs — see
 (internal issue review) §2.4. That writeback lands in a
 follow-up worker.
 """

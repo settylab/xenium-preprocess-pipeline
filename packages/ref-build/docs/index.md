@@ -2,12 +2,12 @@
 
 `ref-build` takes a **primary sample's preprocessed scRNA AnnData** (from step 2, `flex-preprocess`) and a **pool of same-primary-tumor-type donor AnnData files**, applies the per-celltype adaptive migration rules, and produces two artifacts:
 
-- a **10X-style mtx bundle** — `{counts.mtx.gz, features.tsv.gz, barcodes.tsv.gz, metadata.csv}` — the file convention step 1's `split_prep` writes for the spatial side, so downstream R tooling sees a consistent layout across pipelines,
+- a **10X-style mtx bundle** — `{counts.mtx.gz, features.tsv.gz, barcodes.tsv.gz, metadata.csv}` — the file convention xenium-preprocess's `split_prep` writes for the spatial side, so downstream R tooling sees a consistent layout across pipelines,
 - a **spacexr `Reference` `.rds`** — the RCTD-ready reference object that `spacexr::create.RCTD(spatial, reference)` takes as the reference side of the deconvolution.
 
 Along the way it emits `census.csv`, an operator-visible audit trail that records the per-celltype migration decision (`primary_only` / `balanced` / `borrowed` / `missing_no_donor`) and where each celltype's cells came from.
 
-This is **step 3** of the Xenium spatial-data preprocessing pipeline. Step 1 (`xenium-preprocess`) prepares the spatial side; step 2 (`flex-preprocess`) prepares each sample's `_preprocessed_scRNA.h5ad`; step 3 (this package) merges the primary + donor pool into the reference; downstream RCTD/SPLIT drives the deconvolution.
+This is **ref-build** of the Xenium spatial-data preprocessing pipeline. xenium-preprocess (`xenium-preprocess`) prepares the spatial side; step 2 (`flex-preprocess`) prepares each sample's `_preprocessed_scRNA.h5ad`; ref-build (this package) merges the primary + donor pool into the reference; downstream RCTD/SPLIT drives the deconvolution.
 
 ## Pipeline shape
 

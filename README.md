@@ -297,7 +297,7 @@ rctd_split:
 ./scripts/submit_workflow.sh --config runs/MH10/MH10_cap100/config.yaml
 # CLI still wins — same YAML with a knob overridden:
 ./scripts/submit_workflow.sh --config runs/MH10/MH10_cap100/config.yaml \
-    --step3-donor-borrow-cap 200
+    --ref-build-donor-borrow-cap 200
 ```
 
 ## Outputs
@@ -342,14 +342,14 @@ consult external notes.
 
 Note that this is NOT the same as the "Provenance" section in
 `summary/<sample>_summary_report.html`, which captures the
-step-4 QC report's own invocation (`sys.argv`), merged
+rctd-split QC report's own invocation (`sys.argv`), merged
 `config.yaml`, and package versions. Both exist:
 
 - `spatial_adata/provenance/` = the proseg-run script that
-  produced the input counts (populated by step 1).
+  produced the input counts (populated by xenium-preprocess).
 - `summary/<sample>_summary_report.html` "Provenance" section
-  = step 4's Python invocation + merged config + package
-  versions (populated by step 4's `qc_report`).
+  = rctd-split's Python invocation + merged config + package
+  versions (populated by rctd-split's `qc_report`).
 
 If `--proseg-run-script` was not supplied, the folder is
 omitted (no empty directory left behind).

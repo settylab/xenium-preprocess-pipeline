@@ -1,4 +1,4 @@
-# Default configuration for the rctd-split pipeline (step 4 of the
+# Default configuration for the rctd-split pipeline (rctd-split of the
 # Xenium spatial-data preprocessing pipeline).
 #
 # Every value here can be overridden on the CLI (--key value) or by a
@@ -8,13 +8,13 @@
 sample_id: null                  # REQUIRED on CLI: e.g. SAMPLE1
 run_id: null                     # resolved on CLI (--run-id > $SLURM_JOB_ID > YYYYMMDD_HHMMSS)
 test_object: null                # OPTIONAL: path to the spatial test object RDS
-                                 # (the output of step 1's rctd_prep stage — a Seurat
+                                 # (the output of xenium-preprocess's rctd_prep stage — a Seurat
                                  # with assay="Proseg", spatial DimReduc "ST_", x/y meta).
                                  # AUTO-DERIVED from the run-folder layout when null:
                                  #   <output_root>/<sample>/<sample>_<run_id>/rctd/<sample>_test_object.rds
                                  # Set this to override with a foreign test-object.
 reference_rds: null              # OPTIONAL: path to the scRNA reference RDS
-                                 # (the output of step 3's rctd_reference_build stage —
+                                 # (the output of ref-build's rctd_reference_build stage —
                                  # a `spacexr::Reference` object).
                                  # AUTO-DERIVED from the run-folder layout when null:
                                  #   <output_root>/<sample>/<sample>_<run_id>/rctd/<sample>_reference.rds
@@ -23,7 +23,7 @@ output_root: null                # REQUIRED on CLI: root output directory
 force_rerun: false               # nuke per-stage sentinels and re-run
 keep_intermediate: false         # keep <run_dir>/intermediate/ after the
                                  # terminal stage (qc_report) finishes.
-                                 # Default (false) mirrors ref-build (step 3) —
+                                 # Default (false) mirrors ref-build (ref-build) —
                                  # working artifacts under `intermediate/` are
                                  # dropped once the full pipeline succeeds.
                                  # Set true for debugging / QC access to the
@@ -94,31 +94,31 @@ postprocess:
   process_unpurified_layer: true
   h5ad_compression: gzip
 
-# ----- Stage 7: writeback_to_step1_raw ------------------------------
-# Writes filter-status columns + step4_unpurified.h5ad .obs back
-# onto step-1's <S>_proseg_raw.h5ad. Idempotent — running twice
+# ----- Stage 7: writeback_to_raw ------------------------------
+# Writes filter-status columns + unpurified.h5ad .obs back
+# onto xenium-preprocess's <S>_proseg_raw.h5ad. Idempotent — running twice
 # overwrites in place, no double-write.
-writeback_to_step1_raw:
-  # Path to step-1's raw h5ad. Defaults to
+writeback_to_raw:
+  # Path to xenium-preprocess's raw h5ad. Defaults to
   # <output_root>/<sample>/<sample>_<run_id>/spatial_adata/<sample>_proseg_raw.h5ad
   # (the merged run-folder layout).
   raw_h5ad: null
 
-  # step-1 .obs column carrying the qc_filtered boolean written by
-  # step-1's qc_filter stage. Cells absent from filter_status.csv
-  # MUST be marked qc_filtered=False on step-1's side; anything else
+  # xenium-preprocess .obs column carrying the qc_filtered boolean written by
+  # xenium-preprocess's qc_filter stage. Cells absent from filter_status.csv
+  # MUST be marked qc_filtered=False on xenium-preprocess's side; anything else
   # is a fail-loud "unaccounted-for cells" invariant.
   qc_filtered_col: qc_filtered
 
-  # Columns NOT re-copied from step4_unpurified.h5ad's .obs onto
+  # Columns NOT re-copied from unpurified.h5ad's .obs onto
   # raw.h5ad. They are NEITHER removed from unpurified.obs NOR removed
-  # from raw.obs — they simply stay on raw as step-1 wrote them.
+  # from raw.obs — they simply stay on raw as xenium-preprocess wrote them.
   # Two reasons to skip:
-  #   1. Duplicate-of-step-1: proseg / qc_filter / enrich_xenium_id
+  #   1. Duplicate-of-xenium-preprocess: proseg / qc_filter / enrich_xenium_id
   #      already wrote the full (all-cells) version onto raw.obs;
   #      folding unpurified would overwrite it with a QC-passed subset.
   #      `qc_filtered` is included here for the same reason — it's a
-  #      step-1 bool that unpurified only carries True values for
+  #      xenium-preprocess bool that unpurified only carries True values for
   #      (internal issue review).
   #   2. Written by Part 1's filter_status writeback above: the three
   #      `passed_*` / `filtered_by_*` bool cols.
@@ -145,16 +145,16 @@ writeback_to_step1_raw:
   h5ad_compression: gzip
 
 # ----- Stage 8: celltype_writeback ----------------------------------
-# NN-maps celltype from step4_proseg_purified.h5ad onto step-1's
+# NN-maps celltype from proseg_purified.h5ad onto xenium-preprocess's
 # xenium_ranger.h5ad using .obsm['spatial'] as the query. Pure NN;
 # NO direct-cell-id-assign; NO mark_unassigned (per (request on
 # (internal issue review).
 celltype_writeback:
-  # Path to step-1's xenium_ranger.h5ad. Defaults to
+  # Path to xenium-preprocess's xenium_ranger.h5ad. Defaults to
   # <output_root>/<sample>/<sample>_<run_id>/spatial_adata/<sample>_xenium_ranger.h5ad
   xenium_ranger_h5ad: null
 
-  # reference (source of celltype) — step 4 purified.h5ad. Resolved
+  # reference (source of celltype) — rctd-split purified.h5ad. Resolved
   # from the run-folder layout automatically.
   reference_label_col: first_type
   reference_x_col: centroid_x
@@ -191,7 +191,7 @@ qc_report:
   # metrics row + log10 count histogram. proseg emits multiple assays;
   # `maxpost_counts` is the argmax-posterior integer counts (per pipeline convention
   # explicitly named the maxpost matrix — (internal issue review)
-  # comment (internal); canonical layer name confirmed against step-1
+  # comment (internal); canonical layer name confirmed against xenium-preprocess
   # proseg export in comment (internal)). Fail loud when absent.
   raw_layer: maxpost_counts
   # Optional: append links to external HTML reports at the bottom

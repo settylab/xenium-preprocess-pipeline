@@ -6,7 +6,7 @@ own sentinel-existence resume check (nuke with `force_rerun`).
 Post-2026-08-11 refactor: outputs live under
 `<output_root>/<sample_id>/<sample_id>_<run_id>/{spatial_adata,rctd}/`,
 and `config.yaml` at that run folder is written via the shared
-`_merge_config` helper so step 3 / step 4 (spawned as separate sbatch
+`_merge_config` helper so ref-build / rctd-split (spawned as separate sbatch
 jobs in the driver chain) don't clobber each other's config sections.
 """
 from __future__ import annotations
@@ -71,11 +71,12 @@ def run(cfg: dict, stages: list[str], argv: list[str]) -> int:
     the_run_dir.mkdir(parents=True, exist_ok=True)
     log(f"[pipeline] run folder: {the_run_dir}")
 
-    # Merged resolved_config: write ONLY the step1 key, preserve any
-    # step3/step4/driver sections a sibling pipeline already wrote.
+    # Merged resolved_config: write ONLY the xenium_preprocess key,
+    # preserve any ref_build/rctd_split/driver sections a sibling pipeline
+    # already wrote.
     snap = resolved_config_path(output_root, sample_id, run_id)
-    step1_cfg = dict(cfg)
-    merge_config(snap, step_key="step1", step_cfg=step1_cfg)
+    xp_cfg = dict(cfg)
+    merge_config(snap, step_key="xenium_preprocess", step_cfg=xp_cfg)
     log(f"[pipeline] merged resolved_config -> {snap}")
 
     n_stages = len(stages)
@@ -212,10 +213,10 @@ def run(cfg: dict, stages: list[str], argv: list[str]) -> int:
             banner(f"stage {idx}/{n_stages}: enrich_xenium_id — "
                    f"complete in {time.time()-t0:.1f}s")
 
-    # --- Stage: preprocess (RETAINED for reversibility, NOT default) --
+    # --- Sub-stage: preprocess (RETAINED for reversibility, NOT default) --
     # The heavy PCA/UMAP/Leiden/celltype pass is kept in the codebase
     # but is no longer part of DEFAULT_STAGES. Users who want the old
-    # 4.4-GB `<S>_step1_preprocessed.h5ad` output can `--stages ... preprocess`.
+    # 4.4-GB `<S>_preprocessed.h5ad` output can `--stages ... preprocess`.
     if "preprocess" in stages:
         idx = stages.index("preprocess") + 1
         banner(f"stage {idx}/{n_stages}: preprocess — DEPRECATED, running anyway")

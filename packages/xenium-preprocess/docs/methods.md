@@ -98,7 +98,7 @@ Optionally re-runs the QC filter (`sc.pp.filter_cells(min_counts=10)`) before ex
 
 ## Stage 4: `rctd_prep`
 
-**Source:** the internal spatial-RCTD preparation reference (first half; the second half — building a `spacexr::Reference` from a scRNA mtx triple — is out of scope for step 1).
+**Source:** the internal spatial-RCTD preparation reference (first half; the second half — building a `spacexr::Reference` from a scRNA mtx triple — is out of scope for xenium-preprocess).
 
 Python (`xenium_preprocess.stages.rctd_prep`) shells out to `Rscript src/xenium_preprocess/r/rctd_prep.R`. The R script:
 

@@ -65,7 +65,7 @@ def _add_run_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--flex-h5ad", type=Path, default=None,
                    help="Path to the flex-preprocessed scRNA h5ad (reference-"
                         "in-place). The pipeline records this path verbatim "
-                        "under `step3.flex_h5ad_path` in the merged "
+                        "under `ref_build.flex_h5ad_path` in the merged "
                         "config.yaml — no copy, no symlink. When "
                         "--primary-h5ad is not passed the flex path is used "
                         "as the primary input.")
@@ -99,7 +99,7 @@ def _add_run_args(p: argparse.ArgumentParser) -> None:
                         "fallback h5ad is auto-detected.")
     p.add_argument("--celltype-marker-json", type=Path,
                    help="Path to the marker-gene JSON declaring the expected celltype set. "
-                        "Same shape as step 1's --global-non-tumor-json.")
+                        "Same shape as xenium-preprocess's --global-non-tumor-json.")
     p.add_argument("--celltype-target-list", type=Path, default=None,
                    help="Path to a JSON that declares the CANONICAL celltype "
                         "list to enforce completeness over (Rule 5). Keys are "

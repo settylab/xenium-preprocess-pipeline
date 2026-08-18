@@ -32,7 +32,7 @@ def _expected_paths(tmp_path, sample_id="MH8_2", run_id="demo_v1"):
 def test_pipeline_run_auto_derives_from_layout_when_unset(tmp_path, capsys):
     """When cfg has no test_object / reference_rds / rctd_results_rds,
     `pipeline.run` MUST resolve them to the run-folder-layout paths —
-    matching the paths step 1 / step 3 / this pipeline's own rctd_run
+    matching the paths xenium-preprocess / ref-build / this pipeline's own rctd_run
     stage write in the same run folder.
     """
     from rctd_split.pipeline import run

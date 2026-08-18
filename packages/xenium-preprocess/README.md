@@ -1,6 +1,6 @@
 # xenium-preprocess
 
-**Step 1 of the Xenium spatial-data preprocessing pipeline: proseg output → raw AnnData + xenium-ranger AnnData with a NN-mapped proseg cell_id column joining the two.**
+**xenium-preprocess of the Xenium spatial-data preprocessing pipeline: proseg output → raw AnnData + xenium-ranger AnnData with a NN-mapped proseg cell_id column joining the two.**
 
 At a glance (default stages):
 
@@ -86,7 +86,7 @@ Dropped from `DEFAULT_STAGES` on 2026-08-11 (user request, (internal issue revie
 
 That RDS is the RCTD "test object" — downstream `spacexr::create.RCTD(spatial_seurat, reference)` calls take it as the query side. Since RCTD's `require_int=TRUE` rejects the continuous expected-counts matrix, `rctd_prep.source_layer` defaults to `maxpost_counts` (threaded into `split_prep.layer` by `pipeline.py`).
 
-The second half of the reference Rmd (building an RCTD `Reference` from a scRNA mtx triple) is out of scope for step 1; it will land in a later step.
+The second half of the reference Rmd (building an RCTD `Reference` from a scRNA mtx triple) is out of scope for xenium-preprocess; it will land in a later step.
 
 **Writes:** `rctd_prep/test_object.rds`.
 
@@ -153,7 +153,7 @@ spatial_adata/<sample>_xenium_ranger.h5ad      — xenium_ranger_to_anndata; enr
                                                  .obs['proseg_cell_id_nn' + 'proseg_id_nn_distance'
                                                      + 'proseg_id_nn_note']
 config.yaml                           — snapshot of the resolved config (merged across steps)
-logs/xenium-preprocess.log                                 — the step-1 log
+logs/xenium-preprocess.log                                 — the xenium-preprocess log
 ```
 
 Opting into the legacy `preprocess` / `split_prep` / `rctd_prep` stages via `--stages` additionally writes (respectively): `legacy_preprocess/adata_unpurified.h5ad` + UMAP plots; `split_prep/<sample>{suffix}_*` (mtx triple + metadata + spatial_coords); `rctd/<sample>_test_object.rds`.

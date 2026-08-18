@@ -1,12 +1,12 @@
 # rctd-split
 
-**Step 4 of the Xenium spatial-data preprocessing pipeline: spatial test object (from step 1) + scRNA reference (from step 3) → RCTD run → SPLIT post-process (unpurified) → SPLIT purify (purified) → 10X-style mtx bundles → .h5ad AnnData files.**
+**rctd-split of the Xenium spatial-data preprocessing pipeline: spatial test object (from xenium-preprocess) + scRNA reference (from ref-build) → RCTD run → SPLIT post-process (unpurified) → SPLIT purify (purified) → 10X-style mtx bundles → .h5ad AnnData files.**
 
 At a glance:
 
 - **`rctd_run`** — shells out to `Rscript r/rctd_run.R`. Loads the spatial test object RDS + the `spacexr::Reference` RDS, calls `create.RCTD(...)` with the reference-workflow parameters and `run.RCTD(..., doublet_mode="doublet")`. Saves `rctd_results.rds`.
 - **`split_purify`** — shells out to `Rscript r/split_purify.R`. Loads `rctd_results.rds` and the spatial test object; calls `SPLIT::run_post_process_RCTD(...)` (unpurified variant) and `SPLIT::purify(..., DO_purify_singlets=TRUE)` (purified variant). Saves `unpurified.rds` and `purified.rds` — each is a Seurat spatial object carrying RCTD's per-cell metadata (`first_type`, `second_type`, `spot_class`, `purification_status`, `w1_larger_w2`, `same_class`, `nCount_Proseg`, spatial `x`/`y`).
-- **`export_mtx`** — shells out to `Rscript r/export_mtx.R`. Reads both `unpurified.rds` and `purified.rds` and writes matched 10X-style bundles per variant: `{counts.mtx.gz, features.tsv.gz, barcodes.tsv.gz, metadata.csv, spatial_coords.csv.gz}`. Same filename convention as step 1's `split_prep` and step 3's `export_mtx`.
+- **`export_mtx`** — shells out to `Rscript r/export_mtx.R`. Reads both `unpurified.rds` and `purified.rds` and writes matched 10X-style bundles per variant: `{counts.mtx.gz, features.tsv.gz, barcodes.tsv.gz, metadata.csv, spatial_coords.csv.gz}`. Same filename convention as xenium-preprocess's `split_prep` and ref-build's `export_mtx`.
 - **`mtx_to_h5ad`** — pure Python. Reads each bundle, builds an AnnData with `.var_names` = features, `.obs_names` = barcodes; merges `metadata.csv` into `.obs`; attaches `spatial_coords.csv.gz` into `.obsm['spatial']`. Writes `<sample>_unpurified.h5ad` and `<sample>_purified.h5ad`.
 - Every stage is idempotent — sentinel-file resume — and every run snapshots its resolved configuration to disk.
 
@@ -20,8 +20,8 @@ Four stages, run in order (`rctd_run → split_purify → export_mtx → mtx_to_
 
 Adapted verbatim from the internal SPLIT/Proseg workflow lines 344-363. Python shells out to `Rscript src/rctd_split/r/rctd_run.R`. The R script:
 
-1. Loads the spatial test object RDS (Seurat with `assay=Proseg`, spatial DimReduc keyed `ST_`, `x`/`y` metadata — the output of step 1's `rctd_prep`).
-2. Loads the scRNA reference RDS (`spacexr::Reference` — the output of step 3's `rctd_reference_build`).
+1. Loads the spatial test object RDS (Seurat with `assay=Proseg`, spatial DimReduc keyed `ST_`, `x`/`y` metadata — the output of xenium-preprocess's `rctd_prep`).
+2. Loads the scRNA reference RDS (`spacexr::Reference` — the output of ref-build's `rctd_reference_build`).
 3. Intersects the gene panel between spatial and reference.
 4. Builds a `spacexr::SpatialRNA` object from the spatial coords + counts.
 5. Calls `create.RCTD(test.obj, ref.obj, UMI_min=10, counts_MIN=10, UMI_min_sigma=100, max_cores=<config>, CELL_MIN_INSTANCE=20, class_df=NULL)`. (Pipeline default; Rmd used 25 — lowered on 2026-07-28 per `(internal issue review)`.)
@@ -46,7 +46,7 @@ Adapted verbatim from the internal SPLIT/Proseg workflow lines 494-523. The R sc
 
 ### `export_mtx` — Seurat RDS → 10X-style bundle
 
-Reads both `unpurified.rds` and `purified.rds`, extracts counts + metadata + spatial coords, and writes matched bundles. Same naming convention as step 1's `split_prep` and step 3's `export_mtx`:
+Reads both `unpurified.rds` and `purified.rds`, extracts counts + metadata + spatial coords, and writes matched bundles. Same naming convention as xenium-preprocess's `split_prep` and ref-build's `export_mtx`:
 
 - `<sample>_{unpurified,purified}_counts.mtx.gz` — genes × cells, gzipped MatrixMarket.
 - `<sample>_{unpurified,purified}_features.tsv.gz` — one gene name per line (single-column).

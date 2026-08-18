@@ -7,7 +7,7 @@ All notable changes to rctd-split will be documented here. Follows
 
 ### Changed
 - `qc_report` proseg_purified histogram now sources `nCount_Proseg`
-  from `intermediate/adata/<S>_step4_unpurified.h5ad` (the pre-filter
+  from `intermediate/adata/<S>_unpurified.h5ad` (the pre-filter
   intermediate) when available, so cells that
   `postprocess.filter_cells(min_counts=...)` removed still appear in
   the distribution on the left of the dashed threshold line. Tracy's
@@ -16,7 +16,7 @@ All notable changes to rctd-split will be documented here. Follows
   those cells which are not removed in purified.adata and use the
   dash line to show the threshold so that we could know which cells
   are removed." The plot title picks up a `source:` suffix
-  (`step4_unpurified (pre-min_counts)` vs.
+  (`unpurified (pre-min_counts)` vs.
   `proseg_purified (post-min_counts)`) so the reader can tell which
   population they're looking at. Falls back to the post-filter
   `proseg_purified.h5ad` when the intermediate has been cleaned up
@@ -26,7 +26,7 @@ All notable changes to rctd-split will be documented here. Follows
 - `pipeline._drop_intermediate_outputs` now drops the ENTIRE
   `intermediate/` directory after the terminal `qc_report` stage
   succeeds — previously it kept `intermediate/adata/*.h5ad` and
-  `intermediate/adata/*.csv` so `--stages writeback_to_step1_raw`
+  `intermediate/adata/*.csv` so `--stages writeback_to_raw`
   could re-run without redoing SPLIT/mtx/adata, but that left an
   `intermediate/adata/` folder on disk after a fully-successful run.
   Tracy's ask on `settylab/TracyY123-nexus#26` comment 5322401335
@@ -49,7 +49,7 @@ All notable changes to rctd-split will be documented here. Follows
   "missing at render time" note rather than a broken link.
   Interfaces:
   - Config YAML: `qc_report.extra_reports: [{path: ..., name: ...}, ...]`.
-    Wire in via `--config` on `rctd-split run` or `--step4-config`
+    Wire in via `--config` on `rctd-split run` or `--rctd-split-config`
     on the workflow driver.
   - CLI: `rctd-split run --extra-report PATH,NAME` (repeatable;
     first-comma split lets the display name contain commas).
@@ -85,8 +85,8 @@ All notable changes to rctd-split will be documented here. Follows
 ### Added
 - `qc_report` now extracts an RCTD spot_class summary + a first_type
   breakdown of RCTD-rejected cells from `raw.obs` (`spot_class` +
-  `first_type`, folded from `step4_unpurified.obs` by
-  `writeback_to_step1_raw` Part 2; originally emitted by
+  `first_type`, folded from `unpurified.obs` by
+  `writeback_to_raw` Part 2; originally emitted by
   `SPLIT::run_post_process_RCTD` from RCTD's `results_df`). Renders a
   two-part table in the HTML report:
     1. RCTD spot_class counts + % of RCTD-categorized (singlet,
@@ -96,7 +96,7 @@ All notable changes to rctd-split will be documented here. Follows
   Also writes `qc/<sample_id>_rctd_summary.csv` as a machine-parseable
   sidecar. Fail-loud when `raw.obs['spot_class']` or
   `raw.obs['first_type']` is absent — points at
-  `writeback_to_step1_raw` as the responsible upstream stage.
+  `writeback_to_raw` as the responsible upstream stage.
   Requested via internal review comment (internal).
 
 ### Changed
@@ -104,10 +104,10 @@ All notable changes to rctd-split will be documented here. Follows
   each source h5ad rather than the previous positive-only slice. A
   dashed vertical line is drawn at the upstream filter threshold read
   from the merged `config.yaml`:
-    - `proseg_raw` histogram: `step1.qc_filter.min_counts_cell`
-    - `xenium_ranger` histogram: no line (step-1 has no min-counts
+    - `proseg_raw` histogram: `xenium_preprocess.qc_filter.min_counts_cell`
+    - `xenium_ranger` histogram: no line (xenium-preprocess has no min-counts
       gate on xenium_ranger)
-    - `proseg_purified` histogram: `step4.postprocess.qc.min_counts`
+    - `proseg_purified` histogram: `rctd_split.postprocess.qc.min_counts`
   Thresholds are strictly data-driven — if `config.yaml` is
   absent or a key is missing, the caption falls back to "no dashed
   threshold line drawn" (never a hard-coded value). Cells with counts
@@ -127,7 +127,7 @@ All notable changes to rctd-split will be documented here. Follows
 
 ### Fixed
 - `qc_report.raw_layer` default changed from `maxpost` → `maxpost_counts`
-  to match the canonical layer name proseg's step-1 export actually
+  to match the canonical layer name proseg's xenium-preprocess export actually
   emits (`expected_counts`, `maxpost_counts`). users hit
   `SystemExit: proseg_raw.h5ad has no layers['maxpost']` at runtime
   on (internal issue review) comment (internal). Touches:
@@ -155,7 +155,7 @@ All notable changes to rctd-split will be documented here. Follows
 ## [0.1.0] — 2026-07-09
 
 ### Added
-- Initial package scaffold (step 4 of the internal SPLIT/Proseg workflow spatial-data
+- Initial package scaffold (rctd-split of the internal SPLIT/Proseg workflow spatial-data
   preprocessing pipeline).
 - Four stage modules under `rctd_split.stages`:
   - `rctd_run` — Python wrapper → `r/rctd_run.R`: `create.RCTD` +
@@ -180,7 +180,7 @@ All notable changes to rctd-split will be documented here. Follows
 - `pyproject.toml` + `environment.yml` describing the `rctdSplit`
   conda env.
 - `scripts/submit.slurm.sh` — sbatch wrapper carrying the same
-  Slurm-tee/pipefail deadlock fix that landed in step 1
+  Slurm-tee/pipefail deadlock fix that landed in xenium-preprocess
   (the xenium-preprocess submit script).
 - `CITATION.cff`, MIT `LICENSE`, `docs/` markdown pages, smoke tests
   under `tests/` plus a synthetic round-trip test for `mtx_to_h5ad`.

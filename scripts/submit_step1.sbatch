@@ -16,12 +16,12 @@
 #     OUTPUT_ROOT          (required)  Root output directory.
 #     RUN_ID               (optional)  Shared run id; defaults to this
 #                                      job's SLURM_JOB_ID when unset.
-#     PROSEG_DIR           (optional)  Overrides step-1 proseg-dir.
-#     XENIUM_CELLS         (optional)  Overrides step-1 xenium-cells.
-#     XENIUM_RANGER_DIR    (optional)  Overrides step-1 xenium-ranger-dir.
+#     PROSEG_DIR           (optional)  Overrides xenium-preprocess proseg-dir.
+#     XENIUM_CELLS         (optional)  Overrides xenium-preprocess xenium-cells.
+#     XENIUM_RANGER_DIR    (optional)  Overrides xenium-preprocess xenium-ranger-dir.
 #     FLEX_H5AD            (unused here) Passed through by the driver so
 #                                      operators inspecting env can trace
-#                                      the origin; step 3 consumes it.
+#                                      the origin; ref-build consumes it.
 #     STEP1_X_SOURCE       (optional)  Passed as --x-source.
 #     STEP1_QC_MIN_COUNTS_CELL (opt.)  Passed as --qc-min-counts-cell.
 #     STEP1_GEX_ONLY       (optional)  Passed as --gex-only.
@@ -33,8 +33,8 @@
 #                                      Each is passed as one positional
 #                                      value to `xenium-preprocess run --stages …`.
 #     STEP1_OVERRIDES_B64  (optional)  base64-encoded YAML built from the
-#                                      driver's --step1-config +
-#                                      --override step1.<key>=<val>. When
+#                                      driver's --xenium-preprocess-config +
+#                                      --override xenium_preprocess.<key>=<val>. When
 #                                      set, decoded to a tmpfile and
 #                                      passed to `xenium-preprocess run
 #                                      --config <tmp>` before the named
@@ -116,8 +116,8 @@ if [[ -n "${XENIUM_RANGER_DIR:-}" ]]; then
     extra+=(--xenium-ranger-dir "$XENIUM_RANGER_DIR")
 fi
 
-# --config passthrough from driver's --step1-config + --override
-# step1.<key>=<val>. When neither was set the driver leaves
+# --config passthrough from driver's --xenium-preprocess-config + --override
+# xenium_preprocess.<key>=<val>. When neither was set the driver leaves
 # STEP1_OVERRIDES_B64 unset, and this block is a no-op.
 if [[ -n "${STEP1_OVERRIDES_B64:-}" ]]; then
     STEP1_TMP_CFG=$(mktemp -t step1_cfg.XXXXXX.yaml)

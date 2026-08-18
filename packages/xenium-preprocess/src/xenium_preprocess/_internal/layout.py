@@ -8,12 +8,12 @@ Layout (locked in (internal issue review):
             ├── spatial_adata/
             │   ├── <sample_id>_proseg_raw.h5ad
             │   ├── <sample_id>_xenium_ranger.h5ad
-            │   └── <sample_id>_proseg_purified.h5ad     (written by step 4)
+            │   └── <sample_id>_proseg_purified.h5ad     (written by rctd-split)
             ├── rctd/
             │   ├── <sample_id>_test_object.rds          (this pipeline)
-            │   ├── <sample_id>_reference.rds            (step 3)
-            │   ├── <sample_id>_reference_post_rules.h5ad (step 3)
-            │   └── <sample_id>_rctd_results.rds         (step 4)
+            │   ├── <sample_id>_reference.rds            (ref-build)
+            │   ├── <sample_id>_reference_post_rules.h5ad (ref-build)
+            │   └── <sample_id>_rctd_results.rds         (rctd-split)
             ├── config.yaml                     (merged across steps)
             └── logs/{xenium-preprocess,ref-build,rctd-split}.log
 
@@ -29,7 +29,7 @@ from pathlib import Path
 
 
 # Keys index which h5ad this pipeline knows how to place. Each maps to
-# the basename inside `spatial_adata/`. Step 3 / step 4 outputs live
+# the basename inside `spatial_adata/`. ref-build / rctd-split outputs live
 # under `rctd/` and are placed by their own pipelines — the constants
 # for those are captured in RCTD_BASENAMES below purely for downstream
 # stages inside THIS pipeline that need to READ them.

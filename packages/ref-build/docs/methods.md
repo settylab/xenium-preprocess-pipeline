@@ -22,8 +22,8 @@ The `noGeneFilter` invariant (the pipeline directive; summary lines 30, 80, 237)
 
 Two additional guards:
 
-- **`primary_only_celltypes`** (default `[tumor, liver]`) — always `primary_only` regardless of the count. Guards summary Caveat §1 (lines 358-369): the summary's Stage B step 10 recombine is union-not-intersection on `celltype.isin({"tumor","liver"})`; if a donor tumor cell survived the earlier subset, it would silently sweep in. `primary_only_celltypes` makes the guard explicit rather than relying on an earlier subset having removed the donor-tumor cells.
-- **Expected-celltype set** — the marker JSON's keys with `_marker` stripped (same shape as step 1's `--global-non-tumor-json`; the expected set is fixed by the JSON, per the user's clarification).
+- **`primary_only_celltypes`** (default `[tumor, liver]`) — always `primary_only` regardless of the count. Guards summary Caveat §1 (lines 358-369): the summary's Stage B xenium-preprocess0 recombine is union-not-intersection on `celltype.isin({"tumor","liver"})`; if a donor tumor cell survived the earlier subset, it would silently sweep in. `primary_only_celltypes` makes the guard explicit rather than relying on an earlier subset having removed the donor-tumor cells.
+- **Expected-celltype set** — the marker JSON's keys with `_marker` stripped (same shape as xenium-preprocess's `--global-non-tumor-json`; the expected set is fixed by the JSON, per the user's clarification).
 
 ### Fuzzy celltype-label matching
 
@@ -31,7 +31,7 @@ From user request 2026-07-10 (internal issue review) — the census stage no lon
 
 1. **Exact** — `L == X`. Always active.
 2. **Unknown-maybe** — `L == f"unknown_maybe_{X}"`. Active when `census.include_unknown_maybe: true` (default). Rationale: cells labelled `unknown_maybe_Fibroblast` are Fibroblast candidates whose annotation carries some uncertainty; including them lets downstream spatial deconvolution reduce that uncertainty against a larger spatial panel.
-3. **Composite delimited** — `X` appears in `L` as a token surrounded by `_` / `/` / string boundary. Regex: ``(?:^|[_/])re.escape(X)(?:$|[_/])``. Active when `census.fuzzy_matching: true` (default). Rationale: preprocessing (step 3 of the summary) produces composite labels like `B/Plasma_T/NK_rbc` for cells whose marker signal maps to multiple lineages; these should count toward every constituent celltype, not be silently dropped.
+3. **Composite delimited** — `X` appears in `L` as a token surrounded by `_` / `/` / string boundary. Regex: ``(?:^|[_/])re.escape(X)(?:$|[_/])``. Active when `census.fuzzy_matching: true` (default). Rationale: preprocessing (ref-build of the summary) produces composite labels like `B/Plasma_T/NK_rbc` for cells whose marker signal maps to multiple lineages; these should count toward every constituent celltype, not be silently dropped.
 
 The `re.escape(X)` is essential because expected celltypes may themselves contain `/` (e.g. `T/NK`).
 
@@ -64,7 +64,7 @@ The `noGeneFilter` invariant continues — no gene filter here.
 
 ## Stage 4: `export_mtx`
 
-**Source:** `the internal reference summary` Stage B, step 11 (line 87), and the file naming convention from step 1's `split_prep` module.
+**Source:** `the internal reference summary` Stage B, xenium-preprocess1 (line 87), and the file naming convention from xenium-preprocess's `split_prep` module.
 
 Writes:
 

@@ -1,4 +1,4 @@
-"""Stage 8: NN-map celltype from step-4 purified onto step-1 xenium-ranger.
+"""Stage 8: NN-map celltype from rctd-split purified onto xenium-preprocess xenium-ranger.
 
 Reads:
   * ``<S>_proseg_purified.h5ad`` (this pipeline's Stage-6 output; source
@@ -6,7 +6,7 @@ Reads:
     ``.obs[reference_x_col]`` / ``.obs[reference_y_col]`` as reference
     centroids — ``centroid_x`` / ``centroid_y`` per the skeptic
     correction on ``step1-option-b-skeptic``).
-  * ``<S>_xenium_ranger.h5ad`` (step-1 output; query cells with
+  * ``<S>_xenium_ranger.h5ad`` (xenium-preprocess output; query cells with
     ``.obsm['spatial']`` as ``(n, 2)`` query centroids).
 
 Writes ``.obs[celltype_col]`` and ``.obs[distance_col]`` back on the
@@ -77,8 +77,8 @@ def run_celltype_writeback(
     if not xenium_ranger_h5ad.exists():
         raise SystemExit(
             f"[celltype_writeback] xenium_ranger h5ad not found: "
-            f"{xenium_ranger_h5ad}. This stage depends on step-1's "
-            "xenium_ranger_to_anndata output — run step 1 first."
+            f"{xenium_ranger_h5ad}. This stage depends on xenium-preprocess's "
+            "xenium_ranger_to_anndata output — run xenium-preprocess first."
         )
     if not purified_h5ad.exists():
         raise SystemExit(
@@ -100,7 +100,7 @@ def run_celltype_writeback(
     if "spatial" not in query.obsm:
         raise SystemExit(
             "[celltype_writeback] query xenium_ranger.h5ad is missing "
-            "obsm['spatial']. Was step-1's xenium_ranger_to_anndata run?"
+            "obsm['spatial']. Was xenium-preprocess's xenium_ranger_to_anndata run?"
         )
 
     reference_xy = np.column_stack(

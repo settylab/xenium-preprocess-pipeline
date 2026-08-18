@@ -1,9 +1,9 @@
 """Merge-config invariant tests.
 
 Enforces: each pipeline reads current YAML, replaces ONLY its own
-top-level key (`step4:`), preserves every sibling. Cross-repo consistency
-gate — the sister repos (`xenium-preprocess`, `ref-build`) MUST ship a
-parallel test so a regression here is caught locally.
+top-level key (`rctd_split:`), preserves every sibling. Cross-repo
+consistency gate — the sister repos (`xenium-preprocess`, `ref-build`)
+MUST ship a parallel test so a regression here is caught locally.
 """
 from __future__ import annotations
 
@@ -14,40 +14,41 @@ def test_merge_config_creates_new_file(tmp_path: Path):
     from rctd_split._internal.merge_config import merge_config
 
     p = tmp_path / "config.yaml"
-    merged = merge_config(p, "step4", {"foo": 1})
+    merged = merge_config(p, "rctd_split", {"foo": 1})
     assert p.exists()
-    assert merged == {"step4": {"foo": 1}}
+    assert merged == {"rctd_split": {"foo": 1}}
 
 
 def test_merge_config_preserves_siblings(tmp_path: Path):
-    """Step 4 writing under `step4:` must not touch existing step1/step3."""
+    """rctd-split writing under `rctd_split:` must not touch existing
+    xenium_preprocess / ref_build sections."""
     import yaml
     from rctd_split._internal.merge_config import merge_config
 
     p = tmp_path / "config.yaml"
-    # Simulate step 1 writing first.
+    # Simulate xenium-preprocess writing first.
     p.write_text(yaml.safe_dump({
-        "step1": {"sample_id": "MH10", "output_root": "/tmp/o"},
-        "step3": {"primary_h5ad": "/tmp/primary.h5ad"},
+        "xenium_preprocess": {"sample_id": "MH10", "output_root": "/tmp/o"},
+        "ref_build": {"primary_h5ad": "/tmp/primary.h5ad"},
     }))
 
-    merged = merge_config(p, "step4", {"sample_id": "MH10", "run_id": "42"})
-    assert merged["step1"] == {"sample_id": "MH10", "output_root": "/tmp/o"}
-    assert merged["step3"] == {"primary_h5ad": "/tmp/primary.h5ad"}
-    assert merged["step4"] == {"sample_id": "MH10", "run_id": "42"}
+    merged = merge_config(p, "rctd_split", {"sample_id": "MH10", "run_id": "42"})
+    assert merged["xenium_preprocess"] == {"sample_id": "MH10", "output_root": "/tmp/o"}
+    assert merged["ref_build"] == {"primary_h5ad": "/tmp/primary.h5ad"}
+    assert merged["rctd_split"] == {"sample_id": "MH10", "run_id": "42"}
 
     reread = yaml.safe_load(p.read_text())
     assert reread == merged
 
 
 def test_merge_config_overwrites_own_key(tmp_path: Path):
-    """Rerunning step 4 replaces the step4: block wholesale."""
+    """Rerunning rctd-split replaces the rctd_split: block wholesale."""
     from rctd_split._internal.merge_config import merge_config
 
     p = tmp_path / "config.yaml"
-    merge_config(p, "step4", {"a": 1})
-    merged = merge_config(p, "step4", {"b": 2})
-    assert merged["step4"] == {"b": 2}
+    merge_config(p, "rctd_split", {"a": 1})
+    merged = merge_config(p, "rctd_split", {"b": 2})
+    assert merged["rctd_split"] == {"b": 2}
 
 
 def test_merge_config_rejects_unknown_step_key(tmp_path: Path):
@@ -56,7 +57,7 @@ def test_merge_config_rejects_unknown_step_key(tmp_path: Path):
 
     p = tmp_path / "config.yaml"
     with pytest.raises(SystemExit) as exc:
-        merge_config(p, "step2", {"foo": 1})
+        merge_config(p, "unknown_stage", {"foo": 1})
     assert "step_key" in str(exc.value)
 
 
@@ -65,6 +66,6 @@ def test_merge_config_atomic_write(tmp_path: Path):
     from rctd_split._internal.merge_config import merge_config
 
     p = tmp_path / "config.yaml"
-    merge_config(p, "step4", {"a": 1})
+    merge_config(p, "rctd_split", {"a": 1})
     tmp = p.with_suffix(p.suffix + ".tmp")
     assert not tmp.exists()

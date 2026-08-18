@@ -13,7 +13,7 @@ so both the H&E-side ``nn_celltype_mapping`` stage and this package's
 neighbor's label through even when ``distance > distance_threshold``;
 ``"mark_unassigned"`` puts label ``"Unassigned"`` on those rows. Per
 (request on (internal issue review), ``nearest_label`` is
-the default in step-4 writeback — proseg's ``original_cell_id`` bug
+the default in rctd-split writeback — proseg's ``original_cell_id`` bug
 would spuriously flag real cells otherwise.
 """
 from __future__ import annotations

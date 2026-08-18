@@ -112,7 +112,7 @@ All notable changes to xenium-preprocess will be documented here. Follows
 ## [0.1.0] — 2026-07-09
 
 ### Added
-- Initial package scaffold (step 1 of the internal SPLIT/Proseg workflow spatial-data
+- Initial package scaffold (xenium-preprocess of the internal SPLIT/Proseg workflow spatial-data
   preprocessing pipeline).
 - Four stage modules under `xenium_preprocess.stages`
   (`proseg_to_anndata`, `preprocess`, `split_prep`, `rctd_prep`),

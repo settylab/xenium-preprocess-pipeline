@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Mock ref-build CLI — creates step-3 target artifacts and merges step3
-# key into config.yaml (preserving step1: sibling).
+# Mock ref-build CLI — creates ref-build target artifacts and merges the
+# ref_build key into config.yaml (preserving the xenium_preprocess sibling).
 set -euo pipefail
 
 cmd="${1:-}"
@@ -57,9 +57,10 @@ done
 
 run_dir="$output_root/$sample/${sample}_${run_id}"
 
-# Step 3 depends on step 1's output folder existing (dependency chain).
+# ref-build depends on xenium-preprocess's output folder existing (dependency
+# chain).
 if [[ ! -d "$run_dir" ]]; then
-    echo "mock ref-build: run folder does not exist — step 1 missed? $run_dir" >&2
+    echo "mock ref-build: run folder does not exist — xenium-preprocess missed? $run_dir" >&2
     exit 3
 fi
 
@@ -68,7 +69,7 @@ mkdir -p "$run_dir/rctd" "$run_dir/logs"
 : > "$run_dir/rctd/${sample}_reference_post_rules.h5ad"
 : > "$run_dir/rctd/${sample}_reference.rds"
 {
-    echo "step3 ok flex=$flex_h5ad markers=$celltype_marker_json"
+    echo "ref-build ok flex=$flex_h5ad markers=$celltype_marker_json"
     echo "celltype_col=${celltype_col}"
     echo "donors_count=${#donors[@]}"
     for p in "${donors[@]}"; do echo "donor=$p"; done
@@ -89,7 +90,7 @@ mkdir -p "$run_dir/rctd" "$run_dir/logs"
     echo "raw_argv=${raw_argv[*]}"
 } > "$run_dir/logs/ref-build.log"
 
-# Merge step3 key into config.yaml, preserving siblings.
+# Merge ref_build key into config.yaml, preserving siblings.
 cfg="$run_dir/config.yaml"
 python3 - "$cfg" "$sample" "$run_id" "$flex_h5ad" <<'PY'
 import sys, os
@@ -107,11 +108,11 @@ for line in lines:
             skip = False
         else:
             continue
-    if line.startswith("step3:"):
+    if line.startswith("ref_build:"):
         skip = True
         continue
     out.append(line)
-out.append(f"step3:\n  sample_id: {sample}\n  run_id: {run_id}\n  flex_h5ad_path: {flex}\n")
+out.append(f"ref_build:\n  sample_id: {sample}\n  run_id: {run_id}\n  flex_h5ad_path: {flex}\n")
 
 with open(cfg_path, "w") as f:
     f.writelines(out)

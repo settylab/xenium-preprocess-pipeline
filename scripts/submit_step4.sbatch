@@ -46,14 +46,14 @@
 #                                      Standalone (not mutual with the
 #                                      test_object/reference pair).
 #     STEP4_OVERRIDES_B64  (optional)  base64-encoded YAML from the driver's
-#                                      --step4-config + --override
-#                                      step4.<key>=<val>. When set, decoded
+#                                      --rctd-split-config + --override
+#                                      rctd_split.<key>=<val>. When set, decoded
 #                                      to a tmpfile and passed to `rctd-split
 #                                      run --config <tmp>` before the named
 #                                      flags (so named flags win).
 #
 # When STEP4_TEST_OBJECT / STEP4_REFERENCE_RDS are unset, rctd-split uses the
-# run-scoped layout to locate step-1 test_object.rds and step-3 reference.rds
+# run-scoped layout to locate xenium-preprocess test_object.rds and ref-build reference.rds
 # automatically:
 #     <OUTPUT_ROOT>/<SAMPLE>/<SAMPLE>_<RUN_ID>/rctd/<SAMPLE>_test_object.rds
 #     <OUTPUT_ROOT>/<SAMPLE>/<SAMPLE>_<RUN_ID>/rctd/<SAMPLE>_reference.rds
@@ -62,7 +62,7 @@
 #     rctd/<SAMPLE>_rctd_results.rds                    (new)
 #     spatial_adata/<SAMPLE>_proseg_purified.h5ad       (new)
 #     spatial_adata/<SAMPLE>_proseg_raw.h5ad            (obs cols augmented
-#                                                       by writeback_to_step1_raw)
+#                                                       by writeback_to_raw)
 #     spatial_adata/<SAMPLE>_xenium_ranger.h5ad         (celltype + distance
 #                                                       cols augmented by
 #                                                       celltype_writeback)
@@ -133,8 +133,8 @@ RUN_ID="${RUN_ID:-$SLURM_JOB_ID}"
 # before invoking submit_workflow.sh.
 MAX_CORES="${MAX_CORES:-12}"
 
-# --config passthrough from driver's --step4-config + --override
-# step4.<key>=<val>. When neither was set the driver leaves
+# --config passthrough from driver's --rctd-split-config + --override
+# rctd_split.<key>=<val>. When neither was set the driver leaves
 # STEP4_OVERRIDES_B64 unset, and CONFIG_ARGS stays empty.
 CONFIG_ARGS=()
 if [[ -n "${STEP4_OVERRIDES_B64:-}" ]]; then

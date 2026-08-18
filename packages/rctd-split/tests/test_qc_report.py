@@ -137,7 +137,7 @@ def _write_raw(
         # Cells 3..5 → doublet_certain
         # Cells 6..7 → doublet_uncertain
         # Cells 8..9 → reject
-        # Cells 10..11 → "" (step-1 QC dropped them BEFORE RCTD;
+        # Cells 10..11 → "" (xenium-preprocess QC dropped them BEFORE RCTD;
         # empty spot_class is the sentinel).
         spot = (
             (["singlet"] * 3)
@@ -202,8 +202,8 @@ def _write_xenium(output_root: Path, *, with_total_counts_obs: bool = True):
 def _write_resolved_config(
     output_root: Path,
     *,
-    step1_min_counts_cell=10,
-    step4_postprocess_min_counts=50,
+    xenium_preprocess_min_counts_cell=10,
+    rctd_split_postprocess_min_counts=50,
 ):
     """Write a minimal ``config.yaml`` under the run dir so
     ``_read_hist_thresholds`` picks up the two threshold values.
@@ -219,13 +219,13 @@ def _write_resolved_config(
     p.parent.mkdir(parents=True, exist_ok=True)
 
     merged: dict = {}
-    if step1_min_counts_cell is not None:
-        merged["step1"] = {"qc_filter": {
-            "min_counts_cell": step1_min_counts_cell,
+    if xenium_preprocess_min_counts_cell is not None:
+        merged["xenium_preprocess"] = {"qc_filter": {
+            "min_counts_cell": xenium_preprocess_min_counts_cell,
         }}
-    if step4_postprocess_min_counts is not None:
-        merged["step4"] = {"postprocess": {"qc": {
-            "min_counts": step4_postprocess_min_counts,
+    if rctd_split_postprocess_min_counts is not None:
+        merged["rctd_split"] = {"postprocess": {"qc": {
+            "min_counts": rctd_split_postprocess_min_counts,
         }}}
     with open(p, "w") as f:
         yaml.safe_dump(merged, f, sort_keys=False)
@@ -324,8 +324,8 @@ def test_qc_report_happy_path(tmp_path: Path):
     assert "doublet_uncertain" in body
     assert "reject" in body
     # Threshold captions include the config-source annotation.
-    assert "step1.qc_filter.min_counts_cell" in body
-    assert "step4.postprocess.qc.min_counts" in body
+    assert "xenium_preprocess.qc_filter.min_counts_cell" in body
+    assert "rctd_split.postprocess.qc.min_counts" in body
 
     # RCTD summary CSV is a separate sidecar.
     from rctd_split._internal.layout import summary_path
@@ -386,7 +386,7 @@ def test_qc_report_html_provenance_section(tmp_path: Path):
     cfg_text = resolved_config_path(
         output_root, SAMPLE, RUN_ID,
     ).read_text()
-    # The fixture writes step1.qc_filter.min_counts_cell — pick a
+    # The fixture writes xenium_preprocess.qc_filter.min_counts_cell — pick a
     # substring that would only appear if the config text made it into
     # the report body.
     assert "min_counts_cell" in cfg_text
@@ -565,7 +565,7 @@ def test_qc_report_rctd_summary_counts(tmp_path: Path):
     the fixture-planted values on ``raw.obs``.
 
     Fixture (see ``_write_raw``): 3 singlet, 3 doublet_certain,
-    2 doublet_uncertain, 2 reject, 2 empty (step-1 dropped).
+    2 doublet_uncertain, 2 reject, 2 empty (xenium-preprocess dropped).
     Rejected cells' first_type = {tumor, stroma} (one each).
     """
     import pandas as pd
@@ -587,7 +587,7 @@ def test_qc_report_rctd_summary_counts(tmp_path: Path):
     # Summary section: denominators.
     summary = df[df["section"] == "summary"].set_index("key")
     assert int(summary.loc["n_raw", "count"]) == _N_RAW  # 12
-    # 2 empty spot_class cells → step-1-dropped.
+    # 2 empty spot_class cells → xenium-preprocess-dropped.
     assert int(summary.loc["n_pre_rctd_dropped", "count"]) == 2
     assert int(summary.loc["n_rctd", "count"]) == _N_RAW - 2  # 10
     assert int(summary.loc["n_rejected", "count"]) == 2
@@ -647,7 +647,7 @@ def test_qc_report_fails_on_missing_spot_class(tmp_path: Path):
     msg = str(exc.value)
     assert "spot_class" in msg
     assert "proseg_raw" in msg
-    assert "writeback_to_step1_raw" in msg
+    assert "writeback_to_raw" in msg
 
 
 def test_qc_report_fails_on_missing_first_type_on_raw(tmp_path: Path):
@@ -683,8 +683,8 @@ def test_qc_report_hist_threshold_from_resolved_config(tmp_path: Path):
     output_root, _, _, _ = _setup_run(
         tmp_path,
         resolved_config_kwargs={
-            "step1_min_counts_cell": 7,
-            "step4_postprocess_min_counts": 42,
+            "xenium_preprocess_min_counts_cell": 7,
+            "rctd_split_postprocess_min_counts": 42,
         },
     )
     run_qc_report(
@@ -694,9 +694,9 @@ def test_qc_report_hist_threshold_from_resolved_config(tmp_path: Path):
 
     body = summary_path(output_root, SAMPLE, RUN_ID, "html_report").read_text()
     # Both the config-path anchor and the numeric threshold should render.
-    assert "step1.qc_filter.min_counts_cell" in body
+    assert "xenium_preprocess.qc_filter.min_counts_cell" in body
     assert "<b>7</b>" in body
-    assert "step4.postprocess.qc.min_counts" in body
+    assert "rctd_split.postprocess.qc.min_counts" in body
     assert "<b>42</b>" in body
 
 
@@ -724,7 +724,7 @@ def test_qc_report_hist_no_threshold_when_config_absent(tmp_path: Path):
 
 
 def test_qc_report_hist_xenium_never_has_threshold(tmp_path: Path):
-    """xenium_ranger.h5ad has no upstream min-counts gate in step-1;
+    """xenium_ranger.h5ad has no upstream min-counts gate in xenium-preprocess;
     even with a fully-populated resolved_config the xenium histogram
     caption stays on the "no line" branch."""
     from rctd_split._internal.layout import summary_path
@@ -784,8 +784,8 @@ def test_qc_report_read_hist_thresholds_unit(tmp_path: Path):
     #    xenium always None (no config key defined).
     good = tmp_path / "good.yaml"
     good.write_text(yaml.safe_dump({
-        "step1": {"qc_filter": {"min_counts_cell": 11}},
-        "step4": {"postprocess": {"qc": {"min_counts": 33}}},
+        "xenium_preprocess": {"qc_filter": {"min_counts_cell": 11}},
+        "rctd_split": {"postprocess": {"qc": {"min_counts": 33}}},
     }))
     got = _read_hist_thresholds(good)
     assert got["raw"] == 11.0
@@ -795,7 +795,7 @@ def test_qc_report_read_hist_thresholds_unit(tmp_path: Path):
     # 3. Non-numeric config value → None (defensive).
     bad = tmp_path / "bad.yaml"
     bad.write_text(yaml.safe_dump({
-        "step1": {"qc_filter": {"min_counts_cell": "not a number"}},
+        "xenium_preprocess": {"qc_filter": {"min_counts_cell": "not a number"}},
     }))
     got = _read_hist_thresholds(bad)
     assert got["raw"] is None

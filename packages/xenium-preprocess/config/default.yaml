@@ -1,4 +1,4 @@
-# Default configuration for the xenium-preprocess pipeline (step 1
+# Default configuration for the xenium-preprocess pipeline (xenium-preprocess
 # of the Xenium spatial-data preprocessing pipeline).
 #
 # Every value here can be overridden on the CLI (--key value) or by a

@@ -3,8 +3,8 @@
 Reads (never writes to) the three persisted h5ads under
 ``spatial_adata/``:
 
-  * ``<S>_xenium_ranger.h5ad`` (step 1; augmented by celltype_writeback)
-  * ``<S>_proseg_raw.h5ad``    (step 1; augmented by writeback_to_step1_raw)
+  * ``<S>_xenium_ranger.h5ad`` (xenium-preprocess; augmented by celltype_writeback)
+  * ``<S>_proseg_raw.h5ad``    (xenium-preprocess; augmented by writeback_to_raw)
   * ``<S>_proseg_purified.h5ad`` (this pipeline; augmented by postprocess)
 
 Emits under ``<run_dir>/summary/``:
@@ -43,14 +43,14 @@ Reproducibility:
     vertical line at the upstream filter threshold, read from the
     merged ``config.yaml`` (settylab/TracyY123-nexus#26
     comment 5275064492). Thresholds:
-      - proseg_raw histogram: ``step1.qc_filter.min_counts_cell``
+      - proseg_raw histogram: ``xenium_preprocess.qc_filter.min_counts_cell``
       - xenium_ranger histogram: no upstream min-counts gate, no line
-      - proseg_purified histogram: ``step4.postprocess.qc.min_counts``
+      - proseg_purified histogram: ``rctd_split.postprocess.qc.min_counts``
     If the config file or a threshold key is absent, the line is
     omitted — never hard-coded.
   * The proseg_purified histogram sources its `nCount_Proseg` values
     from the pre-filter intermediate
-    ``intermediate/adata/<S>_step4_unpurified.h5ad`` when available, so
+    ``intermediate/adata/<S>_unpurified.h5ad`` when available, so
     cells that ``postprocess.filter_cells(min_counts=...)`` removed are
     still visible in the distribution on the left of the dashed
     threshold line (Tracy's ask on settylab/TracyY123-nexus#26
@@ -60,11 +60,11 @@ Reproducibility:
     already-completed + cleaned run).
   * RCTD spot_class summary + first_type-in-rejected tabulation are
     computed from ``proseg_raw.obs`` (``spot_class`` + ``first_type``
-    are folded from ``intermediate/adata/step4_unpurified.h5ad`` onto
-    raw by ``writeback_to_step1_raw`` Part 2; ``unpurified.obs`` in
+    are folded from ``intermediate/adata/unpurified.h5ad`` onto
+    raw by ``writeback_to_raw`` Part 2; ``unpurified.obs`` in
     turn got them from RCTD's ``results_df`` via
     ``SPLIT::run_post_process_RCTD``). Fail-loud when either column is
-    absent. Cells with empty ``spot_class`` were dropped by step-1
+    absent. Cells with empty ``spot_class`` were dropped by xenium-preprocess
     QC before RCTD ever saw them and are excluded from the RCTD
     denominator.
 
@@ -148,7 +148,7 @@ def _resolve_matrix(adata, layer: str | None, label: str):
             f"[qc_report] {label}.h5ad has no layers[{layer!r}]. "
             f"Available layers: {available}. "
             "The canonical proseg argmax-posterior integer count "
-            "layer is 'maxpost_counts' (as emitted by step-1 proseg "
+            "layer is 'maxpost_counts' (as emitted by xenium-preprocess proseg "
             "export). If your h5ad uses that name, drop --qc-raw-layer "
             "or set qc_report.raw_layer: maxpost_counts in your config."
         )
@@ -221,9 +221,9 @@ def _rctd_summary_metrics(raw_adata) -> dict:
     """Compute RCTD summary metrics from ``proseg_raw.obs``.
 
     Reads ``raw.obs['spot_class']`` and ``raw.obs['first_type']`` —
-    both folded onto raw by ``writeback_to_step1_raw`` Part 2 from
-    ``step4_unpurified.obs``. Cells with empty ``spot_class`` were
-    dropped by step-1 QC before RCTD saw them and are excluded from
+    both folded onto raw by ``writeback_to_raw`` Part 2 from
+    ``unpurified.obs``. Cells with empty ``spot_class`` were
+    dropped by xenium-preprocess QC before RCTD saw them and are excluded from
     the RCTD denominator (they are counted separately as
     ``n_pre_rctd_dropped``).
 
@@ -231,7 +231,7 @@ def _rctd_summary_metrics(raw_adata) -> dict:
 
     - ``n_raw`` — total raw cells.
     - ``n_pre_rctd_dropped`` — cells with empty spot_class
-      (step-1 qc-filtered, never reached RCTD).
+      (xenium-preprocess qc-filtered, never reached RCTD).
     - ``n_rctd`` — cells RCTD categorized.
     - ``spot_class_rows`` — list of dicts with keys
       ``class``, ``display_name``, ``count``, ``pct``. Ordered by
@@ -247,9 +247,9 @@ def _rctd_summary_metrics(raw_adata) -> dict:
         if col not in raw_adata.obs.columns:
             raise SystemExit(
                 f"[qc_report] proseg_raw.h5ad missing obs[{col!r}] — "
-                "expected after writeback_to_step1_raw Part 2 folds "
-                "step4_unpurified.obs onto raw. Re-run the "
-                "writeback_to_step1_raw stage (with all prerequisites)."
+                "expected after writeback_to_raw Part 2 folds "
+                "unpurified.obs onto raw. Re-run the "
+                "writeback_to_raw stage (with all prerequisites)."
             )
 
     spot = _normalize_spot_series(raw_adata.obs["spot_class"])
@@ -323,10 +323,10 @@ def _read_hist_thresholds(resolved_yaml: Path) -> dict:
     non-numeric config values → None.
 
     Returns:
-      raw:      step1.qc_filter.min_counts_cell (float | None)
+      raw:      xenium_preprocess.qc_filter.min_counts_cell (float | None)
       xenium:   None — xenium_ranger.h5ad has no min-counts gate in
-                step-1 (xenium_ranger_to_anndata is pass-through).
-      purified: step4.postprocess.qc.min_counts (float | None)
+                xenium-preprocess (xenium_ranger_to_anndata is pass-through).
+      purified: rctd_split.postprocess.qc.min_counts (float | None)
     """
     result = {"raw": None, "xenium": None, "purified": None}
     if not resolved_yaml.exists():
@@ -355,8 +355,8 @@ def _read_hist_thresholds(resolved_yaml: Path) -> dict:
         except (TypeError, ValueError):
             return None
 
-    result["raw"] = _get(merged, ("step1", "qc_filter", "min_counts_cell"))
-    result["purified"] = _get(merged, ("step4", "postprocess", "qc", "min_counts"))
+    result["raw"] = _get(merged, ("xenium_preprocess", "qc_filter", "min_counts_cell"))
+    result["purified"] = _get(merged, ("rctd_split", "postprocess", "qc", "min_counts"))
     return result
 
 
@@ -421,7 +421,7 @@ def _resolve_purification_status(purified_adata, column_name: str):
 
     Fail-loud when the column is missing — do NOT try to reindex from
     raw.obs (raw carries the boolean ``passed_purification`` from
-    ``writeback_to_step1_raw``, not the SPLIT categorical).
+    ``writeback_to_raw``, not the SPLIT categorical).
     """
     import numpy as np
 
@@ -431,7 +431,7 @@ def _resolve_purification_status(purified_adata, column_name: str):
             "This is a SPLIT-native column produced by SPLIT::purify; "
             "check that the split_purify → mtx_to_h5ad chain ran "
             "successfully. (Do not confuse with raw.obs['passed_purification'], "
-            "which is the boolean written by writeback_to_step1_raw.)"
+            "which is the boolean written by writeback_to_raw.)"
         )
     log(f"[qc_report]   using purified.obs[{column_name!r}] "
         "for UMAP #1 coloring")
@@ -707,10 +707,10 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 <h2>RCTD summary</h2>
 <p class="meta">
   RCTD categorized <b>{n_rctd}</b> cells (of {n_raw_total} raw;
-  {n_pre_rctd_dropped} dropped by step-1 QC before RCTD saw them).
+  {n_pre_rctd_dropped} dropped by xenium-preprocess QC before RCTD saw them).
   Source: <code>proseg_raw.obs['spot_class']</code> (folded from
-  <code>step4_unpurified.obs</code> by
-  <code>writeback_to_step1_raw</code>; originally emitted by
+  <code>unpurified.obs</code> by
+  <code>writeback_to_raw</code>; originally emitted by
   <code>SPLIT::run_post_process_RCTD</code> from RCTD's
   <code>results_df</code>).
 </p>
@@ -1015,13 +1015,13 @@ def _render_html(
             _render_rctd_rejected_first_type_rows(rctd_summary)
         ),
         threshold_caption_raw=_threshold_caption(
-            "step1.qc_filter.min_counts_cell", thresholds["raw"],
+            "xenium_preprocess.qc_filter.min_counts_cell", thresholds["raw"],
         ),
         threshold_caption_xenium=_threshold_caption(
-            "step1 (xenium_ranger min-counts)", thresholds["xenium"],
+            "xenium-preprocess (xenium_ranger min-counts)", thresholds["xenium"],
         ),
         threshold_caption_purified=_threshold_caption(
-            "step4.postprocess.qc.min_counts", thresholds["purified"],
+            "rctd_split.postprocess.qc.min_counts", thresholds["purified"],
         ),
         img_hist_raw=img_paths["hist_raw"],
         img_hist_xenium=img_paths["hist_xenium"],
@@ -1279,7 +1279,7 @@ def run_qc_report(
         "first_type-in-rejected tabulation from raw.obs")
     rctd_summary = _rctd_summary_metrics(raw)
     log(f"[qc_report] RCTD summary: {rctd_summary['n_rctd']} categorized "
-        f"({rctd_summary['n_pre_rctd_dropped']} step-1-dropped), "
+        f"({rctd_summary['n_pre_rctd_dropped']} xenium-preprocess-dropped), "
         f"{rctd_summary['n_rejected']} rejected")
 
     log(f"[qc_report] reading histogram thresholds from {resolved_yaml}")
@@ -1313,7 +1313,7 @@ def run_qc_report(
         xenium, "total_counts", "xenium_ranger",
     )
     # Prefer the pre-min_counts population from
-    # `intermediate/adata/<S>_step4_unpurified.h5ad` so cells that
+    # `intermediate/adata/<S>_unpurified.h5ad` so cells that
     # `postprocess.filter_cells(min_counts=...)` removed still appear in
     # the histogram on the left of the dashed threshold line
     # (settylab/TracyY123-nexus#26 comment 5322401335, item 2). Fall
@@ -1330,11 +1330,11 @@ def run_qc_report(
         unpurified = ad.read_h5ad(unpurified_h5ad_p)
         if "nCount_Proseg" in unpurified.obs.columns:
             hist_purified_vals = _hist_values_from_obs(
-                unpurified, "nCount_Proseg", "step4_unpurified",
+                unpurified, "nCount_Proseg", "unpurified",
             )
-            hist_purified_source = "step4_unpurified (pre-min_counts)"
+            hist_purified_source = "unpurified (pre-min_counts)"
         else:
-            log("[qc_report]   step4_unpurified.h5ad missing "
+            log("[qc_report]   unpurified.h5ad missing "
                 "obs['nCount_Proseg'] — falling back to post-filter "
                 "purified.h5ad for the histogram.")
             hist_purified_vals = _hist_values_from_obs(

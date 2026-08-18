@@ -1,11 +1,11 @@
 # ref-build
 
-**Step 3 of the Xenium spatial-data preprocessing pipeline: primary + donor-pool preprocessed scRNA AnnData → per-celltype adaptive migration → 10X-style mtx/features/barcodes bundle → spacexr Reference `.rds` for RCTD.**
+**ref-build of the Xenium spatial-data preprocessing pipeline: primary + donor-pool preprocessed scRNA AnnData → per-celltype adaptive migration → 10X-style mtx/features/barcodes bundle → spacexr Reference `.rds` for RCTD.**
 
 At a glance:
 
 - **`load_primary_and_donors`** — reads the primary sample's preprocessed scRNA h5ad (originally produced by step 2 `flex-preprocess`; step 2 was **[deprecated 2026-08-10](internal issue review)** and the primary h5ad now comes from manual scRNA preprocessing, meeting the input contract documented under [Configuration](#configuration)) plus a list of same-primary-tumor-type donor files, concatenates with `anndata.concat(..., join="outer", fill_value=0)`, and attaches a `sample_ID` column.
-- **`census`** — reads the celltype-marker JSON (same shape as step 1's `--global-non-tumor-json`), extracts the expected-celltype set, tallies per-sample per-celltype counts, decides the per-celltype migration policy, and writes `census.csv` — the operator-visible "why did we borrow X from Y" audit trail.
+- **`census`** — reads the celltype-marker JSON (same shape as xenium-preprocess's `--global-non-tumor-json`), extracts the expected-celltype set, tallies per-sample per-celltype counts, decides the per-celltype migration policy, and writes `census.csv` — the operator-visible "why did we borrow X from Y" audit trail.
 - **`assemble`** — applies the census's per-celltype policy to build the merged reference AnnData. Preserves raw integer counts (no normalization) so the R side's `require_int=TRUE` passes.
 - **`export_mtx`** — writes a 10X-style `{counts.mtx.gz, features.tsv.gz, barcodes.tsv.gz, metadata.csv}` bundle. Single-column `features.tsv` so `Seurat::ReadMtx(feature.column=1)` on the R side lines up.
 - **`rctd_reference_build`** — shells out to `Rscript` (via the `fhR/4.4.1-foss-2023b` R module (Lmod) by default) to build a `spacexr::Reference` object with `min_UMI=10, require_int=TRUE`, `saveRDS`'d as `<sample_id>_scRNA_ref.rds`. That RDS is what RCTD's `create.RCTD(spatial, reference)` takes as the reference side.
@@ -65,7 +65,7 @@ Adapted from the shared Stage-B backbone in `the internal reference summary` (St
 
 ### `census` — expected-celltype set → per-celltype migration decision
 
-Reads the marker JSON (default: `--celltype-marker-json /data/markers/markers.json`), extracts the expected celltype set as `{k.rsplit("_marker", 1)[0] for k in markers}` (same shape as step 1's `--global-non-tumor-json`), tallies per-sample per-celltype cell counts, and decides the per-celltype migration policy under the rules:
+Reads the marker JSON (default: `--celltype-marker-json /data/markers/markers.json`), extracts the expected celltype set as `{k.rsplit("_marker", 1)[0] for k in markers}` (same shape as xenium-preprocess's `--global-non-tumor-json`), tallies per-sample per-celltype cell counts, and decides the per-celltype migration policy under the rules:
 
 | Primary count | Any donor has it? | Any fallback has it? | Decision |
 |---|---|---|---|

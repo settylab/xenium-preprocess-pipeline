@@ -1,4 +1,4 @@
-# Default configuration for the ref-build pipeline (step 3 of the
+# Default configuration for the ref-build pipeline (ref-build of the
 # Xenium spatial-data preprocessing pipeline).
 #
 # Every value here can be overridden on the CLI (--key value) or by a
@@ -52,7 +52,7 @@ force_rerun: false                    # nuke per-stage sentinels and re-run
 run_id: null
 
 # --flex-h5ad — the flex-preprocessed scRNA h5ad. Reference-in-place:
-# recorded verbatim under `step3.flex_h5ad_path` in the merged
+# recorded verbatim under `ref_build.flex_h5ad_path` in the merged
 # config.yaml. No copy / no symlink. When null, no path is
 # recorded. If --primary-h5ad is not set, the flex path is used as
 # the primary input.

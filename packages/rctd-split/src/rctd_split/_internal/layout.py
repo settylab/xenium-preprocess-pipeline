@@ -1,4 +1,4 @@
-"""Run-scoped output layout for rctd-split (step 4).
+"""Run-scoped output layout for rctd-split.
 
 Layout (locked in (internal issue review):
 
@@ -7,20 +7,20 @@ Layout (locked in (internal issue review):
         └── <sample_id>_<run_id>/
             ├── spatial_adata/
             │   ├── <sample_id>_proseg_purified.h5ad     (this pipeline)
-            │   ├── <sample_id>_proseg_raw.h5ad          (step 1; writeback lands here)
-            │   └── <sample_id>_xenium_ranger.h5ad       (step 1; celltype writeback lands here)
+            │   ├── <sample_id>_proseg_raw.h5ad          (xenium-preprocess; writeback lands here)
+            │   └── <sample_id>_xenium_ranger.h5ad       (xenium-preprocess; celltype writeback lands here)
             ├── rctd/
             │   ├── <sample_id>_rctd_results.rds         (this pipeline)
-            │   ├── <sample_id>_reference.rds            (step 3, read)
-            │   ├── <sample_id>_reference_post_rules.h5ad (step 3, read)
-            │   └── <sample_id>_test_object.rds          (step 1, read)
+            │   ├── <sample_id>_reference.rds            (ref-build, read)
+            │   ├── <sample_id>_reference_post_rules.h5ad (ref-build, read)
+            │   └── <sample_id>_test_object.rds          (xenium-preprocess, read)
             ├── intermediate/                            (this pipeline; not persisted)
             │   ├── split/
             │   │   ├── <sample_id>_unpurified.rds
             │   │   └── <sample_id>_purified.rds
             │   ├── mtx/{unpurified,purified}/…
-            │   └── adata/<sample_id>_step4_unpurified.h5ad
-            ├── config.yaml                     (merged across steps)
+            │   └── adata/<sample_id>_unpurified.h5ad
+            ├── config.yaml                     (merged across stages)
             └── logs/rctd-split.log                           (this pipeline's log)
 
 `run_id` precedence (bound in cli._resolve_run_id): `--run-id` >
@@ -46,11 +46,11 @@ _RCTD_BASENAMES = {
 _INTERMEDIATE_BASENAMES = {
     "unpurified_rds": "split/{sample_id}_unpurified.rds",
     "purified_rds": "split/{sample_id}_purified.rds",
-    "unpurified_h5ad": "adata/{sample_id}_step4_unpurified.h5ad",
+    "unpurified_h5ad": "adata/{sample_id}_unpurified.h5ad",
     "filter_status_csv": "adata/{sample_id}_filter_status.csv",
-    "postprocess_sentinel": "adata/{sample_id}_step6_postprocess.done",
-    "postprocess_summary": "adata/{sample_id}_step6_postprocess_summary.csv",
-    "writeback_sentinel": "adata/{sample_id}_writeback_to_step1_raw.done",
+    "postprocess_sentinel": "adata/{sample_id}_postprocess.done",
+    "postprocess_summary": "adata/{sample_id}_postprocess_summary.csv",
+    "writeback_sentinel": "adata/{sample_id}_writeback_to_raw.done",
     "writeback_unaccounted": "adata/{sample_id}_writeback_unaccounted_cells.csv",
     "celltype_sentinel": "adata/{sample_id}_celltype_writeback.done",
     "qc_report_sentinel": "adata/{sample_id}_qc_report.done",
@@ -171,9 +171,9 @@ def _sanitize_frame_for_h5ad(df):
       Index is backed by ArrowStringArray.
 
     This is a verbatim replica of `xenium_preprocess._internal.layout.
-    _sanitize_frame_for_h5ad` (step 1) and `ref_build._internal.layout.
-    _sanitize_frame_for_h5ad` (step 3). Kept in sync manually — if any
-    implementation changes, update all three. See the step-3 arrow-string
+    _sanitize_frame_for_h5ad` and `ref_build._internal.layout.
+    _sanitize_frame_for_h5ad`. Kept in sync manually — if any
+    implementation changes, update all three. See the ref-build arrow-string
     report for the rationale on replication vs. cross-package import.
     """
     import numpy as np
@@ -245,10 +245,10 @@ def atomic_write_h5ad(adata, out_path: Path, **write_kwargs) -> None:
     with object-backed categories, and anndata's re-invocation inside
     `write_h5ad` is a no-op — the sanitize survives to the writer.
 
-    Step 4 reads h5ads written by step 1 (`proseg_raw`,
-    `xenium_ranger`) and step 3 (`reference_post_rules`); those reads
-    yield arrow-string-backed obs/var frames, and every step 4 write
-    (`filter_status`, `writeback_to_step1_raw`, `celltype_writeback`,
+    rctd-split reads h5ads written by xenium-preprocess (`proseg_raw`,
+    `xenium_ranger`) and ref-build (`reference_post_rules`); those reads
+    yield arrow-string-backed obs/var frames, and every rctd-split write
+    (`filter_status`, `writeback_to_raw`, `celltype_writeback`,
     `mtx_to_h5ad`, `postprocess`) routes through this helper.
     """
     out_path = Path(out_path)

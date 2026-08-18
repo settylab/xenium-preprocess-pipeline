@@ -1,5 +1,5 @@
-"""Stage-orchestration loop for ref-build (step 3 of the pipeline
-three-step pipeline).
+"""Sub-stage orchestration loop for ref-build (the middle stage of the
+three-stage pipeline).
 
 Runs the requested subset of
     load_primary_and_donors → census → assemble → export_mtx → rctd_reference_build
@@ -13,12 +13,12 @@ After `rctd_reference_build` succeeds the intermediate outputs
 (`loaded/`, `census/`, `mtx_bundle/`) are DROPPED. The two final
 artifacts under `rctd/` — `<sample_id>_reference_post_rules.h5ad` (from
 `assemble`) and `<sample_id>_reference.rds` (from `rctd_reference_build`)
-— survive; they are the inputs step 4 consumes.
+— survive; they are the inputs rctd-split consumes.
 
 Merged `config.yaml` is written via the shared
-`_internal.merge_config` helper under the `step3:` top-level key so
-step 1 / step 4 co-writing the same file don't clobber each other's
-sections.
+`_internal.merge_config` helper under the `ref_build:` top-level key so
+xenium-preprocess / rctd-split co-writing the same file don't clobber
+each other's sections.
 """
 from __future__ import annotations
 
@@ -102,18 +102,18 @@ def _drop_intermediate_outputs(rundir: Path) -> None:
 def _write_merged_resolved_config(
     output_root: Path, sample_id: str, run_id: str, cfg: dict,
 ) -> Path:
-    """Write only the `step3:` top-level key to the shared merged
+    """Write only the `ref_build:` top-level key to the shared merged
     `config.yaml` at `<run_dir>/config.yaml`.
-    Preserves any sibling `step1:` / `step4:` / `driver:` sections
-    written by adjacent pipelines in the same run.
+    Preserves any sibling `xenium_preprocess:` / `rctd_split:` / `driver:`
+    sections written by adjacent pipelines in the same run.
 
-    The `step3:` payload we record is the FULL resolved config for this
+    The `ref_build:` payload we record is the FULL resolved config for this
     invocation — including `flex_h5ad_path` (reference-in-place — no
-    copy, no symlink), the resolved `run_id`, and every stage's knobs.
+    copy, no symlink), the resolved `run_id`, and every sub-stage's knobs.
     """
     resolved = resolved_config_path(output_root, sample_id, run_id)
-    step3_cfg = dict(cfg)  # shallow copy is enough — we don't mutate below
-    merged = merge_config(resolved, "step3", step3_cfg)
+    ref_build_cfg = dict(cfg)  # shallow copy is enough — we don't mutate below
+    merged = merge_config(resolved, "ref_build", ref_build_cfg)
     log(f"[pipeline] resolved config -> {resolved} "
         f"(top-level keys after merge: {sorted(merged.keys())})")
     return resolved
@@ -168,9 +168,9 @@ def run(cfg: dict, stages: list[str], argv: list[str]) -> int:
     rundir.mkdir(parents=True, exist_ok=True)
     rctd_dir(output_root, sample_id, run_id).mkdir(parents=True, exist_ok=True)
 
-    # Merged resolved-config write BEFORE any stage runs. This lets a
-    # downstream consumer read `step3.flex_h5ad_path` even after a
-    # partial-stages invocation.
+    # Merged resolved-config write BEFORE any sub-stage runs. This lets a
+    # downstream consumer read `ref_build.flex_h5ad_path` even after a
+    # partial-substages invocation.
     _write_merged_resolved_config(output_root, sample_id, run_id, cfg)
 
     n_stages = len(stages)

@@ -93,14 +93,14 @@ def _add_run_args(p: argparse.ArgumentParser) -> None:
                    help="Sample identifier (e.g. SAMPLE1).")
     p.add_argument("--test-object", type=Path,
                    help="Path to the spatial test object RDS "
-                        "(step 1 rctd_prep output). Optional — when "
+                        "(xenium-preprocess rctd_prep output). Optional — when "
                         "omitted, resolves to "
                         "<output_root>/<sample>/<sample>_<run_id>/rctd/"
                         "<sample>_test_object.rds (the standard "
                         "workflow layout).")
     p.add_argument("--reference-rds", type=Path,
                    help="Path to the scRNA reference RDS "
-                        "(step 3 rctd_reference_build output — a "
+                        "(ref-build rctd_reference_build output — a "
                         "spacexr::Reference object). Optional — when "
                         "omitted, resolves to "
                         "<output_root>/<sample>/<sample>_<run_id>/rctd/"
@@ -188,16 +188,16 @@ def _add_run_args(p: argparse.ArgumentParser) -> None:
                    help="postprocess: also compute PCA/UMAP on "
                         "layers['unpurified_counts'] (default: true).")
 
-    # writeback_to_step1_raw
-    p.add_argument("--step1-raw-h5ad", type=Path, default=None,
-                   help="writeback_to_step1_raw: path to step-1's "
+    # writeback_to_raw
+    p.add_argument("--xenium-preprocess-raw-h5ad", type=Path, default=None,
+                   help="writeback_to_raw: path to xenium-preprocess's "
                         "<S>_proseg_raw.h5ad. Default resolves to "
                         "<output_root>/<sample>/<sample>_<run_id>/"
                         "spatial_adata/<sample>_proseg_raw.h5ad.")
 
     # celltype_writeback
-    p.add_argument("--step1-xenium-ranger-h5ad", type=Path, default=None,
-                   help="celltype_writeback: path to step-1's "
+    p.add_argument("--xenium-preprocess-xenium-ranger-h5ad", type=Path, default=None,
+                   help="celltype_writeback: path to xenium-preprocess's "
                         "<S>_xenium_ranger.h5ad. Default resolves to "
                         "<output_root>/<sample>/<sample>_<run_id>/"
                         "spatial_adata/<sample>_xenium_ranger.h5ad.")
@@ -363,14 +363,14 @@ def _resolve_config(args: argparse.Namespace) -> dict:
         overrides["postprocess"] = pp_over
 
     wb_over: dict = {}
-    if args.step1_raw_h5ad is not None:
-        wb_over["raw_h5ad"] = str(args.step1_raw_h5ad)
+    if args.xenium_preprocess_raw_h5ad is not None:
+        wb_over["raw_h5ad"] = str(args.xenium_preprocess_raw_h5ad)
     if wb_over:
-        overrides["writeback_to_step1_raw"] = wb_over
+        overrides["writeback_to_raw"] = wb_over
 
     ct_over: dict = {}
-    if args.step1_xenium_ranger_h5ad is not None:
-        ct_over["xenium_ranger_h5ad"] = str(args.step1_xenium_ranger_h5ad)
+    if args.xenium_preprocess_xenium_ranger_h5ad is not None:
+        ct_over["xenium_ranger_h5ad"] = str(args.xenium_preprocess_xenium_ranger_h5ad)
     if ct_over:
         overrides["celltype_writeback"] = ct_over
 

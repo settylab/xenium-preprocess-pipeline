@@ -6,7 +6,7 @@ All notable changes to ref-build will be documented here. Follows
 ## [0.1.0] — 2026-07-09
 
 ### Added
-- Initial package scaffold (step 3 of the internal SPLIT/Proseg workflow spatial-data
+- Initial package scaffold (ref-build of the internal SPLIT/Proseg workflow spatial-data
   preprocessing pipeline).
 - Five stage modules under `ref_build.stages`
   (`load_primary_and_donors`, `census`, `assemble`, `export_mtx`,

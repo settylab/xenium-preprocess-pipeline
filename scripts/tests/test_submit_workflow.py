@@ -10,7 +10,7 @@ Coverage (per dispatch plan §4 + comment 5251080220 §2 overwrite audit):
 
   * `--sample-id` + `--flex-h5ad` required; missing either exits non-zero.
   * The three jobs submit in order with `--parsable`.
-  * Step 3's `--dependency` is `afterok:JOB1`; step 4's is `afterok:JOB3`.
+  * ref-build's `--dependency` is `afterok:JOB1`; rctd-split's is `afterok:JOB3`.
   * RUN_ID propagation:
       - fresh run (no --run-id, no $RUN_ID)   → JOB1's fake id is used.
       - --run-id flag override                → CLI value wins.
@@ -212,7 +212,7 @@ def test_three_jobs_submitted_in_order(env, tmp_path):
     assert j4["script"].endswith("submit_step4.sbatch")
 
 
-def test_step3_afterok_step1(env, tmp_path):
+def test_ref_build_afterok_xenium_preprocess(env, tmp_path):
     _run_driver(env,
                 "--sample-id", "MH10",
                 "--flex-h5ad", _flex_h5ad(tmp_path), "--celltype-marker-json", _marker_json(tmp_path))
@@ -223,7 +223,7 @@ def test_step3_afterok_step1(env, tmp_path):
     assert records[1]["dependency"] == f"afterok:{j1_id}"
 
 
-def test_step4_afterok_step3(env, tmp_path):
+def test_rctd_split_afterok_ref_build(env, tmp_path):
     _run_driver(env,
                 "--sample-id", "MH10",
                 "--flex-h5ad", _flex_h5ad(tmp_path), "--celltype-marker-json", _marker_json(tmp_path))
@@ -250,8 +250,9 @@ def test_run_id_defaults_to_job1_slurm_id(env, tmp_path):
     assert r.returncode == 0
     records = _parse_log(env["log"])
     j1_id, _, j4 = records
-    # Step 1's --export doesn't set RUN_ID (defaults inside the sbatch to
-    # $SLURM_JOB_ID); step 3+4 explicitly carry RUN_ID=<JOB1 id>.
+    # xenium-preprocess's --export doesn't set RUN_ID (defaults inside the
+    # sbatch to $SLURM_JOB_ID); ref-build + rctd-split explicitly carry
+    # RUN_ID=<JOB1 id>.
     assert _run_id_from(records[0]) is None
     assert _run_id_from(records[1]) == j1_id["jobid"]
     assert _run_id_from(records[2]) == j1_id["jobid"]
@@ -403,7 +404,7 @@ def test_end_to_end_layout(env, tmp_path):
     assert not missing, f"missing paths under {run_dir}: {missing}"
 
 
-def test_resolved_config_merged_across_steps(env, tmp_path):
+def test_resolved_config_merged_across_stages(env, tmp_path):
     _run_driver(env,
                 "--sample-id", "MH10",
                 "--flex-h5ad", _flex_h5ad(tmp_path), "--celltype-marker-json", _marker_json(tmp_path),
@@ -412,9 +413,9 @@ def test_resolved_config_merged_across_steps(env, tmp_path):
            / "config.yaml").read_text()
     # All three top-level keys survive (invariant enforced by the shared
     # _merge_config helper in each pipeline — the mocks here emulate it).
-    assert "step1:" in cfg
-    assert "step3:" in cfg
-    assert "step4:" in cfg
+    assert "xenium_preprocess:" in cfg
+    assert "ref_build:" in cfg
+    assert "rctd_split:" in cfg
     # The flex path was recorded verbatim.
     assert _flex_h5ad(tmp_path) in cfg or "flex_h5ad_path" in cfg
 
@@ -438,11 +439,11 @@ def test_dry_run_submits_nothing(env, tmp_path):
 # --------------------------------------------------------------------------
 # --donor-h5ad / --fallback-donor-h5ad — Tracy's per-run inputs
 # (settylab/TracyY123-nexus#26 comment 5257935882). Optional, repeatable;
-# threaded to step 3 as numbered env vars, expanded in submit_step3.sbatch
+# threaded to ref-build as numbered env vars, expanded in submit_step3.sbatch
 # into --donor-h5ad / --fallback-donor-h5ad flags on `ref-build run`.
 # --------------------------------------------------------------------------
 
-def _step3_log(env, sample, run_id):
+def _ref_build_log(env, sample, run_id):
     """Return the mock ref-build's ref-build.log contents (donors + fallbacks
     recorded, one per line)."""
     p = env["output_root"] / sample / f"{sample}_{run_id}" / "logs" / "ref-build.log"
@@ -461,7 +462,7 @@ def test_donor_h5ad_empty_by_default(env, tmp_path):
         assert _export_field(rec, "DONOR_H5AD_COUNT") == "0", rec
         assert _export_field(rec, "FALLBACK_H5AD_COUNT") == "0", rec
     # And ref-build received no donor / fallback flags.
-    log = _step3_log(env, "MH10", "no_donors")
+    log = _ref_build_log(env, "MH10", "no_donors")
     assert "donors_count=0" in log
     assert "fallback_donors_count=0" in log
 
@@ -479,7 +480,7 @@ def test_single_donor_h5ad_threaded_to_ref_build(env, tmp_path):
     for rec in records:
         assert _export_field(rec, "DONOR_H5AD_COUNT") == "1", rec
         assert _export_field(rec, "DONOR_H5AD_1") == donor, rec
-    log = _step3_log(env, "MH10", "one_donor")
+    log = _ref_build_log(env, "MH10", "one_donor")
     assert "donors_count=1" in log
     assert f"donor={donor}" in log
 
@@ -504,7 +505,7 @@ def test_multiple_donor_h5ads_threaded_repeatable(env, tmp_path):
         assert _export_field(rec, "DONOR_H5AD_COUNT") == "3", rec
         for i, d in enumerate(donors, 1):
             assert _export_field(rec, f"DONOR_H5AD_{i}") == d, (i, rec)
-    log = _step3_log(env, "MH10", "multi_donor")
+    log = _ref_build_log(env, "MH10", "multi_donor")
     assert "donors_count=3" in log
     for d in donors:
         assert f"donor={d}" in log
@@ -523,7 +524,7 @@ def test_fallback_donor_h5ad_threaded(env, tmp_path):
     for rec in records:
         assert _export_field(rec, "FALLBACK_H5AD_COUNT") == "1", rec
         assert _export_field(rec, "FALLBACK_H5AD_1") == fb, rec
-    log = _step3_log(env, "MH10", "one_fb")
+    log = _ref_build_log(env, "MH10", "one_fb")
     assert "fallback_donors_count=1" in log
     assert f"fallback_donor={fb}" in log
 
@@ -541,7 +542,7 @@ def test_donor_and_fallback_donor_h5ads_together(env, tmp_path):
                     "--fallback-donor-h5ad", fb,
                     "--run-id", "mh3_e2e")
     assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
-    log = _step3_log(env, "MH3", "mh3_e2e")
+    log = _ref_build_log(env, "MH3", "mh3_e2e")
     assert "donors_count=2" in log
     assert f"donor={donor_a}" in log
     assert f"donor={donor_b}" in log
@@ -550,7 +551,7 @@ def test_donor_and_fallback_donor_h5ads_together(env, tmp_path):
 
 
 # --------------------------------------------------------------------------
-# --celltype-col-for-ref-build — Tracy's step-3 celltype-column override
+# --celltype-col-for-ref-build — Tracy's ref-build celltype-column override
 # (settylab/TracyY123-nexus#26 comment 5258483286). Optional; threaded via
 # CELLTYPE_COL_FOR_REF_BUILD env var; expanded in submit_step3.sbatch into
 # `ref-build run --celltype-col <name>`. Unset ⇒ ref-build's config default.
@@ -563,18 +564,18 @@ def test_celltype_col_for_ref_build_unset_by_default(env, tmp_path):
                     "--run-id", "no_ct_col")
     assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
     records = _parse_log(env["log"])
-    # Not threaded at all when the flag is omitted (step 3 falls through
-    # to ref-build's config default).
+    # Not threaded at all when the flag is omitted (ref-build falls through
+    # to its config default).
     for rec in records:
         assert _export_field(rec, "CELLTYPE_COL_FOR_REF_BUILD") is None, rec
-    log = _step3_log(env, "MH10", "no_ct_col")
+    log = _ref_build_log(env, "MH10", "no_ct_col")
     # Mock ref-build records an empty celltype_col when --celltype-col
     # wasn't passed by submit_step3.sbatch.
     assert "celltype_col=" in log
     assert "celltype_col=refined" not in log
 
 
-def test_celltype_col_for_ref_build_threaded_to_step3(env, tmp_path):
+def test_celltype_col_for_ref_build_threaded_to_ref_build(env, tmp_path):
     col = "refined_celltype_update_lymphocyes_new"
     r = _run_driver(env,
                     "--sample-id", "MH10",
@@ -586,20 +587,20 @@ def test_celltype_col_for_ref_build_threaded_to_step3(env, tmp_path):
     # Threaded on every job's --export payload (common exports).
     for rec in records:
         assert _export_field(rec, "CELLTYPE_COL_FOR_REF_BUILD") == col, rec
-    # And expanded into `ref-build run --celltype-col <col>` at step 3.
-    log = _step3_log(env, "MH10", "ct_col_set")
+    # And expanded into `ref-build run --celltype-col <col>`.
+    log = _ref_build_log(env, "MH10", "ct_col_set")
     assert f"celltype_col={col}" in log
 
 
 # --------------------------------------------------------------------------
 # Slurm log routing (settylab/TracyY123-nexus#26 comments 5259180881 +
-# 5274187257). Route per-step stdout/stderr into the run-scoped logs/ folder
+# 5274187257). Route per-stage stdout/stderr into the run-scoped logs/ folder
 # so the run directory is self-contained, and name the log by the pipeline
-# package invoked (xenium-preprocess / ref-build / rctd-split) rather than
-# the internal "stepN" label. Verified via the mock sbatch's `output:` field.
+# package invoked (xenium-preprocess / ref-build / rctd-split). Verified via
+# the mock sbatch's `output:` field.
 # --------------------------------------------------------------------------
 
-# Log-file suffix per step, in submission order (step 1, 3, 4).
+# Log-file suffix per stage, in submission order.
 _STAGE_LOG_SUFFIXES = ("xenium-preprocess", "ref-build", "rctd-split")
 
 
@@ -661,10 +662,12 @@ def test_workflow_submit_log_mirrors_summary(env, tmp_path):
     assert "Workflow chain submitted" in text
     assert "sample_id         = MH10" in text
     assert "run_id            = log_mirror" in text
-    # Job ids show up on the step lines.
+    # Job ids show up on the per-stage lines.
     records = _parse_log(env["log"])
-    for step, rec in zip((1, 3, 4), records):
-        assert rec["jobid"] in text, (step, rec)
+    for stage, rec in zip(
+        ("xenium-preprocess", "ref-build", "rctd-split"), records
+    ):
+        assert rec["jobid"] in text, (stage, rec)
 
 
 def test_dry_run_writes_no_workflow_submit_log(env, tmp_path):
@@ -680,33 +683,34 @@ def test_dry_run_writes_no_workflow_submit_log(env, tmp_path):
 
 # --------------------------------------------------------------------------
 # --reuse-run-dir — resume-friendly counterpart to --force. Keeps the run
-# folder intact (each step overwrites the files it writes; other files
+# folder intact (each stage overwrites the files it writes; other files
 # preserved). settylab/TracyY123-nexus#26 comment 5260289249.
 # --------------------------------------------------------------------------
 
-def _seed_step1_outputs(env, sample, run_id):
-    """Pretend step 1 has already run: create the artifacts a resume path
-    would need to find in the run folder."""
+def _seed_xenium_preprocess_outputs(env, sample, run_id):
+    """Pretend xenium-preprocess has already run: create the artifacts a
+    resume path would need to find in the run folder."""
     run_dir = env["output_root"] / sample / f"{sample}_{run_id}"
     (run_dir / "spatial_adata").mkdir(parents=True, exist_ok=True)
     (run_dir / "rctd").mkdir(parents=True, exist_ok=True)
     (run_dir / "logs").mkdir(parents=True, exist_ok=True)
-    (run_dir / "spatial_adata" / f"{sample}_proseg_raw.h5ad").write_bytes(b"step1")
-    (run_dir / "spatial_adata" / f"{sample}_xenium_ranger.h5ad").write_bytes(b"step1")
-    (run_dir / "rctd" / f"{sample}_test_object.rds").write_bytes(b"step1")
+    (run_dir / "spatial_adata" / f"{sample}_proseg_raw.h5ad").write_bytes(b"xp")
+    (run_dir / "spatial_adata" / f"{sample}_xenium_ranger.h5ad").write_bytes(b"xp")
+    (run_dir / "rctd" / f"{sample}_test_object.rds").write_bytes(b"xp")
     return run_dir
 
 
-def _seed_step3_outputs(env, sample, run_id):
-    """Seed step-1 + step-3 outputs, as if the chain reached the end of step 3."""
-    run_dir = _seed_step1_outputs(env, sample, run_id)
-    (run_dir / "rctd" / f"{sample}_reference.rds").write_bytes(b"step3")
-    (run_dir / "rctd" / f"{sample}_reference_post_rules.h5ad").write_bytes(b"step3")
+def _seed_ref_build_outputs(env, sample, run_id):
+    """Seed xenium-preprocess + ref-build outputs, as if the chain reached
+    the end of ref-build."""
+    run_dir = _seed_xenium_preprocess_outputs(env, sample, run_id)
+    (run_dir / "rctd" / f"{sample}_reference.rds").write_bytes(b"rb")
+    (run_dir / "rctd" / f"{sample}_reference_post_rules.h5ad").write_bytes(b"rb")
     return run_dir
 
 
 def test_reuse_run_dir_keeps_existing_folder(env, tmp_path):
-    run_dir = _seed_step1_outputs(env, "MH10", "reuse")
+    run_dir = _seed_xenium_preprocess_outputs(env, "MH10", "reuse")
     marker = run_dir / "spatial_adata" / "MH10_proseg_raw.h5ad"
     r = _run_driver(env,
                     "--sample-id", "MH10",
@@ -743,17 +747,19 @@ def test_reuse_run_dir_on_fresh_folder_is_noop(env, tmp_path):
 
 
 # --------------------------------------------------------------------------
-# --start-step — skip earlier steps and resume mid-chain. Tracy's use case
-# from comment 5260289249: step 1 already ran, wants to redo step 3 + 4
-# under the same run-id without wiping step 1's outputs.
+# --start-step — skip earlier stages and resume mid-chain. Tracy's use case
+# from comment 5260289249: xenium-preprocess already ran, wants to redo
+# ref-build + rctd-split under the same run-id without wiping
+# xenium-preprocess's outputs.
 # --------------------------------------------------------------------------
 
-def test_start_step_default_is_1(env, tmp_path):
-    # Explicit --start-step 1 must be equivalent to omitting the flag.
+def test_start_step_default_is_xenium_preprocess(env, tmp_path):
+    # Explicit --start-step xenium-preprocess must be equivalent to omitting
+    # the flag.
     r = _run_driver(env,
                     "--sample-id", "MH10",
                     "--flex-h5ad", _flex_h5ad(tmp_path), "--celltype-marker-json", _marker_json(tmp_path),
-                    "--start-step", "1",
+                    "--start-step", "xenium-preprocess",
                     "--run-id", "explicit1")
     assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
     records = _parse_log(env["log"])
@@ -768,57 +774,59 @@ def test_start_step_invalid_value_rejected(env, tmp_path):
                     "--start-step", "2",
                     "--run-id", "bad")
     assert r.returncode != 0
-    assert "one of 1|xenium-preprocess, 3|ref-build, 4|rctd-split" in r.stderr
+    assert "one of xenium-preprocess, ref-build, rctd-split" in r.stderr
 
 
-def test_start_step_3_requires_run_id(env, tmp_path):
+def test_start_step_ref_build_requires_run_id(env, tmp_path):
     r = _run_driver(env,
                     "--sample-id", "MH10",
                     "--flex-h5ad", _flex_h5ad(tmp_path), "--celltype-marker-json", _marker_json(tmp_path),
-                    "--start-step", "3")
+                    "--start-step", "ref-build")
     assert r.returncode != 0
     assert "requires --run-id" in r.stderr
 
 
-def test_start_step_3_missing_run_folder_fails_loud(env, tmp_path):
+def test_start_step_ref_build_missing_run_folder_fails_loud(env, tmp_path):
     r = _run_driver(env,
                     "--sample-id", "MH10",
                     "--flex-h5ad", _flex_h5ad(tmp_path), "--celltype-marker-json", _marker_json(tmp_path),
-                    "--start-step", "3",
+                    "--start-step", "ref-build",
                     "--run-id", "no_such_run")
     assert r.returncode != 0
     assert "does not exist" in r.stderr or "nothing to resume" in r.stderr
 
 
-def test_start_step_3_missing_prereqs_fails_loud(env, tmp_path):
-    # Folder exists but step-1 outputs are absent — fail-loud with the
-    # missing paths listed.
+def test_start_step_ref_build_missing_prereqs_fails_loud(env, tmp_path):
+    # Folder exists but xenium-preprocess outputs are absent — fail-loud
+    # with the missing paths listed.
     (env["output_root"] / "MH10" / "MH10_partial").mkdir(parents=True)
     r = _run_driver(env,
                     "--sample-id", "MH10",
                     "--flex-h5ad", _flex_h5ad(tmp_path), "--celltype-marker-json", _marker_json(tmp_path),
-                    "--start-step", "3",
+                    "--start-step", "ref-build",
                     "--run-id", "partial")
     assert r.returncode != 0
     assert "requires these prior outputs" in r.stderr
     assert "test_object.rds" in r.stderr
 
 
-def test_start_step_3_submits_step3_and_step4_only(env, tmp_path):
-    _seed_step1_outputs(env, "MH10", "resume3")
+def test_start_step_ref_build_submits_ref_build_and_rctd_split_only(env, tmp_path):
+    _seed_xenium_preprocess_outputs(env, "MH10", "resume3")
     r = _run_driver(env,
                     "--sample-id", "MH10",
                     "--flex-h5ad", _flex_h5ad(tmp_path), "--celltype-marker-json", _marker_json(tmp_path),
-                    "--start-step", "3",
+                    "--start-step", "ref-build",
                     "--run-id", "resume3")
     assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
     records = _parse_log(env["log"])
-    assert len(records) == 2, f"expected 2 submits (step 3 + step 4), got {len(records)}"
+    assert len(records) == 2, (
+        f"expected 2 submits (ref-build + rctd-split), got {len(records)}"
+    )
     assert records[0]["script"].endswith("submit_step3.sbatch")
     assert records[1]["script"].endswith("submit_step4.sbatch")
-    # Step 3 has NO dependency (step 1 was skipped).
+    # ref-build has NO dependency (xenium-preprocess was skipped).
     assert records[0]["dependency"] == "", records[0]
-    # Step 4 chains off step 3's jobid.
+    # rctd-split chains off ref-build's jobid.
     assert records[1]["dependency"] == f"afterok:{records[0]['jobid']}", records[1]
 
 
@@ -830,7 +838,7 @@ def _write_config(tmp_path, body: str) -> str:
 
 def test_workflow_config_seeds_driver_defaults(env, tmp_path):
     # --config <path> populates sample_id / flex_h5ad / celltype-marker-json
-    # + a per-step named param so the chain runs without repeating them on
+    # + a per-stage named param so the chain runs without repeating them on
     # the CLI. Assert (1) the run submits, (2) the ref_build named param
     # threads through to the sbatch --export payload.
     flex = _flex_h5ad(tmp_path)
@@ -863,15 +871,15 @@ def test_workflow_config_cli_wins_over_yaml(env, tmp_path):
     """))
     r = _run_driver(env, "--config", cfg,
                     "--sample-id", "MH10",
-                    "--step3-donor-borrow-cap", "42")
+                    "--ref-build-donor-borrow-cap", "42")
     assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
     records = _parse_log(env["log"])
-    step1 = next(r for r in records if r["script"].endswith("submit_step1.sbatch"))
+    xp = next(r for r in records if r["script"].endswith("submit_step1.sbatch"))
     # CLI --sample-id wins over YAML sample_id.
-    assert "SAMPLE=MH10" in step1["export"]
-    step3 = next(r for r in records if r["script"].endswith("submit_step3.sbatch"))
-    # CLI --step3-donor-borrow-cap wins over YAML ref_build.donor_borrow_cap.
-    assert "STEP3_DONOR_BORROW_CAP=42" in step3["export"]
+    assert "SAMPLE=MH10" in xp["export"]
+    rb = next(r for r in records if r["script"].endswith("submit_step3.sbatch"))
+    # CLI --ref-build-donor-borrow-cap wins over YAML ref_build.donor_borrow_cap.
+    assert "STEP3_DONOR_BORROW_CAP=42" in rb["export"]
 
 
 def test_workflow_config_missing_file_fails_loud(env, tmp_path):
@@ -881,7 +889,7 @@ def test_workflow_config_missing_file_fails_loud(env, tmp_path):
     assert "not found" in r.stderr
 
 
-def test_workflow_config_rejects_numeric_step_keys(env, tmp_path):
+def test_workflow_config_rejects_numeric_stage_keys(env, tmp_path):
     # settylab/TracyY123-nexus#26 comment 5321822161: the config schema
     # is semantic-only. Numeric `step1:` / `step3:` / `step4:` at the top
     # level must fail loud so a typo (or a copy-paste from an older
@@ -906,9 +914,9 @@ def test_workflow_config_rejects_numeric_step_keys(env, tmp_path):
             or "rctd_split" in r.stderr, r.stderr
 
 
-def test_workflow_config_accepts_all_three_semantic_step_keys(env, tmp_path):
+def test_workflow_config_accepts_all_three_semantic_stage_keys(env, tmp_path):
     # Round-trip check: xenium_preprocess / ref_build / rctd_split all
-    # thread through to the correct STEP{1,3,4}_* env var on the sbatch
+    # thread through to the correct internal env var on the sbatch
     # --export payload.
     flex = _flex_h5ad(tmp_path)
     marker = _marker_json(tmp_path)
@@ -926,18 +934,18 @@ def test_workflow_config_accepts_all_three_semantic_step_keys(env, tmp_path):
     r = _run_driver(env, "--config", cfg)
     assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
     records = _parse_log(env["log"])
-    step1 = next(r for r in records if r["script"].endswith("submit_step1.sbatch"))
-    step3 = next(r for r in records if r["script"].endswith("submit_step3.sbatch"))
-    step4 = next(r for r in records if r["script"].endswith("submit_step4.sbatch"))
-    assert "STEP1_QC_MIN_COUNTS_CELL=11" in step1["export"]
-    assert "STEP3_DONOR_BORROW_CAP=33"    in step3["export"]
-    assert "STEP4_UMI_MIN=55"             in step4["export"]
+    xp = next(r for r in records if r["script"].endswith("submit_step1.sbatch"))
+    rb = next(r for r in records if r["script"].endswith("submit_step3.sbatch"))
+    rs = next(r for r in records if r["script"].endswith("submit_step4.sbatch"))
+    assert "STEP1_QC_MIN_COUNTS_CELL=11" in xp["export"]
+    assert "STEP3_DONOR_BORROW_CAP=33"   in rb["export"]
+    assert "STEP4_UMI_MIN=55"            in rs["export"]
 
 
 def test_start_step_semantic_alias_ref_build(env, tmp_path):
     # `ref-build` is the semantic alias for numeric `3`; the two must
     # take identical paths through the driver.
-    _seed_step1_outputs(env, "MH10", "resume_semantic")
+    _seed_xenium_preprocess_outputs(env, "MH10", "resume_semantic")
     r = _run_driver(env,
                     "--sample-id", "MH10",
                     "--flex-h5ad", _flex_h5ad(tmp_path), "--celltype-marker-json", _marker_json(tmp_path),
@@ -945,15 +953,17 @@ def test_start_step_semantic_alias_ref_build(env, tmp_path):
                     "--run-id", "resume_semantic")
     assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
     records = _parse_log(env["log"])
-    assert len(records) == 2, f"expected 2 submits (step 3 + step 4), got {len(records)}"
+    assert len(records) == 2, (
+        f"expected 2 submits (ref-build + rctd-split), got {len(records)}"
+    )
     assert records[0]["script"].endswith("submit_step3.sbatch")
     assert records[1]["script"].endswith("submit_step4.sbatch")
 
 
 def test_start_step_semantic_alias_rctd_split(env, tmp_path):
     # `rctd-split` is the semantic alias for numeric `4`.
-    _seed_step1_outputs(env, "MH10", "resume4_semantic")
-    _seed_step3_outputs(env, "MH10", "resume4_semantic")
+    _seed_xenium_preprocess_outputs(env, "MH10", "resume4_semantic")
+    _seed_ref_build_outputs(env, "MH10", "resume4_semantic")
     r = _run_driver(env,
                     "--sample-id", "MH10",
                     "--flex-h5ad", _flex_h5ad(tmp_path), "--celltype-marker-json", _marker_json(tmp_path),
@@ -961,7 +971,7 @@ def test_start_step_semantic_alias_rctd_split(env, tmp_path):
                     "--run-id", "resume4_semantic")
     assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
     records = _parse_log(env["log"])
-    assert len(records) == 1, f"expected 1 submit (step 4 only), got {len(records)}"
+    assert len(records) == 1, f"expected 1 submit (rctd-split only), got {len(records)}"
     assert records[0]["script"].endswith("submit_step4.sbatch")
 
 
@@ -977,115 +987,115 @@ def test_start_step_semantic_alias_xenium_preprocess(env, tmp_path):
     assert len(records) == 3
 
 
-def test_start_step_3_implies_reuse_run_dir(env, tmp_path):
-    _seed_step1_outputs(env, "MH10", "implicit_reuse")
+def test_start_step_ref_build_implies_reuse_run_dir(env, tmp_path):
+    _seed_xenium_preprocess_outputs(env, "MH10", "implicit_reuse")
     r = _run_driver(env,
                     "--sample-id", "MH10",
                     "--flex-h5ad", _flex_h5ad(tmp_path), "--celltype-marker-json", _marker_json(tmp_path),
-                    "--start-step", "3",
+                    "--start-step", "ref-build",
                     "--run-id", "implicit_reuse")
     # No --reuse-run-dir on the CLI, yet the driver proceeds — proves
-    # --start-step 3 implies --reuse-run-dir.
+    # --start-step ref-build implies --reuse-run-dir.
     assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
 
 
-def test_start_step_3_incompatible_with_force(env, tmp_path):
-    _seed_step1_outputs(env, "MH10", "step3_force")
+def test_start_step_ref_build_incompatible_with_force(env, tmp_path):
+    _seed_xenium_preprocess_outputs(env, "MH10", "rb_force")
     r = _run_driver(env,
                     "--sample-id", "MH10",
                     "--flex-h5ad", _flex_h5ad(tmp_path), "--celltype-marker-json", _marker_json(tmp_path),
-                    "--start-step", "3",
-                    "--run-id", "step3_force",
+                    "--start-step", "ref-build",
+                    "--run-id", "rb_force",
                     "--force")
     assert r.returncode != 0
     assert "incompatible" in r.stderr
 
 
-def test_start_step_4_missing_step3_outputs_fails_loud(env, tmp_path):
-    # Step-1 outputs present, but step-3 reference.rds absent.
-    _seed_step1_outputs(env, "MH10", "step4_missing_ref")
+def test_start_step_rctd_split_missing_ref_build_outputs_fails_loud(env, tmp_path):
+    # xenium-preprocess outputs present, but ref-build reference.rds absent.
+    _seed_xenium_preprocess_outputs(env, "MH10", "rs_missing_ref")
     r = _run_driver(env,
                     "--sample-id", "MH10",
                     "--flex-h5ad", _flex_h5ad(tmp_path), "--celltype-marker-json", _marker_json(tmp_path),
-                    "--start-step", "4",
-                    "--run-id", "step4_missing_ref")
+                    "--start-step", "rctd-split",
+                    "--run-id", "rs_missing_ref")
     assert r.returncode != 0
     assert "reference.rds" in r.stderr
 
 
-def test_start_step_4_submits_only_step4(env, tmp_path):
-    _seed_step3_outputs(env, "MH10", "resume4")
+def test_start_step_rctd_split_submits_only_rctd_split(env, tmp_path):
+    _seed_ref_build_outputs(env, "MH10", "resume_rs")
     r = _run_driver(env,
                     "--sample-id", "MH10",
                     "--flex-h5ad", _flex_h5ad(tmp_path), "--celltype-marker-json", _marker_json(tmp_path),
-                    "--start-step", "4",
-                    "--run-id", "resume4")
+                    "--start-step", "rctd-split",
+                    "--run-id", "resume_rs")
     assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
     records = _parse_log(env["log"])
-    assert len(records) == 1, f"expected 1 submit (step 4), got {len(records)}"
+    assert len(records) == 1, f"expected 1 submit (rctd-split), got {len(records)}"
     assert records[0]["script"].endswith("submit_step4.sbatch")
     assert records[0]["dependency"] == ""
 
 
-def test_start_step_summary_marks_skipped_steps(env, tmp_path):
-    _seed_step1_outputs(env, "MH10", "sum3")
+def test_start_step_summary_marks_skipped_stages(env, tmp_path):
+    _seed_xenium_preprocess_outputs(env, "MH10", "sum_rb")
     r = _run_driver(env,
                     "--sample-id", "MH10",
                     "--flex-h5ad", _flex_h5ad(tmp_path), "--celltype-marker-json", _marker_json(tmp_path),
-                    "--start-step", "3",
-                    "--run-id", "sum3")
+                    "--start-step", "ref-build",
+                    "--run-id", "sum_rb")
     assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
     # Summary shows xenium-preprocess as skipped, ref-build / rctd-split
-    # as submitted jobids, and start_step names the resumed step.
+    # as submitted jobids, and start_step names the resumed stage.
     assert "xenium-preprocess = skipped" in r.stdout
     assert "start_step        = ref-build" in r.stdout
 
 
 # --------------------------------------------------------------------------
-# Per-step parameter exposure — Tracy's request on
+# Per-stage parameter exposure — Tracy's request on
 # settylab/TracyY123-nexus#26 comment 5277569725.
 #
-# Every step's config surface must be regulable at the submit_workflow.sh
+# Every stage's config surface must be regulable at the submit_workflow.sh
 # level via three layers (in precedence order, last wins):
-#   (2) --stepN-config <path>
-#   (3) --override stepN.<dotted.key>=<yaml-val>
-#   (4) --stepN-<param> <value>            (named flag)
+#   (2) --<stage>-config <path>
+#   (3) --override <stage>.<dotted.key>=<yaml-val>
+#   (4) --<stage>-<param> <value>          (named flag)
 #
 # The tests exercise each layer + the base64 encoding roundtrip that
 # ferries layers 2+3 through slurm's --export=ALL,K=V payload.
 # --------------------------------------------------------------------------
 
-def _step1_log(env, sample, run_id):
+def _xenium_preprocess_log(env, sample, run_id):
     p = env["output_root"] / sample / f"{sample}_{run_id}" / "logs" / "xenium-preprocess.log"
     return p.read_text() if p.exists() else ""
 
 
-def _step4_log(env, sample, run_id):
+def _rctd_split_log(env, sample, run_id):
     p = env["output_root"] / sample / f"{sample}_{run_id}" / "logs" / "rctd-split.log"
     return p.read_text() if p.exists() else ""
 
 
 # ---- Layer 4: named flags -----------------------------------------------
 
-def test_step1_named_flags_threaded(env, tmp_path):
+def test_xenium_preprocess_named_flags_threaded(env, tmp_path):
     r = _run_driver(env,
                     "--sample-id", "MH10",
                     "--flex-h5ad", _flex_h5ad(tmp_path),
                     "--celltype-marker-json", _marker_json(tmp_path),
                     "--run-id", "s1flags",
-                    "--step1-x-source", "maxpost_counts",
-                    "--step1-qc-min-counts-cell", "15",
-                    "--step1-gex-only", "false",
-                    "--step1-force-rerun")
+                    "--xenium-preprocess-x-source", "maxpost_counts",
+                    "--xenium-preprocess-qc-min-counts-cell", "15",
+                    "--xenium-preprocess-gex-only", "false",
+                    "--xenium-preprocess-force-rerun")
     assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
-    log = _step1_log(env, "MH10", "s1flags")
+    log = _xenium_preprocess_log(env, "MH10", "s1flags")
     assert "x_source=maxpost_counts" in log
     assert "qc_min_counts_cell=15" in log
     assert "gex_only=false" in log
     assert "force_rerun=1" in log
 
 
-def test_step3_named_flags_threaded(env, tmp_path):
+def test_ref_build_named_flags_threaded(env, tmp_path):
     target = tmp_path / "target.json"
     target.write_text("{}")
     r = _run_driver(env,
@@ -1093,14 +1103,14 @@ def test_step3_named_flags_threaded(env, tmp_path):
                     "--flex-h5ad", _flex_h5ad(tmp_path),
                     "--celltype-marker-json", _marker_json(tmp_path),
                     "--run-id", "s3flags",
-                    "--step3-donor-borrow-cap", "80",
-                    "--step3-cell-min-instance", "25",
-                    "--step3-min-umi", "15",
-                    "--step3-random-seed", "123",
-                    "--step3-celltype-target-list", str(target),
-                    "--step3-force-rerun")
+                    "--ref-build-donor-borrow-cap", "80",
+                    "--ref-build-cell-min-instance", "25",
+                    "--ref-build-min-umi", "15",
+                    "--ref-build-random-seed", "123",
+                    "--ref-build-celltype-target-list", str(target),
+                    "--ref-build-force-rerun")
     assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
-    log = _step3_log(env, "MH10", "s3flags")
+    log = _ref_build_log(env, "MH10", "s3flags")
     assert "donor_borrow_cap=80" in log
     assert "cell_min_instance=25" in log
     assert "min_umi=15" in log
@@ -1109,21 +1119,21 @@ def test_step3_named_flags_threaded(env, tmp_path):
     assert "force_rerun=1" in log
 
 
-def test_step4_named_flags_threaded(env, tmp_path):
+def test_rctd_split_named_flags_threaded(env, tmp_path):
     r = _run_driver(env,
                     "--sample-id", "MH10",
                     "--flex-h5ad", _flex_h5ad(tmp_path),
                     "--celltype-marker-json", _marker_json(tmp_path),
                     "--run-id", "s4flags",
-                    "--step4-umi-min", "20",
-                    "--step4-counts-min", "8",
-                    "--step4-cell-min-instance", "30",
-                    "--step4-doublet-mode", "full",
-                    "--step4-postprocess-min-counts", "75",
-                    "--step4-keep-intermediate",
-                    "--step4-force-rerun")
+                    "--rctd-split-umi-min", "20",
+                    "--rctd-split-counts-min", "8",
+                    "--rctd-split-cell-min-instance", "30",
+                    "--rctd-split-doublet-mode", "full",
+                    "--rctd-split-postprocess-min-counts", "75",
+                    "--rctd-split-keep-intermediate",
+                    "--rctd-split-force-rerun")
     assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
-    log = _step4_log(env, "MH10", "s4flags")
+    log = _rctd_split_log(env, "MH10", "s4flags")
     assert "umi_min=20" in log
     assert "counts_min=8" in log
     assert "cell_min_instance=30" in log
@@ -1135,7 +1145,7 @@ def test_step4_named_flags_threaded(env, tmp_path):
 
 def test_named_flags_unset_do_not_thread(env, tmp_path):
     # Baseline invariant: when no named flags are passed, none of the
-    # STEPN_<PARAM> env vars leak into the --export payload — each step
+    # STEPN_<PARAM> env vars leak into the --export payload — each stage
     # falls through to its CLI's own default.yaml value.
     r = _run_driver(env,
                     "--sample-id", "MH10",
@@ -1164,17 +1174,17 @@ def test_named_flags_unset_do_not_thread(env, tmp_path):
 
 # ---- Layer 3: --override (single-key) -----------------------------------
 
-def test_override_single_key_step3(env, tmp_path):
+def test_override_single_key_ref_build(env, tmp_path):
     r = _run_driver(env,
                     "--sample-id", "MH10",
                     "--flex-h5ad", _flex_h5ad(tmp_path),
                     "--celltype-marker-json", _marker_json(tmp_path),
                     "--run-id", "ov3",
-                    "--override", "step3.census.random_seed=999")
+                    "--override", "ref_build.census.random_seed=999")
     assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
     # ref-build received --config pointing at a yaml that carries the
     # override under census.random_seed.
-    log = _step3_log(env, "MH10", "ov3")
+    log = _ref_build_log(env, "MH10", "ov3")
     assert "config_path=" in log
     assert "config_path=\n" not in log       # non-empty path
     # The mock cats the yaml; check the merged content.
@@ -1191,9 +1201,9 @@ def test_override_nested_list_yaml_parsed(env, tmp_path):
                     "--flex-h5ad", _flex_h5ad(tmp_path),
                     "--celltype-marker-json", _marker_json(tmp_path),
                     "--run-id", "ov_list",
-                    "--override", "step4.postprocess.leiden.resolutions=[0.5, 0.7, 0.9]")
+                    "--override", "rctd_split.postprocess.leiden.resolutions=[0.5, 0.7, 0.9]")
     assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
-    log = _step4_log(env, "MH10", "ov_list")
+    log = _rctd_split_log(env, "MH10", "ov_list")
     assert "postprocess:" in log
     assert "leiden:" in log
     assert "resolutions:" in log
@@ -1210,10 +1220,10 @@ def test_override_multiple_keys_merged(env, tmp_path):
                     "--flex-h5ad", _flex_h5ad(tmp_path),
                     "--celltype-marker-json", _marker_json(tmp_path),
                     "--run-id", "ov_multi",
-                    "--override", "step3.census.random_seed=42",
-                    "--override", "step3.census.donor_borrow_cap=200")
+                    "--override", "ref_build.census.random_seed=42",
+                    "--override", "ref_build.census.donor_borrow_cap=200")
     assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
-    log = _step3_log(env, "MH10", "ov_multi")
+    log = _ref_build_log(env, "MH10", "ov_multi")
     assert "random_seed: 42" in log
     assert "donor_borrow_cap: 200" in log
 
@@ -1223,9 +1233,9 @@ def test_override_wrong_prefix_rejected(env, tmp_path):
                     "--sample-id", "MH10",
                     "--flex-h5ad", _flex_h5ad(tmp_path),
                     "--celltype-marker-json", _marker_json(tmp_path),
-                    "--override", "step2.foo=1")
+                    "--override", "unknown_stage.foo=1")
     assert r.returncode != 0
-    assert "step1./step3./step4." in r.stderr
+    assert "xenium_preprocess./ref_build./rctd_split." in r.stderr
 
 
 def test_override_bare_key_rejected(env, tmp_path):
@@ -1235,13 +1245,13 @@ def test_override_bare_key_rejected(env, tmp_path):
                     "--celltype-marker-json", _marker_json(tmp_path),
                     "--override", "foo=1")
     assert r.returncode != 0
-    assert "step1./step3./step4." in r.stderr
+    assert "xenium_preprocess./ref_build./rctd_split." in r.stderr
 
 
-# ---- Layer 2: --stepN-config <path> -------------------------------------
+# ---- Layer 2: --<stage>-config <path> -----------------------------------
 
-def test_step_config_yaml_passed_via_config_flag(env, tmp_path):
-    cfg = tmp_path / "step3_user.yaml"
+def test_stage_config_yaml_passed_via_config_flag(env, tmp_path):
+    cfg = tmp_path / "ref_build_user.yaml"
     cfg.write_text(textwrap.dedent("""\
         census:
           cell_min_instance: 33
@@ -1253,17 +1263,17 @@ def test_step_config_yaml_passed_via_config_flag(env, tmp_path):
                     "--flex-h5ad", _flex_h5ad(tmp_path),
                     "--celltype-marker-json", _marker_json(tmp_path),
                     "--run-id", "s3cfg",
-                    "--step3-config", str(cfg))
+                    "--ref-build-config", str(cfg))
     assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
-    log = _step3_log(env, "MH10", "s3cfg")
+    log = _ref_build_log(env, "MH10", "s3cfg")
     assert "cell_min_instance: 33" in log
     assert "require_int: false" in log
 
 
-def test_step_config_and_override_merged(env, tmp_path):
-    # Overrides layer on top of --stepN-config's contents. When both touch
+def test_stage_config_and_override_merged(env, tmp_path):
+    # Overrides layer on top of --<stage>-config's contents. When both touch
     # the SAME key, the override wins.
-    cfg = tmp_path / "step3_base.yaml"
+    cfg = tmp_path / "ref_build_base.yaml"
     cfg.write_text(textwrap.dedent("""\
         census:
           cell_min_instance: 33
@@ -1274,12 +1284,12 @@ def test_step_config_and_override_merged(env, tmp_path):
                     "--flex-h5ad", _flex_h5ad(tmp_path),
                     "--celltype-marker-json", _marker_json(tmp_path),
                     "--run-id", "s3merge",
-                    "--step3-config", str(cfg),
-                    "--override", "step3.census.donor_borrow_cap=222",
-                    "--override", "step3.census.random_seed=7")
+                    "--ref-build-config", str(cfg),
+                    "--override", "ref_build.census.donor_borrow_cap=222",
+                    "--override", "ref_build.census.random_seed=7")
     assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
-    log = _step3_log(env, "MH10", "s3merge")
-    # Preserved from --step3-config
+    log = _ref_build_log(env, "MH10", "s3merge")
+    # Preserved from --ref-build-config
     assert "cell_min_instance: 33" in log
     # Overridden by --override
     assert "donor_borrow_cap: 222" in log
@@ -1288,10 +1298,10 @@ def test_step_config_and_override_merged(env, tmp_path):
     assert "random_seed: 7" in log
 
 
-# ---- Precedence: named flag beats --override + --stepN-config -----------
+# ---- Precedence: named flag beats --override + --<stage>-config --------
 
 def test_named_flag_overrides_config_yaml(env, tmp_path):
-    # --step3-config sets random_seed=1; --step3-random-seed=9 should win.
+    # --ref-build-config sets random_seed=1; --ref-build-random-seed=9 should win.
     cfg = tmp_path / "seed_cfg.yaml"
     cfg.write_text("census:\n  random_seed: 1\n")
     r = _run_driver(env,
@@ -1299,10 +1309,10 @@ def test_named_flag_overrides_config_yaml(env, tmp_path):
                     "--flex-h5ad", _flex_h5ad(tmp_path),
                     "--celltype-marker-json", _marker_json(tmp_path),
                     "--run-id", "s3prec",
-                    "--step3-config", str(cfg),
-                    "--step3-random-seed", "9")
+                    "--ref-build-config", str(cfg),
+                    "--ref-build-random-seed", "9")
     assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
-    log = _step3_log(env, "MH10", "s3prec")
+    log = _ref_build_log(env, "MH10", "s3prec")
     # random_seed: 1 is in the yaml but ref-build sees --random-seed 9 too;
     # our mock records whichever `--random-seed` value ref-build gets last,
     # which is the CLI-flag one. This mirrors ref-build's own precedence
@@ -1312,20 +1322,20 @@ def test_named_flag_overrides_config_yaml(env, tmp_path):
 
 # ---- Dry-run visibility --------------------------------------------------
 
-def test_dry_run_shows_new_step_env_vars(env, tmp_path):
+def test_dry_run_shows_new_stage_env_vars(env, tmp_path):
     # Under --dry-run the driver prints the sbatch command with the full
-    # --export payload, so operators can eyeball what each step receives
-    # (Tracy's task: "update --dry-run to show what each step would
+    # --export payload, so operators can eyeball what each stage receives
+    # (Tracy's task: "update --dry-run to show what each stage would
     # receive"). No fs side effects.
     r = _run_driver(env,
                     "--sample-id", "MH10",
                     "--flex-h5ad", _flex_h5ad(tmp_path),
                     "--celltype-marker-json", _marker_json(tmp_path),
                     "--run-id", "dr_show",
-                    "--step1-qc-min-counts-cell", "50",
-                    "--step3-min-umi", "12",
-                    "--step4-doublet-mode", "full",
-                    "--override", "step4.postprocess.qc.min_counts=99",
+                    "--xenium-preprocess-qc-min-counts-cell", "50",
+                    "--ref-build-min-umi", "12",
+                    "--rctd-split-doublet-mode", "full",
+                    "--override", "rctd_split.postprocess.qc.min_counts=99",
                     "--dry-run")
     assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
     combined = r.stdout + r.stderr
@@ -1341,16 +1351,17 @@ def test_help_lists_new_flags(env):
     r = _run_driver(env, "--help")
     assert r.returncode == 0
     for flag in (
-        "--step1-x-source", "--step1-qc-min-counts-cell", "--step1-gex-only",
-        "--step1-force-rerun",
-        "--step3-donor-borrow-cap", "--step3-cell-min-instance",
-        "--step3-min-umi", "--step3-random-seed",
-        "--step3-celltype-target-list",
-        "--step3-force-rerun",
-        "--step4-umi-min", "--step4-counts-min",
-        "--step4-cell-min-instance", "--step4-doublet-mode",
-        "--step4-postprocess-min-counts", "--step4-keep-intermediate",
-        "--step4-force-rerun",
-        "--stepN-config", "--override",
+        "--xenium-preprocess-x-source", "--xenium-preprocess-qc-min-counts-cell", "--xenium-preprocess-gex-only",
+        "--xenium-preprocess-force-rerun",
+        "--ref-build-donor-borrow-cap", "--ref-build-cell-min-instance",
+        "--ref-build-min-umi", "--ref-build-random-seed",
+        "--ref-build-celltype-target-list",
+        "--ref-build-force-rerun",
+        "--rctd-split-umi-min", "--rctd-split-counts-min",
+        "--rctd-split-cell-min-instance", "--rctd-split-doublet-mode",
+        "--rctd-split-postprocess-min-counts", "--rctd-split-keep-intermediate",
+        "--rctd-split-force-rerun",
+        "--xenium-preprocess-config", "--ref-build-config",
+        "--rctd-split-config", "--override",
     ):
         assert flag in r.stdout, flag

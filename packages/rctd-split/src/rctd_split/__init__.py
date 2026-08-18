@@ -1,4 +1,4 @@
-"""rctd-split — step 4 of the Xenium spatial-data preprocessing pipeline.
+"""rctd-split — rctd-split of the Xenium spatial-data preprocessing pipeline.
 
 Public surface:
 - __version__ — package version.

@@ -30,13 +30,13 @@ VALID_STAGES = (
     "mtx_to_h5ad",
     "filter_status",
     "postprocess",
-    "writeback_to_step1_raw",
+    "writeback_to_raw",
     "celltype_writeback",
     "qc_report",
 )
 
 # Default stages: everything except the two writeback stages, which
-# depend on step-1 outputs and are opt-in.
+# depend on xenium-preprocess outputs and are opt-in.
 DEFAULT_STAGES = (
     "rctd_run",
     "split_purify",
@@ -44,7 +44,7 @@ DEFAULT_STAGES = (
     "mtx_to_h5ad",
     "filter_status",
     "postprocess",
-    "writeback_to_step1_raw",
+    "writeback_to_raw",
     "celltype_writeback",
     "qc_report",
 )
