@@ -44,6 +44,10 @@ dependencies:
   - matplotlib
   - seaborn
   - anndata           # pyproject.toml pip-pins to 0.11.* on top.
+  - zarr<3            # anndata 0.11.* does not support zarr>=3
+                      # (ImportError: "zarr-python major version > 2
+                      # is not supported"). Pin until the pyproject
+                      # anndata bound moves to 0.12+.
   - scanpy            # pyproject.toml pip-pins to 1.11.* on top.
   - umap-learn
   - pip:
