@@ -150,10 +150,20 @@ emit_bundle <- function(rds_path, out_dir, variant) {
   write.csv(meta, meta_path, row.names = TRUE)
   cat(sprintf("[export_mtx.R]   wrote %s\n", meta_path))
 
-  # Spatial coords — pulled from top-level metadata cols x, y (which
-  # split_purify.R keeps on both variants). If absent (rare — e.g. a
-  # purified variant that lost x/y in a bespoke re-run), we skip with
-  # a warning rather than fail.
+  # Spatial coords — try, in order:
+  #   1. Top-level meta.data cols x, y — what rctd_prep.R writes onto
+  #      the step-1 test object (and preserved onto the unpurified
+  #      variant by split_purify.R).
+  #   2. Top-level meta.data cols centroid_x, centroid_y — what the
+  #      step-1 anndata carries; survives onto the purified variant
+  #      via preserve_meta_from_unpurified, whereas x/y do not because
+  #      SPLIT::purify's CreateSeuratObject rebuilds the object from
+  #      res_split$cell_meta (issue #26 comment 5333017468).
+  #   3. The "spatial" DimReduc's embeddings — set by rctd_prep.R on
+  #      the test object; still present on the unpurified variant.
+  # If none of those, skip with a clearer warning.
+  coords <- NULL
+  coords_source <- NULL
   if (all(c("x", "y") %in% colnames(meta))) {
     coords <- data.frame(
       x = meta[, "x"],
@@ -161,12 +171,34 @@ emit_bundle <- function(rds_path, out_dir, variant) {
       row.names = rownames(meta),
       check.names = FALSE
     )
+    coords_source <- "meta:x/y"
+  } else if (all(c("centroid_x", "centroid_y") %in% colnames(meta))) {
+    coords <- data.frame(
+      x = meta[, "centroid_x"],
+      y = meta[, "centroid_y"],
+      row.names = rownames(meta),
+      check.names = FALSE
+    )
+    coords_source <- "meta:centroid_x/centroid_y"
+  } else if ("spatial" %in% Reductions(seu)) {
+    emb <- Embeddings(seu, reduction = "spatial")
+    emb <- emb[colnames(counts_mat), , drop = FALSE]
+    coords <- data.frame(
+      x = emb[, 1],
+      y = emb[, 2],
+      row.names = rownames(emb),
+      check.names = FALSE
+    )
+    coords_source <- "DimReduc:spatial"
+  }
+  if (!is.null(coords)) {
     write_coords_maybe_gz(coords, coords_path, gzip_outputs)
-    cat(sprintf("[export_mtx.R]   wrote %s\n", coords_path))
+    cat(sprintf("[export_mtx.R]   wrote %s (source: %s)\n",
+                coords_path, coords_source))
   } else {
-    cat(sprintf("[export_mtx.R]   WARN: %s has no x/y in metadata; ",
-                variant))
-    cat("skipping spatial_coords export.\n")
+    cat(sprintf(
+      "[export_mtx.R]   WARN: %s has no spatial coords (checked meta cols x/y, centroid_x/centroid_y, and 'spatial' DimReduc); skipping spatial_coords export.\n",
+      variant))
   }
 }
 
