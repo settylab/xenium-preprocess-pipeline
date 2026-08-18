@@ -76,9 +76,11 @@ _PURIFICATION_STATUS_FALLBACK: tuple[str, ...] = (
 # Fixed, maximally-distinct color assignments for common
 # celltypes seen in Setty-lab tumor-microenvironment samples.
 # Case-insensitive key — the returned dict preserves the caller's
-# spelling. Chosen so Tracy's specific complaint on issue #26
-# (Liver / Tumor / Myeloid rendering in confusable shades)
-# cannot recur regardless of the fallback palette's hashing.
+# spelling. Chosen so Tracy's specific complaints on issue #26
+# (Liver / Tumor / Myeloid rendering in confusable shades on
+# comment 5334450782; Fibroblast rendering in a near-identical
+# teal to T cell on comment 5334586625) cannot recur regardless
+# of the fallback palette's hashing.
 _CELLTYPE_KNOWN: dict[str, str] = {
     "liver":       "#08306B",  # midnight blue
     "tumor":       "#B22222",  # firebrick red
@@ -95,7 +97,7 @@ _CELLTYPE_KNOWN: dict[str, str] = {
     "nkcell":      "#CC79A7",
     "macrophage":  "#7B3F00",  # dark chocolate brown
     "endothelial": "#56B4E9",  # Okabe-Ito sky blue
-    "fibroblast":  "#008080",  # teal
+    "fibroblast":  "#FF1493",  # deep pink — max hue distance from T cell green
     "stroma":      "#4D4D4D",  # dark gray
     "stromal":     "#4D4D4D",
 }

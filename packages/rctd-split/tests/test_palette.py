@@ -90,3 +90,13 @@ class TestCelltypeColorMap:
         assert m["liver"] == "#08306B"
         assert m["TUMOR"] == "#B22222"
         assert m["Myeloid"] == "#E69F00"
+
+    def test_fibroblast_and_t_cell_are_high_contrast(self):
+        """Tracy's ask on TracyY123-nexus#26 comment 5334586625:
+        Fibroblast used to be teal (#008080), which was nearly
+        indistinguishable from T cell's bluish green (#009E73).
+        Fibroblast now renders as deep pink (opposite hue from
+        T cell green) so the two never confuse on a UMAP again."""
+        m = celltype_color_map(["Fibroblast", "T cell"])
+        assert m["Fibroblast"] == "#FF1493"  # deep pink
+        assert m["T cell"] == "#009E73"      # Okabe-Ito bluish green
