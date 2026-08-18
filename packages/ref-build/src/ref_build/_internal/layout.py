@@ -12,7 +12,7 @@ Layout (locked in (internal issue review):
             │   ├── <sample_id>_reference.rds               (THIS step)
             │   └── <sample_id>_rctd_results.rds      (step 4)
             ├── config.yaml                  (merged across steps)
-            └── logs/step{1,3,4}.log
+            └── logs/{xenium-preprocess,ref-build,rctd-split}.log
 
 Intermediate outputs (`loaded/`, `census/`, `mtx_bundle/`) also land
 under `<run_dir>/` while the pipeline runs, and are DROPPED by

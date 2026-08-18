@@ -15,7 +15,7 @@ Layout (locked in (internal issue review):
             │   ├── <sample_id>_reference_post_rules.h5ad (step 3)
             │   └── <sample_id>_rctd_results.rds         (step 4)
             ├── config.yaml                     (merged across steps)
-            └── logs/step{1,3,4}.log
+            └── logs/{xenium-preprocess,ref-build,rctd-split}.log
 
 `run_id` precedence (bound in cli._resolve_run_id): `--run-id` >
 `$SLURM_JOB_ID` > `YYYYMMDD_HHMMSS` timestamp fallback. Every path this

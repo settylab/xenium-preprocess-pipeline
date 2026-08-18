@@ -153,7 +153,7 @@ spatial_adata/<sample>_xenium_ranger.h5ad      — xenium_ranger_to_anndata; enr
                                                  .obs['proseg_cell_id_nn' + 'proseg_id_nn_distance'
                                                      + 'proseg_id_nn_note']
 config.yaml                           — snapshot of the resolved config (merged across steps)
-logs/step1.log                                 — the step-1 log
+logs/xenium-preprocess.log                                 — the step-1 log
 ```
 
 Opting into the legacy `preprocess` / `split_prep` / `rctd_prep` stages via `--stages` additionally writes (respectively): `legacy_preprocess/adata_unpurified.h5ad` + UMAP plots; `split_prep/<sample>{suffix}_*` (mtx triple + metadata + spatial_coords); `rctd/<sample>_test_object.rds`.

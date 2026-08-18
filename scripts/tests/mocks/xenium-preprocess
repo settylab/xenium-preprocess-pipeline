@@ -62,7 +62,7 @@ mkdir -p "$run_dir/spatial_adata" "$run_dir/rctd" "$run_dir/logs"
         echo "--- end config ---"
     fi
     echo "raw_argv=${raw_argv[*]}"
-} > "$run_dir/logs/step1.log"
+} > "$run_dir/logs/xenium-preprocess.log"
 
 # Merge step1 key into config.yaml (crude but preserves siblings).
 cfg="$run_dir/config.yaml"

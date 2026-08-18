@@ -78,7 +78,7 @@ touch "$run_dir/spatial_adata/${sample}_xenium_ranger.h5ad"
         echo "--- end config ---"
     fi
     echo "raw_argv=${raw_argv[*]}"
-} > "$run_dir/logs/step4.log"
+} > "$run_dir/logs/rctd-split.log"
 
 cfg="$run_dir/config.yaml"
 python3 - "$cfg" "$sample" "$run_id" <<'PY'

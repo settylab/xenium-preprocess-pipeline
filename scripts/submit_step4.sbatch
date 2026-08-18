@@ -53,7 +53,7 @@
 #                                                       cols augmented by
 #                                                       celltype_writeback)
 #     resolved_config.yaml (step4: key)
-#     logs/step4.log
+#     logs/rctd-split.log
 
 set -euo pipefail
 

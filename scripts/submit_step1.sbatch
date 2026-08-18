@@ -38,7 +38,7 @@
 #     <OUTPUT_ROOT>/<SAMPLE>/<SAMPLE>_<RUN_ID>/spatial_adata/*.h5ad
 #     <OUTPUT_ROOT>/<SAMPLE>/<SAMPLE>_<RUN_ID>/rctd/<SAMPLE>_test_object.rds
 #     <OUTPUT_ROOT>/<SAMPLE>/<SAMPLE>_<RUN_ID>/resolved_config.yaml (step1: key)
-#     <OUTPUT_ROOT>/<SAMPLE>/<SAMPLE>_<RUN_ID>/logs/step1.log
+#     <OUTPUT_ROOT>/<SAMPLE>/<SAMPLE>_<RUN_ID>/logs/xenium-preprocess.log
 
 set -euo pipefail
 

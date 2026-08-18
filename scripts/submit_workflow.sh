@@ -18,7 +18,7 @@
 #         ├── spatial_adata/   ← step 1 + step 4 augmentations
 #         ├── rctd/            ← step 1 + step 3 + step 4
 #         ├── config.yaml  ← merged across steps
-#         └── logs/            ← step{1,3,4}.log
+#         └── logs/            ← {xenium-preprocess,ref-build,rctd-split}.log
 #
 # RUN_ID precedence:
 #     --run-id <id>        > $RUN_ID env             > JOB1's SLURM_JOB_ID
@@ -213,14 +213,20 @@ Optional:
   --run-id <id>                Explicit run identifier. Precedence:
                                --run-id > $RUN_ID env > JOB1 SLURM_JOB_ID.
                                Required when --start-step > 1.
-  --start-step <1|3|4>         Skip earlier steps and start submission at
-                               step N. Default 1 (full chain). --start-step 3
-                               submits step 3 (no dep) then step 4; assumes
-                               step-1 outputs already exist in the run
-                               folder. --start-step 4 submits only step 4;
+  --start-step <name>          Skip earlier steps and start submission at
+                               the named step. Accepts either the numeric
+                               name (1, 3, 4) or the semantic name
+                               (xenium-preprocess, ref-build, rctd-split);
+                               they alias 1:1. Default xenium-preprocess
+                               (full chain). --start-step ref-build submits
+                               step 3 (no dep) then step 4; assumes step-1
+                               outputs already exist in the run folder.
+                               --start-step rctd-split submits only step 4;
                                assumes step-1 + step-3 outputs exist. Both
                                imply --reuse-run-dir. Fails loud if the
-                               required prior outputs are missing.
+                               required prior outputs are missing. The
+                               numeric aliases are kept for one release for
+                               backwards compat.
   --reuse-run-dir              Proceed even if <run-dir> already exists,
                                KEEPING its contents. Each step overwrites
                                the files it writes; other files preserved.
@@ -446,16 +452,21 @@ if [[ -n "$TEST_OBJECT" ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# --start-step validation. Legal values are 1, 3, 4 — matches the pipeline's
-# step numbering (there is no step 2 in this workflow). > 1 needs a
-# pre-bound RUN_ID (nothing to resume without one) and implies
+# --start-step validation + alias normalization. Legal values are the numeric
+# step names (1, 3, 4) or their semantic aliases (xenium-preprocess, ref-build,
+# rctd-split); each pair aliases 1:1. Semantic aliases are normalized to
+# numeric here so the rest of the script keeps its integer-step logic. > 1
+# needs a pre-bound RUN_ID (nothing to resume without one) and implies
 # --reuse-run-dir (the whole point is to keep the earlier steps' outputs).
+# Numeric aliases are kept for one release for backwards compat.
 # ---------------------------------------------------------------------------
 
 case "$START_STEP" in
-    1|3|4) ;;
+    1|xenium-preprocess) START_STEP=1 ;;
+    3|ref-build)         START_STEP=3 ;;
+    4|rctd-split)        START_STEP=4 ;;
     *)
-        echo "error: --start-step must be one of 1, 3, 4 (got: $START_STEP)" >&2
+        echo "error: --start-step must be one of 1|xenium-preprocess, 3|ref-build, 4|rctd-split (got: $START_STEP)" >&2
         exit 2
         ;;
 esac

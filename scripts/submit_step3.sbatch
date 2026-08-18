@@ -57,7 +57,7 @@
 #     <OUTPUT_ROOT>/<SAMPLE>/<SAMPLE>_<RUN_ID>/rctd/<SAMPLE>_reference_post_rules.h5ad
 #     <OUTPUT_ROOT>/<SAMPLE>/<SAMPLE>_<RUN_ID>/rctd/<SAMPLE>_reference.rds
 #     <OUTPUT_ROOT>/<SAMPLE>/<SAMPLE>_<RUN_ID>/resolved_config.yaml (step3: key)
-#     <OUTPUT_ROOT>/<SAMPLE>/<SAMPLE>_<RUN_ID>/logs/step3.log
+#     <OUTPUT_ROOT>/<SAMPLE>/<SAMPLE>_<RUN_ID>/logs/ref-build.log
 
 set -euo pipefail
 

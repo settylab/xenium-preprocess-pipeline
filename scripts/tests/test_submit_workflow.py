@@ -395,9 +395,9 @@ def test_end_to_end_layout(env, tmp_path):
         "rctd/MH10_reference.rds",
         "rctd/MH10_rctd_results.rds",
         "config.yaml",
-        "logs/step1.log",
-        "logs/step3.log",
-        "logs/step4.log",
+        "logs/xenium-preprocess.log",
+        "logs/ref-build.log",
+        "logs/rctd-split.log",
     ]
     missing = [rel for rel in expected if not (run_dir / rel).exists()]
     assert not missing, f"missing paths under {run_dir}: {missing}"
@@ -443,9 +443,9 @@ def test_dry_run_submits_nothing(env, tmp_path):
 # --------------------------------------------------------------------------
 
 def _step3_log(env, sample, run_id):
-    """Return the mock ref-build's step3.log contents (donors + fallbacks
+    """Return the mock ref-build's ref-build.log contents (donors + fallbacks
     recorded, one per line)."""
-    p = env["output_root"] / sample / f"{sample}_{run_id}" / "logs" / "step3.log"
+    p = env["output_root"] / sample / f"{sample}_{run_id}" / "logs" / "ref-build.log"
     return p.read_text() if p.exists() else ""
 
 
@@ -768,7 +768,7 @@ def test_start_step_invalid_value_rejected(env, tmp_path):
                     "--start-step", "2",
                     "--run-id", "bad")
     assert r.returncode != 0
-    assert "one of 1, 3, 4" in r.stderr
+    assert "one of 1|xenium-preprocess, 3|ref-build, 4|rctd-split" in r.stderr
 
 
 def test_start_step_3_requires_run_id(env, tmp_path):
@@ -820,6 +820,49 @@ def test_start_step_3_submits_step3_and_step4_only(env, tmp_path):
     assert records[0]["dependency"] == "", records[0]
     # Step 4 chains off step 3's jobid.
     assert records[1]["dependency"] == f"afterok:{records[0]['jobid']}", records[1]
+
+
+def test_start_step_semantic_alias_ref_build(env, tmp_path):
+    # `ref-build` is the semantic alias for numeric `3`; the two must
+    # take identical paths through the driver.
+    _seed_step1_outputs(env, "MH10", "resume_semantic")
+    r = _run_driver(env,
+                    "--sample-id", "MH10",
+                    "--flex-h5ad", _flex_h5ad(tmp_path), "--celltype-marker-json", _marker_json(tmp_path),
+                    "--start-step", "ref-build",
+                    "--run-id", "resume_semantic")
+    assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
+    records = _parse_log(env["log"])
+    assert len(records) == 2, f"expected 2 submits (step 3 + step 4), got {len(records)}"
+    assert records[0]["script"].endswith("submit_step3.sbatch")
+    assert records[1]["script"].endswith("submit_step4.sbatch")
+
+
+def test_start_step_semantic_alias_rctd_split(env, tmp_path):
+    # `rctd-split` is the semantic alias for numeric `4`.
+    _seed_step1_outputs(env, "MH10", "resume4_semantic")
+    _seed_step3_outputs(env, "MH10", "resume4_semantic")
+    r = _run_driver(env,
+                    "--sample-id", "MH10",
+                    "--flex-h5ad", _flex_h5ad(tmp_path), "--celltype-marker-json", _marker_json(tmp_path),
+                    "--start-step", "rctd-split",
+                    "--run-id", "resume4_semantic")
+    assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
+    records = _parse_log(env["log"])
+    assert len(records) == 1, f"expected 1 submit (step 4 only), got {len(records)}"
+    assert records[0]["script"].endswith("submit_step4.sbatch")
+
+
+def test_start_step_semantic_alias_xenium_preprocess(env, tmp_path):
+    # `xenium-preprocess` is the semantic alias for numeric `1` (full chain).
+    r = _run_driver(env,
+                    "--sample-id", "MH10",
+                    "--flex-h5ad", _flex_h5ad(tmp_path), "--celltype-marker-json", _marker_json(tmp_path),
+                    "--start-step", "xenium-preprocess",
+                    "--run-id", "start1_semantic")
+    assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
+    records = _parse_log(env["log"])
+    assert len(records) == 3
 
 
 def test_start_step_3_implies_reuse_run_dir(env, tmp_path):
@@ -900,12 +943,12 @@ def test_start_step_summary_marks_skipped_steps(env, tmp_path):
 # --------------------------------------------------------------------------
 
 def _step1_log(env, sample, run_id):
-    p = env["output_root"] / sample / f"{sample}_{run_id}" / "logs" / "step1.log"
+    p = env["output_root"] / sample / f"{sample}_{run_id}" / "logs" / "xenium-preprocess.log"
     return p.read_text() if p.exists() else ""
 
 
 def _step4_log(env, sample, run_id):
-    p = env["output_root"] / sample / f"{sample}_{run_id}" / "logs" / "step4.log"
+    p = env["output_root"] / sample / f"{sample}_{run_id}" / "logs" / "rctd-split.log"
     return p.read_text() if p.exists() else ""
 
 

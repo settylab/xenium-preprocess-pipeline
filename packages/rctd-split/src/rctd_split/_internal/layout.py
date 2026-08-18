@@ -21,7 +21,7 @@ Layout (locked in (internal issue review):
             │   ├── mtx/{unpurified,purified}/…
             │   └── adata/<sample_id>_step4_unpurified.h5ad
             ├── config.yaml                     (merged across steps)
-            └── logs/step4.log                           (this pipeline's log)
+            └── logs/rctd-split.log                           (this pipeline's log)
 
 `run_id` precedence (bound in cli._resolve_run_id): `--run-id` >
 `$SLURM_JOB_ID` > `YYYYMMDD_HHMMSS` timestamp fallback.

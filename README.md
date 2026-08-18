@@ -248,7 +248,7 @@ All three steps write into a single run folder:
     ├── slurm-<jobid>-xenium-preprocess.log
     ├── slurm-<jobid>-ref-build.log
     ├── slurm-<jobid>-rctd-split.log
-    ├── step1.log  step3.log  step4.log   # per-step app logs
+    ├── xenium-preprocess.log  ref-build.log  rctd-split.log   # per-step app logs
     └── workflow-submit.log               # authoritative record of jobids + dep chain
 ```
 
