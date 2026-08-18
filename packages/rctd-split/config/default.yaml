@@ -177,7 +177,7 @@ celltype_writeback:
 # ----- Stage 9: qc_report ------------------------------------------
 # Terminal QC step. Reads the three persisted h5ads under
 # spatial_adata/ (never modifies them) and writes an HTML report +
-# UMAP plot PNGs + a metrics CSV under <run_dir>/qc/.
+# UMAP plot PNGs + a metrics CSV under <run_dir>/summary/.
 #
 # Because qc_report is now the terminal stage, `_drop_intermediate_outputs`
 # fires AFTER it — keep_intermediate=true still opts out.

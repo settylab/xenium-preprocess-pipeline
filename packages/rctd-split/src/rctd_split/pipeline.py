@@ -11,7 +11,7 @@ jobs in the driver chain) don't clobber each other's config sections.
 
 After the terminal stage (``qc_report``) succeeds the
 ``intermediate/`` subfolder is DROPPED (mirrors ref-build; the
-final artifacts under ``spatial_adata/``, ``rctd/``, and ``qc/``
+final artifacts under ``spatial_adata/``, ``rctd/``, and ``summary/``
 survive). Pass ``--keep-intermediate`` / ``keep_intermediate: true``
 to retain it for debugging / QC (internal issue review).
 """

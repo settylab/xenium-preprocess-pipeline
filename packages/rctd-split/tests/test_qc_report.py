@@ -266,8 +266,8 @@ def test_qc_report_happy_path(tmp_path: Path):
     CSV + sentinel emitted."""
     from rctd_split._internal.layout import (
         intermediate_path,
-        qc_path,
-        qc_plots_dir,
+        summary_path,
+        summary_plots_dir,
     )
     from rctd_split.stages.qc_report import run_qc_report
 
@@ -285,12 +285,12 @@ def test_qc_report_happy_path(tmp_path: Path):
         output_root, SAMPLE, RUN_ID, "qc_report_sentinel",
     )
 
-    html_out = qc_path(output_root, SAMPLE, RUN_ID, "html_report")
-    metrics_out = qc_path(output_root, SAMPLE, RUN_ID, "metrics_csv")
+    html_out = summary_path(output_root, SAMPLE, RUN_ID, "html_report")
+    metrics_out = summary_path(output_root, SAMPLE, RUN_ID, "metrics_csv")
     assert html_out.exists()
     assert metrics_out.exists()
 
-    plots = qc_plots_dir(output_root, SAMPLE, RUN_ID)
+    plots = summary_plots_dir(output_root, SAMPLE, RUN_ID)
     assert (plots / f"{SAMPLE}_umap_purification_status.png").exists()
     assert (plots / f"{SAMPLE}_umap_leiden_res0.5.png").exists()
     assert (plots / f"{SAMPLE}_umap_first_type.png").exists()
@@ -309,16 +309,16 @@ def test_qc_report_happy_path(tmp_path: Path):
     assert "resolution = 0.5" in body
     assert "first_type" in body
     # The user-facing UMAP + rejected-cells section headings use the
-    # display label "Broad_cell_type" (Tracy's ask on #26, comment
-    # 5275819008). The underlying data column is still `first_type`,
-    # which is why the substring above still appears in the body via
-    # the descriptive paragraphs' <code>first_type</code>.
-    assert "Broad_cell_type" in body
+    # display label "SPLIT-inferred celltype" (Tracy's ask on
+    # #26, comment 5320970944). The underlying data column is still
+    # `first_type`, which is why the substring above still appears in
+    # the body via the descriptive paragraphs' <code>first_type</code>.
+    assert "SPLIT-inferred celltype" in body
     # The raw metrics row records the layer used (maxpost_counts).
     assert "maxpost_counts" in body
-    # RCTD summary section + rejected Broad_cell_type breakdown.
+    # RCTD summary section + rejected SPLIT-inferred celltype breakdown.
     assert "RCTD summary" in body
-    assert "Broad_cell_type in rejected cells" in body
+    assert "SPLIT-inferred celltype in rejected cells" in body
     assert "singlet" in body
     assert "doublet_certain" in body
     assert "doublet_uncertain" in body
@@ -328,8 +328,8 @@ def test_qc_report_happy_path(tmp_path: Path):
     assert "step4.postprocess.qc.min_counts" in body
 
     # RCTD summary CSV is a separate sidecar.
-    from rctd_split._internal.layout import qc_path
-    rctd_csv = qc_path(output_root, SAMPLE, RUN_ID, "rctd_summary_csv")
+    from rctd_split._internal.layout import summary_path
+    rctd_csv = summary_path(output_root, SAMPLE, RUN_ID, "rctd_summary_csv")
     assert rctd_csv.exists()
 
 
@@ -363,7 +363,7 @@ def test_qc_report_raw_metrics_use_maxpost_not_X(tmp_path: Path):
     import scipy.sparse as sp
     from anndata import read_h5ad
 
-    from rctd_split._internal.layout import qc_path
+    from rctd_split._internal.layout import summary_path
     from rctd_split.stages.qc_report import run_qc_report
 
     output_root, _, raw_p, _ = _setup_run(tmp_path)
@@ -373,7 +373,7 @@ def test_qc_report_raw_metrics_use_maxpost_not_X(tmp_path: Path):
         output_root=output_root, force_rerun=False, **_DEFAULT_CALL,
     )
 
-    metrics = pd.read_csv(qc_path(output_root, SAMPLE, RUN_ID, "metrics_csv"))
+    metrics = pd.read_csv(summary_path(output_root, SAMPLE, RUN_ID, "metrics_csv"))
     raw_row = metrics[metrics["h5ad"] == "proseg_raw"].iloc[0]
     assert raw_row["layer"] == "maxpost_counts"
 
@@ -468,7 +468,7 @@ def test_qc_report_fails_on_missing_hist_obs(tmp_path: Path):
 def test_qc_report_sentinel_short_circuits(tmp_path: Path):
     """Second invocation with sentinel present must skip work — the
     plots-dir mtime shouldn't change."""
-    from rctd_split._internal.layout import qc_plots_dir
+    from rctd_split._internal.layout import summary_plots_dir
     from rctd_split.stages.qc_report import run_qc_report
 
     output_root, _, _, _ = _setup_run(tmp_path)
@@ -478,7 +478,7 @@ def test_qc_report_sentinel_short_circuits(tmp_path: Path):
     )
     run_qc_report(force_rerun=False, **common)
     plot_path = (
-        qc_plots_dir(output_root, SAMPLE, RUN_ID)
+        summary_plots_dir(output_root, SAMPLE, RUN_ID)
         / f"{SAMPLE}_umap_first_type.png"
     )
     mtime1 = plot_path.stat().st_mtime_ns
@@ -510,7 +510,7 @@ def test_qc_report_rctd_summary_counts(tmp_path: Path):
     """
     import pandas as pd
 
-    from rctd_split._internal.layout import qc_path
+    from rctd_split._internal.layout import summary_path
     from rctd_split.stages.qc_report import run_qc_report
 
     output_root, _, _, _ = _setup_run(tmp_path)
@@ -520,7 +520,7 @@ def test_qc_report_rctd_summary_counts(tmp_path: Path):
         output_root=output_root, force_rerun=False, **_DEFAULT_CALL,
     )
 
-    csv_path = qc_path(output_root, SAMPLE, RUN_ID, "rctd_summary_csv")
+    csv_path = summary_path(output_root, SAMPLE, RUN_ID, "rctd_summary_csv")
     assert csv_path.exists(), csv_path
     df = pd.read_csv(csv_path)
 
@@ -554,7 +554,7 @@ def test_qc_report_rctd_summary_counts(tmp_path: Path):
 def test_qc_report_rctd_html_shows_percentages(tmp_path: Path):
     """The HTML report must render the RCTD summary rows with counts +
     percentages that agree with the CSV."""
-    from rctd_split._internal.layout import qc_path
+    from rctd_split._internal.layout import summary_path
     from rctd_split.stages.qc_report import run_qc_report
 
     output_root, _, _, _ = _setup_run(tmp_path)
@@ -564,7 +564,7 @@ def test_qc_report_rctd_html_shows_percentages(tmp_path: Path):
         output_root=output_root, force_rerun=False, **_DEFAULT_CALL,
     )
 
-    body = qc_path(output_root, SAMPLE, RUN_ID, "html_report").read_text()
+    body = summary_path(output_root, SAMPLE, RUN_ID, "html_report").read_text()
     # Percent strings from the fixture (RCTD denominator = 10).
     assert "30.00%" in body   # singlet + doublet_certain
     assert "20.00%" in body   # doublet_uncertain + reject
@@ -617,7 +617,7 @@ def test_qc_report_hist_threshold_from_resolved_config(tmp_path: Path):
     """Threshold values are read from ``config.yaml`` — the
     HTML surface names the source config keys AND the numeric values.
     """
-    from rctd_split._internal.layout import qc_path
+    from rctd_split._internal.layout import summary_path
     from rctd_split.stages.qc_report import run_qc_report
 
     output_root, _, _, _ = _setup_run(
@@ -632,7 +632,7 @@ def test_qc_report_hist_threshold_from_resolved_config(tmp_path: Path):
         output_root=output_root, force_rerun=False, **_DEFAULT_CALL,
     )
 
-    body = qc_path(output_root, SAMPLE, RUN_ID, "html_report").read_text()
+    body = summary_path(output_root, SAMPLE, RUN_ID, "html_report").read_text()
     # Both the config-path anchor and the numeric threshold should render.
     assert "step1.qc_filter.min_counts_cell" in body
     assert "<b>7</b>" in body
@@ -645,7 +645,7 @@ def test_qc_report_hist_no_threshold_when_config_absent(tmp_path: Path):
     still render and the HTML explicitly says "no dashed threshold
     line drawn" — never falls back to a hard-coded value."""
     from rctd_split._internal.layout import (
-        qc_path,
+        summary_path,
         resolved_config_path,
     )
     from rctd_split.stages.qc_report import run_qc_report
@@ -658,7 +658,7 @@ def test_qc_report_hist_no_threshold_when_config_absent(tmp_path: Path):
         sample_id=SAMPLE, run_id=RUN_ID,
         output_root=output_root, force_rerun=False, **_DEFAULT_CALL,
     )
-    body = qc_path(output_root, SAMPLE, RUN_ID, "html_report").read_text()
+    body = summary_path(output_root, SAMPLE, RUN_ID, "html_report").read_text()
     # Caption for every histogram falls back to the no-line note.
     assert body.count("no dashed threshold line drawn") == 3
 
@@ -667,7 +667,7 @@ def test_qc_report_hist_xenium_never_has_threshold(tmp_path: Path):
     """xenium_ranger.h5ad has no upstream min-counts gate in step-1;
     even with a fully-populated resolved_config the xenium histogram
     caption stays on the "no line" branch."""
-    from rctd_split._internal.layout import qc_path
+    from rctd_split._internal.layout import summary_path
     from rctd_split.stages.qc_report import run_qc_report
 
     output_root, _, _, _ = _setup_run(tmp_path)
@@ -675,7 +675,7 @@ def test_qc_report_hist_xenium_never_has_threshold(tmp_path: Path):
         sample_id=SAMPLE, run_id=RUN_ID,
         output_root=output_root, force_rerun=False, **_DEFAULT_CALL,
     )
-    body = qc_path(output_root, SAMPLE, RUN_ID, "html_report").read_text()
+    body = summary_path(output_root, SAMPLE, RUN_ID, "html_report").read_text()
     # Locate the xenium histogram block by its <img> alt text and pull
     # a chunk following it — the caption we assert against lives there.
     xenium_anchor = 'alt="log10(xenium_ranger total_counts)"'
@@ -688,7 +688,7 @@ def test_qc_report_hist_handles_zero_count_cells(tmp_path: Path):
     """A cell with total_counts=0 must not crash the histogram code
     path (the "did not pass the threshold or generally low count"
     branch is exercised), and the resulting PNG is written non-empty."""
-    from rctd_split._internal.layout import qc_plots_dir
+    from rctd_split._internal.layout import summary_plots_dir
     from rctd_split.stages.qc_report import run_qc_report
 
     output_root, _, _, _ = _setup_run(
@@ -699,7 +699,7 @@ def test_qc_report_hist_handles_zero_count_cells(tmp_path: Path):
         output_root=output_root, force_rerun=False, **_DEFAULT_CALL,
     )
     hist_png = (
-        qc_plots_dir(output_root, SAMPLE, RUN_ID)
+        summary_plots_dir(output_root, SAMPLE, RUN_ID)
         / f"{SAMPLE}_hist_total_counts_proseg_raw.png"
     )
     assert hist_png.exists()

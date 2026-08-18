@@ -119,23 +119,23 @@ def intermediate_path(
     return intermediate_dir(output_root, sample_id, run_id) / rel
 
 
-def qc_dir(output_root: Path, sample_id: str, run_id: str) -> Path:
-    """`<run_dir>/qc/` — holds the terminal QC HTML report + plots.
+def summary_dir(output_root: Path, sample_id: str, run_id: str) -> Path:
+    """`<run_dir>/summary/` — holds the terminal QC HTML report + plots.
 
     Persisted output (survives `_drop_intermediate_outputs`)."""
-    return run_dir(output_root, sample_id, run_id) / "qc"
+    return run_dir(output_root, sample_id, run_id) / "summary"
 
 
-def qc_plots_dir(output_root: Path, sample_id: str, run_id: str) -> Path:
-    return qc_dir(output_root, sample_id, run_id) / "plots"
+def summary_plots_dir(output_root: Path, sample_id: str, run_id: str) -> Path:
+    return summary_dir(output_root, sample_id, run_id) / "plots"
 
 
-def qc_path(
+def summary_path(
     output_root: Path, sample_id: str, run_id: str, key: str
 ) -> Path:
-    """Path to a QC artifact under `qc/`. `key` is one of `_QC_BASENAMES`."""
+    """Path to a summary artifact under `summary/`. `key` is one of `_QC_BASENAMES`."""
     basename = _QC_BASENAMES[key].format(sample_id=sample_id)
-    return qc_dir(output_root, sample_id, run_id) / basename
+    return summary_dir(output_root, sample_id, run_id) / basename
 
 
 def mtx_bundle_dir(

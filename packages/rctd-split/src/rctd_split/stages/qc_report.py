@@ -7,7 +7,7 @@ Reads (never writes to) the three persisted h5ads under
   * ``<S>_proseg_raw.h5ad``    (step 1; augmented by writeback_to_step1_raw)
   * ``<S>_proseg_purified.h5ad`` (this pipeline; augmented by postprocess)
 
-Emits under ``<run_dir>/qc/``:
+Emits under ``<run_dir>/summary/``:
 
   * ``<S>_qc_report.html`` — QC metrics tables + embedded plots + versions.
   * ``<S>_qc_metrics.csv`` — machine-parseable version of the metrics.
@@ -71,8 +71,8 @@ from pathlib import Path
 from rctd_split._internal.compat import sentinel_exists
 from rctd_split._internal.layout import (
     intermediate_path,
-    qc_path,
-    qc_plots_dir,
+    summary_path,
+    summary_plots_dir,
     resolved_config_path,
     spatial_adata_path,
 )
@@ -695,7 +695,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   </tbody>
 </table>
 
-<h3>Broad_cell_type in rejected cells</h3>
+<h3>SPLIT-inferred celltype in rejected cells</h3>
 <p class="meta">
   Of the <b>{n_rejected}</b> cells RCTD rejected
   (<code>spot_class == 'reject'</code>), the primary cell-type call
@@ -703,7 +703,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 </p>
 <table>
   <thead><tr>
-    <th>Broad_cell_type</th>
+    <th>SPLIT-inferred celltype</th>
     <th>Cells</th><th>% of rejected</th>
   </tr></thead>
   <tbody>
@@ -757,9 +757,9 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   </div>
 </div>
 
-<h2>UMAP: Broad_cell_type</h2>
+<h2>UMAP: SPLIT-inferred celltype</h2>
 <div class="plot">
-  <img src="{img_first_type}" alt="UMAP by Broad_cell_type">
+  <img src="{img_first_type}" alt="UMAP by SPLIT-inferred celltype">
   <div class="caption">
     From <code>proseg_purified.h5ad</code>, obs column
     <code>first_type</code> (RCTD celltype label). Distinct labels:
@@ -1042,7 +1042,7 @@ def run_qc_report(
     """Generate QC HTML report + plots. Returns the sentinel path.
 
     Reads-only w.r.t. the three source h5ads. Writes to
-    ``<run_dir>/qc/`` + a sentinel under ``intermediate/adata/``.
+    ``<run_dir>/summary/`` + a sentinel under ``intermediate/adata/``.
     """
     import time
 
@@ -1060,12 +1060,12 @@ def run_qc_report(
     sentinel = intermediate_path(
         output_root, sample_id, run_id, "qc_report_sentinel",
     )
-    metrics_csv = qc_path(output_root, sample_id, run_id, "metrics_csv")
-    rctd_summary_csv = qc_path(
+    metrics_csv = summary_path(output_root, sample_id, run_id, "metrics_csv")
+    rctd_summary_csv = summary_path(
         output_root, sample_id, run_id, "rctd_summary_csv",
     )
-    html_out = qc_path(output_root, sample_id, run_id, "html_report")
-    plots_dir = qc_plots_dir(output_root, sample_id, run_id)
+    html_out = summary_path(output_root, sample_id, run_id, "html_report")
+    plots_dir = summary_plots_dir(output_root, sample_id, run_id)
     resolved_yaml = resolved_config_path(output_root, sample_id, run_id)
 
     if sentinel_exists(sentinel, force_rerun):
@@ -1186,7 +1186,7 @@ def run_qc_report(
     log(f"[qc_report] writing plot {img_first_type}")
     _scatter_umap(
         plt, umap_xy, first_type_values,
-        title=f"{sample_id}: Broad_cell_type",
+        title=f"{sample_id}: SPLIT-inferred celltype",
         out_path=img_first_type,
         categorical=True,
     )
@@ -1222,7 +1222,7 @@ def run_qc_report(
     log(f"[qc_report] wrote RCTD summary {rctd_summary_csv}")
 
     # HTML report with relative image paths (so the directory is
-    # portable — you can rsync `qc/` anywhere and it renders).
+    # portable — you can rsync `summary/` anywhere and it renders).
     _render_html(
         out_path=html_out,
         sample_id=sample_id,
