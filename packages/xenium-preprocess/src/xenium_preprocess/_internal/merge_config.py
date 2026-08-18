@@ -1,11 +1,14 @@
 """Shared merged `config.yaml` helper.
 
-Merge invariant (from (internal issue review):
-each pipeline reads the current `config.yaml`, writes back
-ONLY its own top-level key (`xenium_preprocess:` / `ref_build:` /
-`rctd_split:` / `driver:`), and PRESERVES all sibling top-level keys.
-This lets the three pipelines run in sequence under a shared `--run-id`
-folder without any pipeline clobbering another's section.
+Merge invariant: each pipeline reads the current `config.yaml`, writes
+back ONLY its own top-level key (`xenium_preprocess:` / `ref_build:` /
+`rctd_split:` / `driver:`), and PRESERVES sibling top-level keys that
+are themselves in that semantic set. This lets the three pipelines
+run in sequence under a shared `--run-id` folder without clobbering
+each other. Unknown top-level keys (e.g. numeric `step1:` / `step3:` /
+`step4:` left behind by a pre-semantic-migration run folder) are
+dropped so a re-run against an older run dir self-heals rather than
+carrying the legacy junk forward.
 
 Duplicated per repo by design — there is no shared parent package the
 three pipelines depend on. `ref-build` and `rctd-split` each ship an
@@ -17,6 +20,7 @@ caught locally.
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 import yaml
@@ -36,7 +40,8 @@ def merge_config(
     step_cfg: dict,
 ) -> dict:
     """Read the merged `config.yaml`, replace ONLY `step_key`,
-    preserve every other top-level key, atomically write back.
+    preserve every valid sibling top-level key, drop any legacy /
+    unknown top-level key, atomically write back.
 
     Returns the full merged dict (post-write) so the caller can log
     the sibling keys that survived.
@@ -52,14 +57,23 @@ def merge_config(
     resolved_yaml_path = Path(resolved_yaml_path)
     if resolved_yaml_path.exists():
         with open(resolved_yaml_path) as f:
-            merged = yaml.safe_load(f) or {}
-        if not isinstance(merged, dict):
+            existing = yaml.safe_load(f) or {}
+        if not isinstance(existing, dict):
             raise SystemExit(
                 f"[merge_config] existing {resolved_yaml_path} is not a "
-                f"mapping (got {type(merged).__name__})"
+                f"mapping (got {type(existing).__name__})"
             )
     else:
-        merged = {}
+        existing = {}
+
+    merged = {k: v for k, v in existing.items() if k in VALID_TOP_LEVEL_KEYS}
+    dropped = sorted(set(existing) - set(merged))
+    if dropped:
+        print(
+            f"[merge_config] dropped stale/unknown top-level keys from "
+            f"{resolved_yaml_path}: {dropped}",
+            file=sys.stderr,
+        )
 
     merged[step_key] = step_cfg
 

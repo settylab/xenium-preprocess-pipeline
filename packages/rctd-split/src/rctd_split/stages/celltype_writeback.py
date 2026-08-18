@@ -1,11 +1,10 @@
-"""Stage 8: NN-map celltype from rctd-split purified onto xenium-preprocess xenium-ranger.
+"""celltype_writeback: NN-map celltype from rctd-split purified onto xenium-preprocess xenium-ranger.
 
 Reads:
-  * ``<S>_proseg_purified.h5ad`` (this pipeline's Stage-6 output; source
-    of celltype via ``.obs[reference_label_col]`` with
+  * ``<S>_proseg_purified.h5ad`` (this pipeline's ``mtx_to_h5ad`` output;
+    source of celltype via ``.obs[reference_label_col]`` with
     ``.obs[reference_x_col]`` / ``.obs[reference_y_col]`` as reference
-    centroids — ``centroid_x`` / ``centroid_y`` per the skeptic
-    correction on ``step1-option-b-skeptic``).
+    centroids — ``centroid_x`` / ``centroid_y`` by default).
   * ``<S>_xenium_ranger.h5ad`` (xenium-preprocess output; query cells with
     ``.obsm['spatial']`` as ``(n, 2)`` query centroids).
 

@@ -17,7 +17,7 @@
 #     FLEX_H5AD            (required)  Absolute path to the flex scRNA h5ad;
 #                                      recorded verbatim under
 #                                      ref_build.flex_h5ad_path in
-#                                      resolved_config.yaml. NO copy, NO
+#                                      config.yaml. NO copy, NO
 #                                      symlink (reference-in-place per
 #                                      comment 5251080220 §1).
 #     CELLTYPE_MARKER_JSON (required)  Marker-gene JSON declaring the
@@ -62,7 +62,7 @@
 # Writes:
 #     <OUTPUT_ROOT>/<SAMPLE>/<SAMPLE>_<RUN_ID>/rctd/<SAMPLE>_reference_post_rules.h5ad
 #     <OUTPUT_ROOT>/<SAMPLE>/<SAMPLE>_<RUN_ID>/rctd/<SAMPLE>_reference.rds
-#     <OUTPUT_ROOT>/<SAMPLE>/<SAMPLE>_<RUN_ID>/resolved_config.yaml (step3: key)
+#     <OUTPUT_ROOT>/<SAMPLE>/<SAMPLE>_<RUN_ID>/config.yaml (ref_build: key)
 #     <OUTPUT_ROOT>/<SAMPLE>/<SAMPLE>_<RUN_ID>/logs/ref-build.log
 
 set -euo pipefail

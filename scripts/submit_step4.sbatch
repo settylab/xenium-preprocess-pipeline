@@ -66,7 +66,7 @@
 #     spatial_adata/<SAMPLE>_xenium_ranger.h5ad         (celltype + distance
 #                                                       cols augmented by
 #                                                       celltype_writeback)
-#     resolved_config.yaml (step4: key)
+#     config.yaml (rctd_split: key)
 #     logs/rctd-split.log
 
 set -euo pipefail
@@ -127,7 +127,7 @@ RUN_ID="${RUN_ID:-$SLURM_JOB_ID}"
 
 # MAX_CORES: RCTD parallelism. sbatch alloc is 16 CPUs (--cpus-per-task
 # above); default here is 12 (headroom for R workers + parent process).
-# Editing rctd_run.max_cores in <run>/resolved_config.yaml does NOT flow
+# Editing rctd_run.max_cores in <run>/config.yaml does NOT flow
 # back into the pipeline — that file is a write-only snapshot the pipeline
 # overwrites at every stage. Override per-run by exporting MAX_CORES=<N>
 # before invoking submit_workflow.sh.

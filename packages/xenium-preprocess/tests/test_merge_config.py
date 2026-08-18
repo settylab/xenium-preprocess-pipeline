@@ -67,3 +67,26 @@ def test_merge_config_creates_parent_dirs(tmp_path: Path):
     deep = tmp_path / "a" / "b" / "config.yaml"
     merge_config(deep, "xenium_preprocess", {"k": "v"})
     assert deep.exists()
+
+
+def test_merge_config_drops_legacy_numeric_keys(tmp_path: Path, capsys):
+    """A resolved config left over from a pre-semantic-migration run
+    folder can contain numeric `step1:` / `step3:` / `step4:` top-level
+    keys. Re-running the current pipeline against that folder MUST
+    drop the legacy keys (so the file self-heals) while preserving the
+    semantic siblings."""
+    from xenium_preprocess._internal.merge_config import merge_config
+
+    resolved = tmp_path / "config.yaml"
+    resolved.write_text(yaml.safe_dump({
+        "step1": {"legacy_junk": True},
+        "step4": {"legacy_junk": True},
+        "ref_build": {"flex_h5ad_path": "/kept.h5ad"},
+    }))
+    merged = merge_config(resolved, "xenium_preprocess", {"sample_id": "MH10"})
+    assert set(merged) == {"xenium_preprocess", "ref_build"}
+    assert merged["ref_build"]["flex_h5ad_path"] == "/kept.h5ad"
+    on_disk = yaml.safe_load(resolved.read_text())
+    assert set(on_disk) == {"xenium_preprocess", "ref_build"}
+    err = capsys.readouterr().err
+    assert "step1" in err and "step4" in err

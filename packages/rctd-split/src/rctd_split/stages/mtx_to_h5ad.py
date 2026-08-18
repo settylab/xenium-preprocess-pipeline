@@ -1,4 +1,4 @@
-"""Stage 4: 10X-style mtx bundles → AnnData .h5ad files.
+"""mtx_to_h5ad: 10X-style mtx bundles → AnnData .h5ad files.
 
 Pure Python (no R). Reads each of the two intermediate mtx bundles
 written by ``export_mtx`` and builds an AnnData:
@@ -12,8 +12,7 @@ written by ``export_mtx`` and builds an AnnData:
 Writes:
 
   * ``<S>_proseg_purified.h5ad`` under ``spatial_adata/`` — the
-    persisted purified adata (renamed from ``<S>_step4_purified.h5ad``
-    per (internal issue review).
+    persisted purified adata.
   * ``<S>_unpurified.h5ad`` under ``intermediate/adata/`` — the
     intermediate unpurified adata, consumed by ``filter_status`` and
     ``writeback_to_raw``. Dropped from persisted final outputs.
