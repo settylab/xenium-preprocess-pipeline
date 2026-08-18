@@ -5,6 +5,21 @@ All notable changes to rctd-split will be documented here. Follows
 
 ## [Unreleased]
 
+### Changed
+- `pipeline._drop_intermediate_outputs` now drops the ENTIRE
+  `intermediate/` directory after the terminal `qc_report` stage
+  succeeds — previously it kept `intermediate/adata/*.h5ad` and
+  `intermediate/adata/*.csv` so `--stages writeback_to_step1_raw`
+  could re-run without redoing SPLIT/mtx/adata, but that left an
+  `intermediate/adata/` folder on disk after a fully-successful run.
+  Tracy's ask on `settylab/TracyY123-nexus#26` comment 5322401335
+  (item 1): "why in `MH8_2/MH8_2_demo_v2`, the intermediate folder
+  is still saved? I have requested that dont save the intermediate
+  folder after all steps are done." The escape hatch
+  `--keep-intermediate` / `keep_intermediate: true` still opts out
+  of the drop entirely; users who need the writeback re-run path
+  should set it at the original invocation.
+
 ### Added
 - `qc_report`: optional `extra_reports` list appends external HTML
   reports to the bottom of `summary_report.html` (Tracy's ask on

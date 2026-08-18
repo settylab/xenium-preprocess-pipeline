@@ -9,11 +9,13 @@ and ``config.yaml`` at that run folder is written via the shared
 ``_merge_config`` helper so step 1 / step 3 (spawned as separate sbatch
 jobs in the driver chain) don't clobber each other's config sections.
 
-After the terminal stage (``qc_report``) succeeds the
+After the terminal stage (``qc_report``) succeeds the entire
 ``intermediate/`` subfolder is DROPPED (mirrors ref-build; the
 final artifacts under ``spatial_adata/``, ``rctd/``, and ``summary/``
 survive). Pass ``--keep-intermediate`` / ``keep_intermediate: true``
-to retain it for debugging / QC (internal issue review).
+to retain it for debugging / QC or for a follow-up
+``--stages writeback_to_step1_raw`` re-run
+(settylab/TracyY123-nexus#26 comment 5322401335).
 """
 from __future__ import annotations
 
@@ -37,39 +39,28 @@ from rctd_split._internal.merge_config import merge_config
 def _drop_intermediate_outputs(
     output_root: Path, sample_id: str, run_id: str,
 ) -> None:
-    """Selectively prune `<run_dir>/intermediate/` after the terminal
-    stage (`qc_report`) succeeds.
+    """Drop the entire `<run_dir>/intermediate/` directory after the
+    terminal stage (`qc_report`) succeeds.
 
-    Drops:
-      * `intermediate/split/` — heavy R-side `.rds` working files.
-      * `intermediate/mtx/` — 10X-style mtx bundles.
-      * `intermediate/adata/*.done` — stage sentinels (so a later
-        `--stages writeback_to_step1_raw` isn't short-circuited).
+    Removes the heavy R-side `.rds` working files under `split/`, the
+    10X-style mtx bundles under `mtx/`, and the intermediate adata
+    h5ads / csvs / sentinels under `adata/`. The persisted final
+    artifacts under `spatial_adata/`, `rctd/`, and `summary/` are
+    untouched.
 
-    Keeps `intermediate/adata/*.h5ad` and `intermediate/adata/*.csv`
-    (lightweight; `writeback_to_step1_raw` reads `filter_status.csv`
-    and `step4_unpurified.h5ad` from here, so preserving them lets
-    that stage re-run cleanly against an already-completed run without
-    redoing SPLIT/mtx/adata; (internal issue review) comment
-    (internal issue review)). Idempotent — no-op when the folder is already gone
-    (internal issue review)."""
+    Users who need to re-run `--stages writeback_to_step1_raw` against
+    an already-completed run without redoing SPLIT/mtx/adata should
+    pass `--keep-intermediate` / `keep_intermediate: true` at the
+    original invocation to opt out of cleanup (matches Tracy's ask on
+    settylab/TracyY123-nexus#26 comment 5322401335). Idempotent — no-op
+    when the folder is already gone."""
     p = intermediate_dir(output_root, sample_id, run_id)
     if not p.exists():
         return
-    for sub in ("split", "mtx"):
-        target = p / sub
-        if target.exists():
-            log(f"[pipeline] dropping intermediate/{sub}/: {target}")
-            shutil.rmtree(target)
-    adata_dir = p / "adata"
-    if adata_dir.exists():
-        for entry in adata_dir.iterdir():
-            if entry.is_file() and entry.suffix == ".done":
-                log(f"[pipeline] dropping stale sentinel: {entry}")
-                entry.unlink()
-    log("[pipeline] intermediate/ pruned; kept adata/*.h5ad + adata/*.csv "
-        "so `--stages writeback_to_step1_raw` can re-run without "
-        "re-doing SPLIT/mtx.")
+    log(f"[pipeline] dropping intermediate/: {p}")
+    shutil.rmtree(p)
+    log("[pipeline] intermediate/ pruned; pass --keep-intermediate to preserve "
+        "for `--stages writeback_to_step1_raw` re-runs.")
 
 
 def _raise_missing_input(
