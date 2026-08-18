@@ -43,7 +43,7 @@ Three publishable packages + one shell driver, chained by Slurm `afterok:`
 dependencies:
 
 ```
-    Xenium raw            step 1                        spatial_adata/
+    Xenium raw            xenium-preprocess             spatial_adata/
     ┌──────────┐        ┌──────────────────┐          ┌──────────────────┐
     │ proseg   │───────▶│ xenium-preprocess│─────────▶│ *_proseg_raw.h5ad│
     │ xranger  │        │ (5 stages)       │          │ *_xenium_ranger  │
@@ -53,7 +53,7 @@ dependencies:
                                  ▼                             │
                           rctd/*_test_object.rds               │
                                                                │
-    Flex scRNA          step 3                                 │
+    Flex scRNA          ref-build                              │
     ┌──────────┐        ┌──────────────────┐                   │
     │ flex.h5ad│───────▶│ ref-build        │                   │
     │ donors   │        │ (celltype-marker │                   │
@@ -63,7 +63,7 @@ dependencies:
                                  ▼                             │
                           rctd/*_reference.rds                 │
                                                                │
-                        step 4                                 │
+                        rctd-split                             │
                         ┌──────────────────┐                   │
                         │ rctd-split       │◀──────────────────┘
                         │ (RCTD + SPLIT    │
@@ -85,7 +85,7 @@ Slurm layer on top.
 
 - **OS**: Linux (developed and tested on a Slurm cluster).
 - **Scheduler**: Slurm (`sbatch`, `--dependency=afterok:` support).
-- **RAM**: ~64 GB per step for typical samples; step 4 benefits from 16 CPUs.
+- **RAM**: ~64 GB per step for typical samples; rctd-split benefits from 16 CPUs.
 - **Disk**: ~50 GB per sample per run for intermediate + final outputs.
 - **Micromamba** (or `conda`), **`uv`**, and **R 4.4+** with `spacexr`,
   `SPLIT`, and `Seurat`.
@@ -120,7 +120,7 @@ the recipe.
 
 ## Usage
 
-### Run the full pipeline (steps 1 → 3 → 4)
+### Run the full pipeline (xenium-preprocess → ref-build → rctd-split)
 
 
 ```bash
@@ -194,26 +194,26 @@ Stages are sentinel-gated — reruns skip already-done work; pass
 
 ```bash
 
-# Step 1 already ran; resume the chain at step 3
+# xenium-preprocess already ran; resume the chain at ref-build
 ./scripts/submit_workflow.sh \
     --sample-id             SAMPLE1 \
     --output-root           /data/workflow_runs \
     --run-id                demo_v1 \
     --flex-h5ad             /data/SAMPLE1/scRNA/SAMPLE1_flex.h5ad \
     --celltype-marker-json  /data/markers/markers.json \
-    --start-step            3
-# --start-step > 1 implies --reuse-run-dir
+    --start-step            ref-build
+# --start-step past xenium-preprocess implies --reuse-run-dir
 ```
 
 Resume policy:
 
-- `--reuse-run-dir` (implied by `--start-step 3` or `4`) — proceed
-  against an existing run folder; each step overwrites only the files it
-  writes, everything else is preserved. This is the everyday "resume the
-  chain" flag.
-- `--force` — `rm -rf` the run folder, then run from step 1. Destructive;
-  for a from-scratch re-run under an already-used `--run-id`. Rejected
-  together with `--start-step 3` / `4`.
+- `--reuse-run-dir` (implied by `--start-step ref-build` or `rctd-split`) —
+  proceed against an existing run folder; each step overwrites only the
+  files it writes, everything else is preserved. This is the everyday
+  "resume the chain" flag.
+- `--force` — `rm -rf` the run folder, then run from xenium-preprocess.
+  Destructive; for a from-scratch re-run under an already-used `--run-id`.
+  Rejected together with `--start-step ref-build` / `rctd-split`.
 
 ## Configuration
 
@@ -255,7 +255,7 @@ output_root: /fh/fast/setty_m/user/ryang/workflow_runs
 flex_h5ad: /fh/fast/setty_m/user/ryang/data/MH10_flex.h5ad
 celltype_marker_json: /fh/fast/setty_m/user/ryang/data/markers.json
 
-# Optional step-4 explicit inputs — bypasses the run-folder layout
+# Optional rctd-split explicit inputs — bypasses the run-folder layout
 # auto-discovery. Use to mix a test_object from one sample with a
 # reference from another.
 test_object:   /fh/fast/setty_m/user/ryang/other/MH3_test_object.rds
@@ -284,14 +284,14 @@ All three steps write into a single run folder:
 
 ```
 <output-root>/<sample>/<sample>_<run-id>/
-├── spatial_adata/                        # step 1 (step 4 augments in place)
+├── spatial_adata/                        # xenium-preprocess (rctd-split augments in place)
 │   ├── <sample>_proseg_raw.h5ad          # proseg cell×gene
 │   ├── <sample>_xenium_ranger.h5ad       # xenium-ranger cell×gene
 │   └── provenance/                       # verbatim copies of proseg-run scripts + configs
 ├── rctd/
-│   ├── <sample>_test_object.rds          # step 1 — RCTD test object (spatial query)
-│   ├── <sample>_reference.rds            # step 3 — RCTD reference (celltype pool)
-│   └── <sample>_rctd_split.rds           # step 4 — RCTD + SPLIT typing result
+│   ├── <sample>_test_object.rds          # xenium-preprocess — RCTD test object (spatial query)
+│   ├── <sample>_reference.rds            # ref-build — RCTD reference (celltype pool)
+│   └── <sample>_rctd_split.rds           # rctd-split — RCTD + SPLIT typing result
 ├── config.yaml                  # merged effective config across the three steps
 └── logs/
     ├── slurm-<jobid>-xenium-preprocess.log
