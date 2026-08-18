@@ -58,7 +58,7 @@ _INTERMEDIATE_BASENAMES = {
 
 
 _QC_BASENAMES = {
-    "html_report": "{sample_id}_qc_report.html",
+    "html_report": "{sample_id}_summary_report.html",
     "metrics_csv": "{sample_id}_qc_metrics.csv",
     "rctd_summary_csv": "{sample_id}_rctd_summary.csv",
 }

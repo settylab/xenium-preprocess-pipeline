@@ -9,7 +9,7 @@ Reads (never writes to) the three persisted h5ads under
 
 Emits under ``<run_dir>/summary/``:
 
-  * ``<S>_qc_report.html`` — QC metrics tables + embedded plots + versions.
+  * ``<S>_summary_report.html`` — QC metrics tables + embedded plots + versions.
   * ``<S>_qc_metrics.csv`` — machine-parseable version of the metrics.
   * ``<S>_rctd_summary.csv`` — RCTD spot_class + rejected-first_type table.
   * ``plots/<S>_umap_purification_status.png``
@@ -627,7 +627,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>QC report — {sample_id}</title>
+<title>Summary report — {sample_id}</title>
 <style>
   body {{ font-family: -apple-system, "Segoe UI", "Helvetica Neue",
          Arial, sans-serif; max-width: 1100px; margin: 2em auto;
@@ -647,7 +647,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 </style>
 </head>
 <body>
-<h1>QC report — {sample_id}</h1>
+<h1>Summary report — {sample_id}</h1>
 <p class="meta">
   Run ID: <code>{run_id}</code><br>
   Generated: {generated_ts}<br>

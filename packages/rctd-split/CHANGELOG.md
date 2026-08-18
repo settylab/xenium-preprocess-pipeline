@@ -5,6 +5,17 @@ All notable changes to rctd-split will be documented here. Follows
 
 ## [Unreleased]
 
+### Changed
+- `qc_report` HTML output filename renamed
+  `<sample>_qc_report.html` → `<sample>_summary_report.html`
+  (title + `<h1>` updated to "Summary report" to match). The
+  `summary/` folder is where the HTML lives; the filename now
+  matches. Referenced by
+  `_QC_BASENAMES["html_report"]` in `_internal/layout.py`;
+  no downstream reader relies on the old name.
+  Requested via
+  `settylab/TracyY123-nexus#26` comment 5322126093 (item 1).
+
 ### Added
 - `qc_report` now extracts an RCTD spot_class summary + a first_type
   breakdown of RCTD-rejected cells from `raw.obs` (`spot_class` +
