@@ -192,6 +192,120 @@ STEP1_OVERRIDES=()
 STEP3_OVERRIDES=()
 STEP4_OVERRIDES=()
 
+# ---------------------------------------------------------------------------
+# --config <path>: driver-level config file (settylab/TracyY123-nexus#26
+# comment 5320970944 item 6, design under
+# reports/no-shared-folder-config-design_*). One file per run under
+# runs/<sample>_<run_id>/config.yaml carries the values the operator would
+# otherwise pass as CLI flags to submit_workflow.sh: driver top-level fields
+# (sample_id, run_id, output_root, flex_h5ad, celltype_marker_json,
+# test_object, reference_rds, proseg_dir, xenium_cells, xenium_ranger_dir,
+# celltype_col_for_ref_build, max_cores) plus per-step scalars nested under
+# step1: / step3: / step4:.
+#
+# Precedence is "CLI wins over YAML": we pre-scan argv for --config and
+# apply its values as DEFAULTS here, before the arg-parse loop runs; the
+# loop then naturally overwrites anything the operator also passed on the
+# CLI. This mirrors how DEFAULT_OUTPUT_ROOT etc. seed defaults above.
+# ---------------------------------------------------------------------------
+
+WORKFLOW_CONFIG=""
+for ((_i=1; _i<=$#; _i++)); do
+    if [[ "${!_i}" == "--config" ]]; then
+        _j=$((_i+1))
+        if [[ $_j -gt $# ]]; then
+            echo "error: --config requires a path argument" >&2
+            exit 2
+        fi
+        WORKFLOW_CONFIG="${!_j}"
+        break
+    fi
+done
+unset _i _j
+
+if [[ -n "$WORKFLOW_CONFIG" ]]; then
+    if [[ ! -f "$WORKFLOW_CONFIG" ]]; then
+        echo "error: --config file not found: $WORKFLOW_CONFIG" >&2
+        exit 2
+    fi
+    # Parse the YAML into a bash `eval`-able block. Every emitted line is
+    # `NAME=<shlex-quoted-value>`, matching the driver's existing env-var
+    # names 1:1. Keys missing from the YAML emit nothing, so the driver's
+    # own scalar defaults stay in place. YAML `true`/`false` for the
+    # gex-only / *-force-rerun / keep-intermediate flag surfaces round-trip
+    # as the strings "1"/"0" the sbatch scripts already look for.
+    _CONFIG_ASSIGNS=$(WORKFLOW_CONFIG="$WORKFLOW_CONFIG" python3 - <<'PY'
+import os, shlex, sys, yaml
+
+path = os.environ["WORKFLOW_CONFIG"]
+with open(path) as f:
+    cfg = yaml.safe_load(f) or {}
+if not isinstance(cfg, dict):
+    sys.exit(f"error: --config {path}: top-level must be a mapping, got {type(cfg).__name__}")
+
+def emit(name, value):
+    if value is None:
+        return
+    print(f"{name}={shlex.quote(str(value))}")
+
+def emit_flag(name, value):
+    # Bool-ish YAML values → the "1"/"0" the sbatch scripts already look for.
+    if value is None:
+        return
+    if isinstance(value, bool):
+        v = "1" if value else "0"
+    else:
+        v = str(value)
+    print(f"{name}={shlex.quote(v)}")
+
+# Driver top-level scalars. Accept `sample` as alias for `sample_id`
+# (matches the memo Tracy uses in issue-thread discussion).
+emit("SAMPLE_ID",              cfg.get("sample_id") or cfg.get("sample"))
+emit("RUN_ID_OVERRIDE",        cfg.get("run_id"))
+emit("OUTPUT_ROOT",            cfg.get("output_root"))
+emit("FLEX_H5AD",              cfg.get("flex_h5ad"))
+emit("CELLTYPE_MARKER_JSON",   cfg.get("celltype_marker_json"))
+emit("TEST_OBJECT",            cfg.get("test_object"))
+emit("REFERENCE_RDS",          cfg.get("reference_rds"))
+emit("PROSEG_DIR",             cfg.get("proseg_dir"))
+emit("XENIUM_CELLS",           cfg.get("xenium_cells"))
+emit("XENIUM_RANGER_DIR",      cfg.get("xenium_ranger_dir"))
+emit("CELLTYPE_COL_FOR_REF_BUILD", cfg.get("celltype_col_for_ref_build"))
+emit("MAX_CORES_OVERRIDE",     cfg.get("max_cores"))
+
+# Per-step scalars. Each of these has a matching --stepN-<param> CLI flag
+# in the driver; the YAML key mirrors the flag name with underscores.
+step1 = cfg.get("step1") or {}
+if isinstance(step1, dict):
+    emit(     "STEP1_X_SOURCE",           step1.get("x_source"))
+    emit(     "STEP1_QC_MIN_COUNTS_CELL", step1.get("qc_min_counts_cell"))
+    emit(     "STEP1_GEX_ONLY",           step1.get("gex_only"))
+    emit_flag("STEP1_FORCE_RERUN",        step1.get("force_rerun"))
+
+step3 = cfg.get("step3") or {}
+if isinstance(step3, dict):
+    emit("STEP3_DONOR_BORROW_CAP",     step3.get("donor_borrow_cap"))
+    emit("STEP3_CELL_MIN_INSTANCE",    step3.get("cell_min_instance"))
+    emit("STEP3_MIN_UMI",              step3.get("min_umi"))
+    emit("STEP3_RANDOM_SEED",          step3.get("random_seed"))
+    emit("STEP3_CELLTYPE_TARGET_LIST", step3.get("celltype_target_list"))
+
+step4 = cfg.get("step4") or {}
+if isinstance(step4, dict):
+    emit(     "STEP4_UMI_MIN",                step4.get("umi_min"))
+    emit(     "STEP4_COUNTS_MIN",             step4.get("counts_min"))
+    emit(     "STEP4_CELL_MIN_INSTANCE",      step4.get("cell_min_instance"))
+    emit(     "STEP4_DOUBLET_MODE",           step4.get("doublet_mode"))
+    emit(     "STEP4_POSTPROCESS_MIN_COUNTS", step4.get("postprocess_min_counts"))
+    emit_flag("STEP4_KEEP_INTERMEDIATE",      step4.get("keep_intermediate"))
+PY
+    )
+    if [[ -n "$_CONFIG_ASSIGNS" ]]; then
+        eval "$_CONFIG_ASSIGNS"
+    fi
+    unset _CONFIG_ASSIGNS
+fi
+
 usage() {
     cat <<'EOF'
 Usage: submit_workflow.sh --sample-id <S> --flex-h5ad <path>
@@ -207,6 +321,20 @@ Required:
                                threaded to ref-build run --celltype-marker-json).
 
 Optional:
+  --config <path>              Driver-level config YAML. Top-level keys
+                               `sample_id`, `run_id`, `output_root`,
+                               `flex_h5ad`, `celltype_marker_json`,
+                               `test_object`, `reference_rds`,
+                               `proseg_dir`, `xenium_cells`,
+                               `xenium_ranger_dir`,
+                               `celltype_col_for_ref_build`, `max_cores`
+                               plus per-step scalars nested under
+                               `step1:` / `step3:` / `step4:` (each key
+                               mirrors the matching --stepN-<param> CLI
+                               flag with underscores). CLI flags win over
+                               the YAML — the file provides defaults.
+                               Recommended location:
+                               <output_root>/<sample>/<sample>_<run_id>/config.yaml.
   --output-root <dir>          Root output directory (default: env
                                OUTPUT_ROOT, else
                                /fh/fast/setty_m/user/ryang/workflow_runs).
@@ -382,6 +510,11 @@ while [[ $# -gt 0 ]]; do
         --step4-doublet-mode)            STEP4_DOUBLET_MODE="$2"; shift 2 ;;
         --step4-postprocess-min-counts)  STEP4_POSTPROCESS_MIN_COUNTS="$2"; shift 2 ;;
         --step4-keep-intermediate)       STEP4_KEEP_INTERMEDIATE=1; shift ;;
+        # Driver-level workflow config (already consumed by the pre-scan
+        # above; skipped here without an error so the loop stays uniform
+        # and later CLI flags — which by policy WIN over YAML — parse
+        # normally).
+        --config)                shift 2 ;;
         # Per-step config files (yaml passthrough)
         --step1-config)          STEP1_CONFIG="$2"; shift 2 ;;
         --step3-config)          STEP3_CONFIG="$2"; shift 2 ;;

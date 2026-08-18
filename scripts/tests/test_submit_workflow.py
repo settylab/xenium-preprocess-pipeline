@@ -822,6 +822,65 @@ def test_start_step_3_submits_step3_and_step4_only(env, tmp_path):
     assert records[1]["dependency"] == f"afterok:{records[0]['jobid']}", records[1]
 
 
+def _write_config(tmp_path, body: str) -> str:
+    p = tmp_path / "workflow_config.yaml"
+    p.write_text(body)
+    return str(p)
+
+
+def test_workflow_config_seeds_driver_defaults(env, tmp_path):
+    # --config <path> populates sample_id / flex_h5ad / celltype-marker-json
+    # + a per-step named param so the chain runs without repeating them on
+    # the CLI. Assert (1) the run submits, (2) the STEP3 named param
+    # threads through to the sbatch --export payload.
+    flex = _flex_h5ad(tmp_path)
+    marker = _marker_json(tmp_path)
+    cfg = _write_config(tmp_path, textwrap.dedent(f"""\
+        sample_id: MH10
+        flex_h5ad: {flex}
+        celltype_marker_json: {marker}
+        step3:
+          donor_borrow_cap: 137
+    """))
+    r = _run_driver(env, "--config", cfg)
+    assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
+    records = _parse_log(env["log"])
+    assert len(records) == 3
+    step3 = next(r for r in records if r["script"].endswith("submit_step3.sbatch"))
+    assert "STEP3_DONOR_BORROW_CAP=137" in step3["export"]
+
+
+def test_workflow_config_cli_wins_over_yaml(env, tmp_path):
+    # CLI flags override YAML defaults — precedence rule Tracy insisted on.
+    flex = _flex_h5ad(tmp_path)
+    marker = _marker_json(tmp_path)
+    cfg = _write_config(tmp_path, textwrap.dedent(f"""\
+        sample_id: WRONG_FROM_YAML
+        flex_h5ad: {flex}
+        celltype_marker_json: {marker}
+        step3:
+          donor_borrow_cap: 999
+    """))
+    r = _run_driver(env, "--config", cfg,
+                    "--sample-id", "MH10",
+                    "--step3-donor-borrow-cap", "42")
+    assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
+    records = _parse_log(env["log"])
+    step1 = next(r for r in records if r["script"].endswith("submit_step1.sbatch"))
+    # CLI --sample-id wins over YAML sample_id.
+    assert "SAMPLE=MH10" in step1["export"]
+    step3 = next(r for r in records if r["script"].endswith("submit_step3.sbatch"))
+    # CLI --step3-donor-borrow-cap wins over YAML step3.donor_borrow_cap.
+    assert "STEP3_DONOR_BORROW_CAP=42" in step3["export"]
+
+
+def test_workflow_config_missing_file_fails_loud(env, tmp_path):
+    r = _run_driver(env, "--config", str(tmp_path / "no_such.yaml"),
+                    "--sample-id", "MH10")
+    assert r.returncode != 0
+    assert "not found" in r.stderr
+
+
 def test_start_step_semantic_alias_ref_build(env, tmp_path):
     # `ref-build` is the semantic alias for numeric `3`; the two must
     # take identical paths through the driver.

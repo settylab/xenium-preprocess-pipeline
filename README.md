@@ -229,6 +229,49 @@ The full effective config for a run is recorded at
 
 Per-step docs live under each package's `docs/` directory.
 
+### Driver-level `--config` (per-run YAML)
+
+`scripts/submit_workflow.sh` accepts `--config <path>`. The file gathers
+the values you'd otherwise pass as CLI flags to the driver — no shared
+folder needed; inputs point at any absolute path. CLI flags on the
+same invocation win over the YAML, so the file is a defaults source you
+can layer overrides on top of.
+
+Recommended location: colocated with the run's outputs at
+`<output_root>/<sample>/<sample>_<run_id>/config.yaml`.
+
+```yaml
+# runs/MH10/MH10_cap100/config.yaml
+sample_id: MH10
+run_id: cap100
+output_root: /fh/fast/setty_m/user/ryang/workflow_runs
+
+flex_h5ad: /fh/fast/setty_m/user/ryang/data/MH10_flex.h5ad
+celltype_marker_json: /fh/fast/setty_m/user/ryang/data/markers.json
+
+# Optional step-4 explicit inputs — bypasses the run-folder layout
+# auto-discovery. Use to mix a test_object from one sample with a
+# reference from another.
+test_object:   /fh/fast/setty_m/user/ryang/other/MH3_test_object.rds
+reference_rds: /fh/fast/setty_m/user/ryang/refs/MH2_scRNA_ref.rds
+
+step1:
+  x_source: maxpost_counts
+  qc_min_counts_cell: 10
+step3:
+  donor_borrow_cap: 100
+step4:
+  umi_min: 10
+  doublet_mode: doublet
+```
+
+```bash
+./scripts/submit_workflow.sh --config runs/MH10/MH10_cap100/config.yaml
+# CLI still wins — same YAML with a knob overridden:
+./scripts/submit_workflow.sh --config runs/MH10/MH10_cap100/config.yaml \
+    --step3-donor-borrow-cap 200
+```
+
 ## Outputs
 
 All three steps write into a single run folder:
