@@ -11,12 +11,20 @@ item 3):
   Unknown levels fall back to a neutral gray so a new SPLIT
   release adding a category doesn't crash the plot.
 - ``celltype_color_map(levels)`` — deterministic per-name mapping
-  from ``first_type`` labels onto the tab20 palette. The color
-  each celltype receives is a stable function of its name string
-  (hash-based mod 20), so the SAME celltype gets the SAME color
-  across every sample the pipeline runs — even though each
-  sample's ``first_type`` set is different. Sorted alphabetically
-  in the returned dict for readable JSON dumps.
+  from ``first_type`` labels onto a high-contrast qualitative
+  palette. Common tumor-microenvironment celltypes (Liver, Tumor,
+  Myeloid, Hepatocyte, T cell, B cell, Macrophage, Endothelial,
+  Fibroblast, Stroma) receive fixed, maximally distinct hues so
+  the summary HTML never renders them in confusable neighboring
+  shades. Unknown celltypes fall back to a hash-based lookup into
+  a curated 16-hue palette — no light/dark pairs, unlike tab20 —
+  so any two celltypes render in visually distinct colors. The
+  color each celltype receives is a stable function of its name
+  (hash-based for unknowns, direct lookup for the known set),
+  so the SAME celltype gets the SAME color across every sample
+  the pipeline runs — even though each sample's ``first_type``
+  set is different. Sorted alphabetically in the returned dict
+  for readable JSON dumps.
 
 Both functions return dicts mapping string level → ``#rrggbb`` hex
 string; that shape drops straight into matplotlib's ``color=``
@@ -65,21 +73,58 @@ _PURIFICATION_STATUS_FALLBACK: tuple[str, ...] = (
 )
 
 
-# tab20 hex codes (RGB tuples converted). Matches matplotlib's
-# 'tab20' qualitative cmap so downstream notebooks that render
-# celltype legends with `plt.get_cmap('tab20')` see the same
-# colors.
-_TAB20_HEX: tuple[str, ...] = (
-    "#1f77b4", "#aec7e8",
-    "#ff7f0e", "#ffbb78",
-    "#2ca02c", "#98df8a",
-    "#d62728", "#ff9896",
-    "#9467bd", "#c5b0d5",
-    "#8c564b", "#c49c94",
-    "#e377c2", "#f7b6d2",
-    "#7f7f7f", "#c7c7c7",
-    "#bcbd22", "#dbdb8d",
-    "#17becf", "#9edae5",
+# Fixed, maximally-distinct color assignments for common
+# celltypes seen in Setty-lab tumor-microenvironment samples.
+# Case-insensitive key — the returned dict preserves the caller's
+# spelling. Chosen so Tracy's specific complaint on issue #26
+# (Liver / Tumor / Myeloid rendering in confusable shades)
+# cannot recur regardless of the fallback palette's hashing.
+_CELLTYPE_KNOWN: dict[str, str] = {
+    "liver":       "#08306B",  # midnight blue
+    "tumor":       "#B22222",  # firebrick red
+    "myeloid":     "#E69F00",  # Okabe-Ito orange
+    "hepatocyte":  "#6A3D9A",  # deep purple
+    "t cell":      "#009E73",  # Okabe-Ito bluish green
+    "t_cell":      "#009E73",
+    "tcell":       "#009E73",
+    "b cell":      "#F0E442",  # Okabe-Ito yellow
+    "b_cell":      "#F0E442",
+    "bcell":       "#F0E442",
+    "nk cell":     "#CC79A7",  # Okabe-Ito reddish purple
+    "nk_cell":     "#CC79A7",
+    "nkcell":      "#CC79A7",
+    "macrophage":  "#7B3F00",  # dark chocolate brown
+    "endothelial": "#56B4E9",  # Okabe-Ito sky blue
+    "fibroblast":  "#008080",  # teal
+    "stroma":      "#4D4D4D",  # dark gray
+    "stromal":     "#4D4D4D",
+}
+
+
+# Curated 16-hue qualitative palette for unknown celltypes.
+# Replaces matplotlib's `tab20`, which pairs every color with a
+# lighter version (hash collisions → confusable neighboring
+# shades — the root cause of Tracy's Liver/Tumor/Myeloid
+# complaint). Colors sourced from Trubetskoy's "20 distinct
+# colors" set, filtered to drop pale pastels that lose contrast
+# on a white background.
+_CELLTYPE_FALLBACK: tuple[str, ...] = (
+    "#e6194b",  # crimson red
+    "#3cb44b",  # medium green
+    "#4363d8",  # bright blue
+    "#f58231",  # bright orange
+    "#911eb4",  # purple
+    "#469990",  # teal-green
+    "#9a6324",  # brown
+    "#f032e6",  # magenta
+    "#800000",  # maroon
+    "#808000",  # olive
+    "#000075",  # navy
+    "#42d4f4",  # cyan
+    "#bfef45",  # lime
+    "#a9a9a9",  # medium gray
+    "#ffe119",  # bright yellow
+    "#dcbeff",  # lavender
 )
 
 
@@ -128,22 +173,32 @@ def _hash_index(name: str, n: int) -> int:
 
 
 def celltype_color_map(levels) -> dict[str, str]:
-    """Return a color map for celltype labels using a deterministic
-    per-name hash → tab20 lookup.
+    """Return a color map for celltype labels.
+
+    Common celltypes (Liver, Tumor, Myeloid, Hepatocyte, T cell,
+    B cell, NK cell, Macrophage, Endothelial, Fibroblast, Stroma;
+    case-insensitive) receive fixed maximally-distinct hues.
+    All other names get a deterministic per-name hash lookup into
+    a 16-hue high-contrast palette.
 
     Consistency guarantee: two pipeline invocations that see the
     same celltype name produce the same hex color. That gives
     cross-sample color consistency without needing a globally
-    shared celltype list.
+    shared celltype list. Adding a new celltype to ``levels``
+    never shifts colors of others.
 
-    Empty/missing labels map to gray. Occasional colour collisions
-    are possible (two celltypes hashing to the same tab20 slot)
-    but rare with typical sample sizes.
+    Empty/missing labels map to gray.
     """
     result: dict[str, str] = {}
     for lv in sorted({_normalize(l) for l in levels}):
         if lv == "":
             result[lv] = "#BBBBBB"
             continue
-        result[lv] = _TAB20_HEX[_hash_index(lv, len(_TAB20_HEX))]
+        known = _CELLTYPE_KNOWN.get(lv.lower())
+        if known is not None:
+            result[lv] = known
+            continue
+        result[lv] = _CELLTYPE_FALLBACK[
+            _hash_index(lv, len(_CELLTYPE_FALLBACK))
+        ]
     return result

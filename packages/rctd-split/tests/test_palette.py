@@ -74,3 +74,19 @@ class TestCelltypeColorMap:
     def test_empty_string_is_gray(self):
         m = celltype_color_map(["T cell", ""])
         assert m[""] == "#BBBBBB"
+
+    def test_liver_tumor_myeloid_are_high_contrast(self):
+        """Tracy's ask on TracyY123-nexus#26 comment 5334450782:
+        Liver / Tumor / Myeloid must render in visually distinct
+        colors, not the confusable neighboring shades tab20 gave
+        them under hash collisions."""
+        m = celltype_color_map(["Liver", "Tumor", "Myeloid"])
+        assert m["Liver"] == "#08306B"    # midnight blue
+        assert m["Tumor"] == "#B22222"    # firebrick red
+        assert m["Myeloid"] == "#E69F00"  # Okabe-Ito orange
+
+    def test_known_lookup_is_case_insensitive(self):
+        m = celltype_color_map(["liver", "TUMOR", "Myeloid"])
+        assert m["liver"] == "#08306B"
+        assert m["TUMOR"] == "#B22222"
+        assert m["Myeloid"] == "#E69F00"

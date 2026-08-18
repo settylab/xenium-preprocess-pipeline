@@ -795,10 +795,14 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   <div class="caption">
     From <code>proseg_purified.h5ad</code>, obs column
     <code>first_type</code> (RCTD celltype label). Distinct labels:
-    {n_first_type_levels}. Colors are a deterministic per-name
-    hash into tab20, so the same celltype receives the same
-    color across every sample this pipeline runs; the full
-    mapping is dumped to <code>{color_map_json_name}</code>.
+    {n_first_type_levels}. Colors: common celltypes (Liver,
+    Tumor, Myeloid, Hepatocyte, T/B/NK cell, Macrophage,
+    Endothelial, Fibroblast, Stroma) receive fixed
+    maximally-distinct hues; other names get a deterministic
+    per-name hash into a 16-hue high-contrast palette, so the
+    same celltype receives the same color across every sample
+    this pipeline runs; the full mapping is dumped to
+    <code>{color_map_json_name}</code>.
   </div>
 </div>
 
