@@ -792,6 +792,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   </div>
 </div>
 
+{extra_reports_section}
 <h2>Provenance</h2>
 <table>
   <tbody>
@@ -809,6 +810,77 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 </body>
 </html>
 """
+
+
+def _render_extra_reports_section(
+    extra_reports: list[dict], summary_dir_path: Path,
+) -> str:
+    """Render the "Extra reports" HTML section from a list of
+    ``{"path": str, "name": str}`` dicts.
+
+    For each entry:
+      * If the file exists AND lives under ``summary_dir_path``, use
+        the relative path so the section works after moving the
+        summary/ folder.
+      * Otherwise, keep the absolute path (still opens locally in a
+        browser). A small ``(missing at path)`` note is appended
+        when the file cannot be resolved at render time.
+      * A sandboxed iframe embeds the report inline; a plain <a>
+        link falls under it so the reader always has a click-through
+        even if the iframe is blocked (some browsers reject
+        ``file://`` iframes).
+
+    An empty ``extra_reports`` list renders as an empty string —
+    the enclosing section vanishes entirely.
+    """
+    if not extra_reports:
+        return ""
+
+    lines = ["<h2>Additional reports</h2>"]
+    lines.append(
+        "<p class=\"meta\">External HTML reports linked from this "
+        "run (via <code>qc_report.extra_reports</code> in the config "
+        "or repeated <code>--extra-report PATH,NAME</code> CLI flags).</p>"
+    )
+    for entry in extra_reports:
+        raw_path = str(entry["path"])
+        raw_name = str(entry["name"])
+        resolved = Path(raw_path)
+        href_target = raw_path
+        missing_note = ""
+        if resolved.exists():
+            try:
+                rel = resolved.resolve().relative_to(
+                    summary_dir_path.resolve()
+                )
+                href_target = str(rel)
+            except ValueError:
+                href_target = str(resolved.resolve())
+        else:
+            missing_note = (
+                f" <span style=\"color:#a33\">"
+                f"(missing at render time: {html.escape(raw_path)})</span>"
+            )
+        safe_name = html.escape(raw_name)
+        safe_href = html.escape(href_target, quote=True)
+        lines.append(
+            f"<h3>{safe_name}{missing_note}</h3>"
+        )
+        lines.append(
+            f"<p class=\"meta\">Source: <code>{html.escape(raw_path)}</code> "
+            f"— <a href=\"{safe_href}\" target=\"_blank\" "
+            "rel=\"noopener\">open in new tab</a>.</p>"
+        )
+        lines.append(
+            "<div class=\"plot\">"
+            f"<iframe src=\"{safe_href}\" "
+            "width=\"1000\" height=\"700\" "
+            "sandbox=\"allow-same-origin allow-popups\" "
+            "style=\"border: 1px solid #ddd;\">"
+            "</iframe>"
+            "</div>"
+        )
+    return "\n".join(lines)
 
 
 def _render_rctd_spot_class_rows(rctd: dict) -> str:
@@ -895,6 +967,7 @@ def _render_html(
     resolved_config_path_str: str,
     resolved_config_text: str,
     color_map_json_name: str,
+    extra_reports_section: str,
 ) -> None:
     rows_html = "\n    ".join(
         (
@@ -956,6 +1029,7 @@ def _render_html(
         resolved_config_path_str=_html_escape(resolved_config_path_str),
         resolved_config_text=_html_escape(resolved_config_text),
         color_map_json_name=color_map_json_name,
+        extra_reports_section=extra_reports_section,
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     tmp = out_path.with_suffix(out_path.suffix + ".tmp")
@@ -1107,6 +1181,7 @@ def run_qc_report(
     raw_layer: str,
     force_rerun: bool,
     invoking_argv: list[str] | None = None,
+    extra_reports: list[dict] | None = None,
 ) -> Path:
     """Generate QC HTML report + plots. Returns the sentinel path.
 
@@ -1117,6 +1192,13 @@ def run_qc_report(
     entrypoint (`sys.argv`) and rendered verbatim into the HTML
     report's Provenance section along with the merged config.yaml
     contents (settylab/TracyY123-nexus#26 comment 5320970944, item 5).
+
+    ``extra_reports`` is an optional list of
+    ``{"path": str, "name": str}`` dicts. For each entry the report
+    appends a labeled iframe + a click-through link to the external
+    HTML at the bottom of the summary_report.html (Tracy's ask on
+    settylab/TracyY123-nexus#26 comment 5322126093, item 4). None or
+    empty list = no extra section rendered.
     """
     import time
 
@@ -1317,6 +1399,27 @@ def run_qc_report(
     _write_rctd_summary_csv(rctd_summary_csv, rctd_summary)
     log(f"[qc_report] wrote RCTD summary {rctd_summary_csv}")
 
+    # Validate + normalize the optional extra_reports list once here
+    # so a malformed config fails fast BEFORE the HTML render.
+    normalized_extra: list[dict] = []
+    for entry in (extra_reports or []):
+        if not isinstance(entry, dict) or "path" not in entry or "name" not in entry:
+            raise SystemExit(
+                f"[qc_report] extra_reports entry must be a dict with "
+                f"'path' and 'name' keys; got {entry!r}"
+            )
+        normalized_extra.append(
+            {"path": str(entry["path"]), "name": str(entry["name"])}
+        )
+    if normalized_extra:
+        log(f"[qc_report] extra_reports: {len(normalized_extra)} entry/entries "
+            f"({[e['name'] for e in normalized_extra]})")
+
+    extra_reports_section = _render_extra_reports_section(
+        normalized_extra,
+        summary_dir(output_root, sample_id, run_id),
+    )
+
     # Provenance: capture the invoking command line + full merged
     # config content so the HTML report can render both. Missing
     # config file (never written) or missing argv (called from a
@@ -1368,6 +1471,7 @@ def run_qc_report(
         resolved_config_path_str=str(resolved_yaml),
         resolved_config_text=resolved_config_text,
         color_map_json_name=color_map_path.name,
+        extra_reports_section=extra_reports_section,
     )
     log(f"[qc_report] wrote HTML {html_out}")
 

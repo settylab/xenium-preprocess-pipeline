@@ -800,3 +800,79 @@ def test_qc_report_read_hist_thresholds_unit(tmp_path: Path):
     got = _read_hist_thresholds(bad)
     assert got["raw"] is None
     assert got["purified"] is None
+
+
+# ---------------------------------------------------------------------------
+# extra_reports (Tracy comment 5322126093, item 4)
+# ---------------------------------------------------------------------------
+
+
+def test_qc_report_extra_reports_absent_no_section(tmp_path: Path):
+    """No extra_reports = no "Additional reports" heading in the HTML."""
+    from rctd_split._internal.layout import summary_path
+    from rctd_split.stages.qc_report import run_qc_report
+
+    output_root, _, _, _ = _setup_run(tmp_path)
+    run_qc_report(
+        sample_id=SAMPLE, run_id=RUN_ID,
+        output_root=output_root, force_rerun=False,
+        **_DEFAULT_CALL,
+    )
+    body = summary_path(output_root, SAMPLE, RUN_ID, "html_report").read_text()
+    assert "Additional reports" not in body
+
+
+def test_qc_report_extra_reports_renders_section(tmp_path: Path):
+    """When present, the section renders one heading + iframe + link
+    per entry, and the source path appears verbatim in the caption."""
+    from rctd_split._internal.layout import summary_path
+    from rctd_split.stages.qc_report import run_qc_report
+
+    output_root, _, _, _ = _setup_run(tmp_path)
+
+    # Put one external report next to the summary/ output; it should
+    # be resolved to a RELATIVE path in the href (portable summary/).
+    external = tmp_path / "external_diagnostics.html"
+    external.write_text("<html><body>hello</body></html>")
+
+    run_qc_report(
+        sample_id=SAMPLE, run_id=RUN_ID,
+        output_root=output_root, force_rerun=False,
+        extra_reports=[
+            {"path": str(external),
+             "name": "MH-alt diagnostics, run #7"},
+            {"path": "/does/not/exist.html",
+             "name": "missing on purpose"},
+        ],
+        **_DEFAULT_CALL,
+    )
+    body = summary_path(output_root, SAMPLE, RUN_ID, "html_report").read_text()
+
+    assert "Additional reports" in body
+    # Display name (with an embedded comma) survives round-trip.
+    assert "MH-alt diagnostics, run #7" in body
+    assert "missing on purpose" in body
+    # Missing file gets an inline "missing at render time" note.
+    assert "missing at render time" in body
+    # Source paths are surfaced verbatim in the meta line.
+    assert "external_diagnostics.html" in body
+    assert "/does/not/exist.html" in body
+    # An iframe embeds each report.
+    assert body.count("<iframe") == 2
+
+
+def test_qc_report_extra_reports_rejects_malformed(tmp_path: Path):
+    """A malformed entry (missing 'path' or 'name') is rejected
+    fail-loud before the HTML is written."""
+    import pytest
+
+    from rctd_split.stages.qc_report import run_qc_report
+
+    output_root, _, _, _ = _setup_run(tmp_path)
+    with pytest.raises(SystemExit):
+        run_qc_report(
+            sample_id=SAMPLE, run_id=RUN_ID,
+            output_root=output_root, force_rerun=False,
+            extra_reports=[{"path": "/tmp/foo.html"}],  # missing name
+            **_DEFAULT_CALL,
+        )

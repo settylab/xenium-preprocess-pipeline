@@ -6,6 +6,21 @@ All notable changes to rctd-split will be documented here. Follows
 ## [Unreleased]
 
 ### Added
+- `qc_report`: optional `extra_reports` list appends external HTML
+  reports to the bottom of `summary_report.html` (Tracy's ask on
+  `settylab/TracyY123-nexus#26` comment 5322126093, item 4).
+  Each entry is a `{path, name}` dict; the report renders each as
+  an `<h3>` heading + click-through `<a>` link + sandboxed inline
+  iframe. When the linked file lives under `summary/`, the path
+  is rewritten as relative so the folder stays portable; otherwise
+  the absolute path is used. Missing files render a visible
+  "missing at render time" note rather than a broken link.
+  Interfaces:
+  - Config YAML: `qc_report.extra_reports: [{path: ..., name: ...}, ...]`.
+    Wire in via `--config` on `rctd-split run` or `--step4-config`
+    on the workflow driver.
+  - CLI: `rctd-split run --extra-report PATH,NAME` (repeatable;
+    first-comma split lets the display name contain commas).
 - `qc_report`: fixed color maps for the `purification_status`
   and `first_type` categorical UMAPs so colors stay consistent
   across samples (Tracy's ask on `settylab/TracyY123-nexus#26`

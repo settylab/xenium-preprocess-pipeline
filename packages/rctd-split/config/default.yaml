@@ -194,3 +194,14 @@ qc_report:
   # comment (internal); canonical layer name confirmed against step-1
   # proseg export in comment (internal)). Fail loud when absent.
   raw_layer: maxpost_counts
+  # Optional: append links to external HTML reports at the bottom
+  # of `<sample>_summary_report.html`. Each entry needs `path`
+  # (absolute or relative to CWD) and `name` (display label used
+  # as the section heading + link text). Empty list = no section.
+  # Example:
+  #   extra_reports:
+  #     - path: /fh/fast/setty_m/user/ryang/runs/MH10/altref_report.html
+  #       name: MH10 alt-ref comparison
+  #     - path: notes/preproc_diagnostics.html
+  #       name: Pre-processing diagnostics (proseg run #7)
+  extra_reports: []
