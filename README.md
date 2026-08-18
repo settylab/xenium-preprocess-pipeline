@@ -301,6 +301,36 @@ All three steps write into a single run folder:
     └── workflow-submit.log               # authoritative record of jobids + dep chain
 ```
 
+### What `spatial_adata/provenance/` is
+
+Written only when `xenium-preprocess` is invoked with
+`--proseg-run-script <path>` (or the equivalent
+`proseg_to_anndata.proseg_run_script` key in the config).
+The `proseg_to_anndata` stage then copies that shell script
+verbatim into `spatial_adata/provenance/<script-name>` alongside
+the `.h5ad` outputs.
+
+Purpose: audit trail. `<sample>_proseg_raw.h5ad` is downstream
+of the proseg run; `provenance/` records the exact upstream
+invocation (proseg CLI flags, model params, seed) that produced
+those counts, so a reader of the run folder can trace the
+raw h5ad back to the proseg invocation without having to
+consult external notes.
+
+Note that this is NOT the same as the "Provenance" section in
+`summary/<sample>_summary_report.html`, which captures the
+step-4 QC report's own invocation (`sys.argv`), merged
+`config.yaml`, and package versions. Both exist:
+
+- `spatial_adata/provenance/` = the proseg-run script that
+  produced the input counts (populated by step 1).
+- `summary/<sample>_summary_report.html` "Provenance" section
+  = step 4's Python invocation + merged config + package
+  versions (populated by step 4's `qc_report`).
+
+If `--proseg-run-script` was not supplied, the folder is
+omitted (no empty directory left behind).
+
 ## Testing
 
 ```bash
