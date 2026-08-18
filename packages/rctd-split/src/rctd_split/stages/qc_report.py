@@ -72,12 +72,17 @@ from pathlib import Path
 from rctd_split._internal.compat import sentinel_exists
 from rctd_split._internal.layout import (
     intermediate_path,
+    summary_dir,
     summary_path,
     summary_plots_dir,
     resolved_config_path,
     spatial_adata_path,
 )
 from rctd_split._internal.logging import log
+from rctd_split._internal.palette import (
+    celltype_color_map,
+    purification_status_color_map,
+)
 
 
 # Canonical RCTD spot_class values (spacexr, post
@@ -563,9 +568,18 @@ def _scatter_umap(
     title: str,
     out_path: Path,
     categorical: bool,
+    color_map: dict[str, str] | None = None,
 ):
     """Draw a single 2D-scatter UMAP colored by `values` and save to
-    `out_path`. `categorical` picks discrete legend rendering."""
+    `out_path`. `categorical` picks discrete legend rendering.
+
+    ``color_map`` (optional): dict mapping normalized string level
+    → hex color. When provided, each level draws with its mapped
+    color instead of the auto-assigned tab20 slot; unmapped
+    levels fall back to gray. Used for cross-sample color
+    consistency on categorical fields — see
+    ``rctd_split._internal.palette``.
+    """
     import numpy as np
     import pandas as pd
 
@@ -577,10 +591,14 @@ def _scatter_umap(
         cmap = plt.get_cmap(_PALETTE, max(len(uniq), 1))
         for i, level in enumerate(uniq):
             mask = (vals == level).to_numpy()
+            if color_map is not None:
+                color = color_map.get(level, "#BBBBBB")
+            else:
+                color = cmap(i)
             ax.scatter(
                 umap_xy[mask, 0], umap_xy[mask, 1],
                 s=_PLOT_POINT_SIZE, alpha=_PLOT_ALPHA,
-                color=cmap(i),
+                color=color,
                 label=str(level) if level else "(empty)",
                 linewidths=0,
             )
@@ -746,6 +764,9 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     From <code>proseg_purified.h5ad</code>, obs column
     <code>{purification_status_column}</code> (SPLIT-native categorical
     from <code>SPLIT::purify</code>). Distinct labels: {n_purification_status_levels}.
+    Colors are fixed per level (high-contrast Wong palette); the
+    full mapping is dumped to
+    <code>{color_map_json_name}</code> for downstream reuse.
   </div>
 </div>
 
@@ -764,7 +785,10 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   <div class="caption">
     From <code>proseg_purified.h5ad</code>, obs column
     <code>first_type</code> (RCTD celltype label). Distinct labels:
-    {n_first_type_levels}.
+    {n_first_type_levels}. Colors are a deterministic per-name
+    hash into tab20, so the same celltype receives the same
+    color across every sample this pipeline runs; the full
+    mapping is dumped to <code>{color_map_json_name}</code>.
   </div>
 </div>
 
@@ -870,6 +894,7 @@ def _render_html(
     invoking_command: str,
     resolved_config_path_str: str,
     resolved_config_text: str,
+    color_map_json_name: str,
 ) -> None:
     rows_html = "\n    ".join(
         (
@@ -930,6 +955,7 @@ def _render_html(
         invoking_command=_html_escape(invoking_command),
         resolved_config_path_str=_html_escape(resolved_config_path_str),
         resolved_config_text=_html_escape(resolved_config_text),
+        color_map_json_name=color_map_json_name,
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     tmp = out_path.with_suffix(out_path.suffix + ".tmp")
@@ -954,6 +980,27 @@ def _pkg_versions() -> str:
         except Exception:
             parts.append(f"{name}=missing")
     return ", ".join(parts)
+
+
+def _write_color_map_json(
+    out_path: Path,
+    *,
+    purification_status: dict[str, str],
+    first_type: dict[str, str],
+) -> None:
+    """Persist the qc_report color maps to a JSON sidecar so
+    downstream plots (or a rerun) can reproduce the same
+    per-level colors."""
+    import json
+
+    payload = {
+        "purification_status": dict(purification_status),
+        "first_type": dict(first_type),
+    }
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = out_path.with_suffix(out_path.suffix + ".tmp")
+    tmp.write_text(json.dumps(payload, indent=2, sort_keys=True))
+    os.replace(tmp, out_path)
 
 
 def _write_metrics_csv(
@@ -1196,12 +1243,21 @@ def run_qc_report(
         plots_dir / f"{sample_id}_hist_nCount_Proseg_proseg_purified.png"
     )
 
+    purification_cmap = purification_status_color_map(
+        purification_status_values
+    )
+    first_type_cmap = celltype_color_map(first_type_values)
+    log(f"[qc_report] purification_status color map: "
+        f"{len(purification_cmap)} levels")
+    log(f"[qc_report] celltype color map: {len(first_type_cmap)} levels")
+
     log(f"[qc_report] writing plot {img_purification}")
     _scatter_umap(
         plt, umap_xy, purification_status_values,
         title=f"{sample_id}: purification_status",
         out_path=img_purification,
         categorical=True,
+        color_map=purification_cmap,
     )
     log(f"[qc_report] writing plot {img_leiden}")
     _scatter_umap(
@@ -1216,7 +1272,20 @@ def run_qc_report(
         title=f"{sample_id}: SPLIT-inferred celltype",
         out_path=img_first_type,
         categorical=True,
+        color_map=first_type_cmap,
     )
+
+    # Persist the color maps alongside the HTML so downstream
+    # consumers can reproduce the same coloring.
+    color_map_path = summary_dir(output_root, sample_id, run_id) / (
+        f"{sample_id}_color_map.json"
+    )
+    _write_color_map_json(
+        color_map_path,
+        purification_status=purification_cmap,
+        first_type=first_type_cmap,
+    )
+    log(f"[qc_report] wrote color map {color_map_path}")
     log(f"[qc_report] writing histogram {img_hist_raw}")
     _hist_log10_counts(
         plt, hist_raw_vals,
@@ -1298,6 +1367,7 @@ def run_qc_report(
         invoking_command=invoking_command,
         resolved_config_path_str=str(resolved_yaml),
         resolved_config_text=resolved_config_text,
+        color_map_json_name=color_map_path.name,
     )
     log(f"[qc_report] wrote HTML {html_out}")
 

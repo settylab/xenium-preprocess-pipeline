@@ -332,6 +332,20 @@ def test_qc_report_happy_path(tmp_path: Path):
     rctd_csv = summary_path(output_root, SAMPLE, RUN_ID, "rctd_summary_csv")
     assert rctd_csv.exists()
 
+    # Color map JSON sidecar is written alongside the HTML report;
+    # both categorical keys are present so downstream consumers can
+    # reproduce the fixed per-level coloring.
+    import json
+    from rctd_split._internal.layout import summary_dir
+    color_map_path = summary_dir(output_root, SAMPLE, RUN_ID) / (
+        f"{SAMPLE}_color_map.json"
+    )
+    assert color_map_path.exists()
+    color_map = json.loads(color_map_path.read_text())
+    assert set(color_map.keys()) == {"purification_status", "first_type"}
+    # The HTML captions link to the JSON sidecar by basename.
+    assert color_map_path.name in body
+
 
 def test_qc_report_html_provenance_section(tmp_path: Path):
     """Provenance section in the HTML captures the invoking command line

@@ -5,6 +5,25 @@ All notable changes to rctd-split will be documented here. Follows
 
 ## [Unreleased]
 
+### Added
+- `qc_report`: fixed color maps for the `purification_status`
+  and `first_type` categorical UMAPs so colors stay consistent
+  across samples (Tracy's ask on `settylab/TracyY123-nexus#26`
+  comment 5322126093, item 3).
+  - `purification_status`: high-contrast Wong-derived palette;
+    `singlet` / `purified` → dark green, `reject` / `discarded`
+    → dark magenta, doublet variants get distinct hues, unknowns
+    fall through to a fallback cycle.
+  - `first_type` (SPLIT-inferred celltype): deterministic
+    per-name SHA-1 hash into the `tab20` palette. The SAME
+    celltype name gets the SAME hex color across every sample
+    the pipeline runs — no shared global celltype list required.
+  - Full color mapping is persisted to
+    `summary/<sample>_color_map.json` and linked from the two
+    UMAP captions in the HTML report for reproducibility.
+  - Palette lives in `rctd_split._internal.palette`;
+    `_scatter_umap` grew an optional `color_map` kwarg.
+
 ### Changed
 - `qc_report` HTML output filename renamed
   `<sample>_qc_report.html` → `<sample>_summary_report.html`
