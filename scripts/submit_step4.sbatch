@@ -22,6 +22,7 @@
 #     STEP4_DOUBLET_MODE   (optional)  Passed as --doublet-mode.
 #     STEP4_POSTPROCESS_MIN_COUNTS (opt.) Passed as --postprocess-min-counts.
 #     STEP4_KEEP_INTERMEDIATE (optional) If '1', passes --keep-intermediate.
+#     STEP4_FORCE_RERUN    (optional)  If '1', passes --force-rerun.
 #     STEP4_STAGE_COUNT    (optional)  Number of --stages entries
 #                                      (default 0 ⇒ rctd-split's DEFAULT_STAGES).
 #     STEP4_STAGE_N        (optional)  Nth stage name (N in 1..COUNT).
@@ -156,6 +157,9 @@ if [[ -n "${STEP4_POSTPROCESS_MIN_COUNTS:-}" ]]; then
 fi
 if [[ "${STEP4_KEEP_INTERMEDIATE:-0}" == "1" ]]; then
     NAMED_ARGS+=(--keep-intermediate)
+fi
+if [[ "${STEP4_FORCE_RERUN:-0}" == "1" ]]; then
+    NAMED_ARGS+=(--force-rerun)
 fi
 # Explicit test_object / reference_rds — MUTUAL both-or-neither (enforced
 # by submit_workflow.sh upstream, so we trust the invariant here and add

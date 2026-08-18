@@ -183,6 +183,7 @@ STEP3_CELL_MIN_INSTANCE=""       # --cell-min-instance       (int)
 STEP3_MIN_UMI=""                 # --min-umi                 (int)
 STEP3_RANDOM_SEED=""             # --random-seed             (int)
 STEP3_CELLTYPE_TARGET_LIST=""    # --celltype-target-list    (path)
+STEP3_FORCE_RERUN=0              # --force-rerun             (flag)
 # Step 4 (rctd-split)
 STEP4_UMI_MIN=""                 # --umi-min                    (int)
 STEP4_COUNTS_MIN=""              # --counts-min                 (int)
@@ -190,6 +191,7 @@ STEP4_CELL_MIN_INSTANCE=""       # --cell-min-instance          (int)
 STEP4_DOUBLET_MODE=""            # --doublet-mode               (str)
 STEP4_POSTPROCESS_MIN_COUNTS=""  # --postprocess-min-counts     (int)
 STEP4_KEEP_INTERMEDIATE=0        # --keep-intermediate          (flag)
+STEP4_FORCE_RERUN=0              # --force-rerun                (flag)
 
 # ---------------------------------------------------------------------------
 # Per-step --stages subset (settylab/TracyY123-nexus#26 comment 5332436239).
@@ -349,6 +351,7 @@ if isinstance(rb, dict):
     emit(       "STEP3_MIN_UMI",              rb.get("min_umi"))
     emit(       "STEP3_RANDOM_SEED",          rb.get("random_seed"))
     emit(       "STEP3_CELLTYPE_TARGET_LIST", rb.get("celltype_target_list"))
+    emit_flag(  "STEP3_FORCE_RERUN",          rb.get("force_rerun"))
     emit_stages("STEP3_STAGES",               rb.get("stages"))
 
 rs = cfg.get("rctd_split") or {}
@@ -359,6 +362,7 @@ if isinstance(rs, dict):
     emit(       "STEP4_DOUBLET_MODE",           rs.get("doublet_mode"))
     emit(       "STEP4_POSTPROCESS_MIN_COUNTS", rs.get("postprocess_min_counts"))
     emit_flag(  "STEP4_KEEP_INTERMEDIATE",      rs.get("keep_intermediate"))
+    emit_flag(  "STEP4_FORCE_RERUN",            rs.get("force_rerun"))
     emit_stages("STEP4_STAGES",                 rs.get("stages"))
 PY
     )
@@ -523,6 +527,10 @@ step CLI flag; empty ⇒ step CLI's default.yaml value):
                                       Default: 42.
     --step3-celltype-target-list <p>  census.celltype_target_list (path).
                                       Default: null (marker JSON keys).
+    --step3-force-rerun               Nuke step-3's per-stage sentinels
+                                      and re-run every selected stage.
+                                      Composes with --ref-build-stages
+                                      so a stage subset re-runs cleanly.
 
   Step 4 (rctd-split):
     --step4-umi-min <N>               rctd_run.UMI_min (int). Default: 10.
@@ -537,6 +545,10 @@ step CLI flag; empty ⇒ step CLI's default.yaml value):
                                       Default: 50.
     --step4-keep-intermediate         Keep <run_dir>/intermediate/ after
                                       step 4 completes. Default: drop.
+    --step4-force-rerun               Nuke step-4's per-stage sentinels
+                                      and re-run every selected stage.
+                                      Composes with --rctd-split-stages
+                                      so a stage subset re-runs cleanly.
 
 Sub-step (stage) subsetting
 (TracyY123-nexus#26 comment 5332436239; each step CLI accepts --stages
@@ -627,6 +639,7 @@ while [[ $# -gt 0 ]]; do
         --step3-min-umi)                 STEP3_MIN_UMI="$2"; shift 2 ;;
         --step3-random-seed)             STEP3_RANDOM_SEED="$2"; shift 2 ;;
         --step3-celltype-target-list)    STEP3_CELLTYPE_TARGET_LIST="$2"; shift 2 ;;
+        --step3-force-rerun)             STEP3_FORCE_RERUN=1; shift ;;
         # Step 4 named params
         --step4-umi-min)                 STEP4_UMI_MIN="$2"; shift 2 ;;
         --step4-counts-min)              STEP4_COUNTS_MIN="$2"; shift 2 ;;
@@ -634,6 +647,7 @@ while [[ $# -gt 0 ]]; do
         --step4-doublet-mode)            STEP4_DOUBLET_MODE="$2"; shift 2 ;;
         --step4-postprocess-min-counts)  STEP4_POSTPROCESS_MIN_COUNTS="$2"; shift 2 ;;
         --step4-keep-intermediate)       STEP4_KEEP_INTERMEDIATE=1; shift ;;
+        --step4-force-rerun)             STEP4_FORCE_RERUN=1; shift ;;
         # Per-step --stages: comma-separated subset of the step's VALID_STAGES.
         # Threaded to the step CLI as `--stages s1 s2 ...`. Composes with
         # --start-step (subsets the started step's stage list). Empty ⇒
@@ -975,6 +989,9 @@ fi
 if [[ -n "$STEP3_CELLTYPE_TARGET_LIST" ]]; then
     COMMON_EXPORTS="$COMMON_EXPORTS,STEP3_CELLTYPE_TARGET_LIST=$STEP3_CELLTYPE_TARGET_LIST"
 fi
+if [[ "$STEP3_FORCE_RERUN" -eq 1 ]]; then
+    COMMON_EXPORTS="$COMMON_EXPORTS,STEP3_FORCE_RERUN=1"
+fi
 # Step 4
 if [[ -n "$STEP4_UMI_MIN" ]]; then
     COMMON_EXPORTS="$COMMON_EXPORTS,STEP4_UMI_MIN=$STEP4_UMI_MIN"
@@ -993,6 +1010,9 @@ if [[ -n "$STEP4_POSTPROCESS_MIN_COUNTS" ]]; then
 fi
 if [[ "$STEP4_KEEP_INTERMEDIATE" -eq 1 ]]; then
     COMMON_EXPORTS="$COMMON_EXPORTS,STEP4_KEEP_INTERMEDIATE=1"
+fi
+if [[ "$STEP4_FORCE_RERUN" -eq 1 ]]; then
+    COMMON_EXPORTS="$COMMON_EXPORTS,STEP4_FORCE_RERUN=1"
 fi
 
 # ---------------------------------------------------------------------------

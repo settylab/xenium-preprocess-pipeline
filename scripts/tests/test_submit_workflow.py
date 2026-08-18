@@ -1097,7 +1097,8 @@ def test_step3_named_flags_threaded(env, tmp_path):
                     "--step3-cell-min-instance", "25",
                     "--step3-min-umi", "15",
                     "--step3-random-seed", "123",
-                    "--step3-celltype-target-list", str(target))
+                    "--step3-celltype-target-list", str(target),
+                    "--step3-force-rerun")
     assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
     log = _step3_log(env, "MH10", "s3flags")
     assert "donor_borrow_cap=80" in log
@@ -1105,6 +1106,7 @@ def test_step3_named_flags_threaded(env, tmp_path):
     assert "min_umi=15" in log
     assert "random_seed=123" in log
     assert f"celltype_target_list={target}" in log
+    assert "force_rerun=1" in log
 
 
 def test_step4_named_flags_threaded(env, tmp_path):
@@ -1118,7 +1120,8 @@ def test_step4_named_flags_threaded(env, tmp_path):
                     "--step4-cell-min-instance", "30",
                     "--step4-doublet-mode", "full",
                     "--step4-postprocess-min-counts", "75",
-                    "--step4-keep-intermediate")
+                    "--step4-keep-intermediate",
+                    "--step4-force-rerun")
     assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
     log = _step4_log(env, "MH10", "s4flags")
     assert "umi_min=20" in log
@@ -1127,6 +1130,7 @@ def test_step4_named_flags_threaded(env, tmp_path):
     assert "doublet_mode=full" in log
     assert "postprocess_min_counts=75" in log
     assert "keep_intermediate=1" in log
+    assert "force_rerun=1" in log
 
 
 def test_named_flags_unset_do_not_thread(env, tmp_path):
@@ -1147,9 +1151,11 @@ def test_named_flags_unset_do_not_thread(env, tmp_path):
             "STEP3_DONOR_BORROW_CAP", "STEP3_CELL_MIN_INSTANCE",
             "STEP3_MIN_UMI", "STEP3_RANDOM_SEED",
             "STEP3_CELLTYPE_TARGET_LIST",
+            "STEP3_FORCE_RERUN",
             "STEP4_UMI_MIN", "STEP4_COUNTS_MIN", "STEP4_CELL_MIN_INSTANCE",
             "STEP4_DOUBLET_MODE", "STEP4_POSTPROCESS_MIN_COUNTS",
             "STEP4_KEEP_INTERMEDIATE",
+            "STEP4_FORCE_RERUN",
             "STEP1_OVERRIDES_B64", "STEP3_OVERRIDES_B64",
             "STEP4_OVERRIDES_B64",
         ):
@@ -1340,9 +1346,11 @@ def test_help_lists_new_flags(env):
         "--step3-donor-borrow-cap", "--step3-cell-min-instance",
         "--step3-min-umi", "--step3-random-seed",
         "--step3-celltype-target-list",
+        "--step3-force-rerun",
         "--step4-umi-min", "--step4-counts-min",
         "--step4-cell-min-instance", "--step4-doublet-mode",
         "--step4-postprocess-min-counts", "--step4-keep-intermediate",
+        "--step4-force-rerun",
         "--stepN-config", "--override",
     ):
         assert flag in r.stdout, flag

@@ -45,6 +45,7 @@
 #     STEP3_MIN_UMI              (optional) Passed as --min-umi.
 #     STEP3_RANDOM_SEED          (optional) Passed as --random-seed.
 #     STEP3_CELLTYPE_TARGET_LIST (optional) Passed as --celltype-target-list.
+#     STEP3_FORCE_RERUN          (optional) If '1', passes --force-rerun.
 #     STEP3_STAGE_COUNT          (optional) Number of --stages entries
 #                                      (default 0 ⇒ ref-build's DEFAULT_STAGES).
 #     STEP3_STAGE_N              (optional) Nth stage name (N in 1..COUNT).
@@ -172,6 +173,9 @@ if [[ -n "${STEP3_RANDOM_SEED:-}" ]]; then
 fi
 if [[ -n "${STEP3_CELLTYPE_TARGET_LIST:-}" ]]; then
     NAMED_ARGS+=(--celltype-target-list "$STEP3_CELLTYPE_TARGET_LIST")
+fi
+if [[ "${STEP3_FORCE_RERUN:-0}" == "1" ]]; then
+    NAMED_ARGS+=(--force-rerun)
 fi
 
 # Expand the numbered STEP3_STAGE_* env vars set by submit_workflow.sh

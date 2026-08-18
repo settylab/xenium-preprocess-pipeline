@@ -24,6 +24,7 @@ cell_min_instance=""
 min_umi=""
 random_seed=""
 celltype_target_list=""
+force_rerun=0
 
 raw_argv=("$@")
 
@@ -43,6 +44,7 @@ while [[ $# -gt 0 ]]; do
         --min-umi)                min_umi="$2"; shift 2 ;;
         --random-seed)            random_seed="$2"; shift 2 ;;
         --celltype-target-list)   celltype_target_list="$2"; shift 2 ;;
+        --force-rerun)            force_rerun=1; shift ;;
         *) shift ;;
     esac
 done
@@ -77,6 +79,7 @@ mkdir -p "$run_dir/rctd" "$run_dir/logs"
     echo "min_umi=$min_umi"
     echo "random_seed=$random_seed"
     echo "celltype_target_list=$celltype_target_list"
+    echo "force_rerun=$force_rerun"
     echo "config_path=$config_path"
     if [[ -n "$config_path" && -f "$config_path" ]]; then
         echo "--- config yaml ---"
