@@ -1,0 +1,74 @@
+# configs/example.yaml — driver-level config for submit_workflow.sh
+#
+# Copy this file, edit the values you need, and run:
+#     ./scripts/submit_workflow.sh --config path/to/your_config.yaml
+#
+# CLI flags win over YAML — the file provides defaults you can override
+# per-invocation. Recommended per-run location (co-located with outputs):
+#     <output_root>/<sample>/<sample>_<run_id>/config.yaml
+#
+# Every scalar below is optional. Any key you omit falls through to the
+# driver's own default (or the step CLI's config/default.yaml for
+# per-step scalars). Per-step keys use the SEMANTIC step names
+# (xenium_preprocess / ref_build / rctd_split). Numeric step keys
+# (step1: / step3: / step4:) are rejected.
+
+# ---------------------------------------------------------------------------
+# Driver top-level scalars (each mirrors a submit_workflow.sh CLI flag).
+# ---------------------------------------------------------------------------
+
+sample_id: MH10                            # --sample-id
+run_id: cap100                             # --run-id
+output_root: /fh/fast/setty_m/user/ryang/workflow_runs   # --output-root
+
+# Step-1 required scRNA + marker inputs.
+flex_h5ad: /fh/fast/setty_m/user/ryang/data/MH10_flex.h5ad          # --flex-h5ad
+celltype_marker_json: /fh/fast/setty_m/user/ryang/data/markers.json # --celltype-marker-json
+
+# Step-1 optional named inputs (each defaults to the packaged config/default.yaml).
+# proseg_dir:         /fh/fast/setty_m/user/ryang/data/MH10/proseg        # --proseg-dir
+# xenium_cells:       /fh/fast/setty_m/user/ryang/data/MH10/cells.parquet # --xenium-cells
+# xenium_ranger_dir:  /fh/fast/setty_m/user/ryang/data/MH10/xenium_ranger # --xenium-ranger-dir
+
+# Step-4 explicit inputs — bypasses the run-folder auto-discovery of
+# rctd/<sample>_test_object.rds + rctd/<sample>_reference.rds.
+# MUTUAL: set both or neither. Use to mix test_object from one sample
+# with a reference from another.
+# test_object:   /fh/fast/setty_m/user/ryang/other/MH3_test_object.rds     # --test-object
+# reference_rds: /fh/fast/setty_m/user/ryang/refs/MH2_scRNA_ref.rds        # --reference-rds
+
+# Step-3 override — which .obs column ref-build reads for celltype label.
+# Default: Final_level1_celltype_annotation.
+# celltype_col_for_ref_build: Final_level1_celltype_annotation  # --celltype-col-for-ref-build
+
+# Step-4 RCTD parallelism (submit_step4.sbatch --cpus-per-task=16 cap).
+# Default: 12. Larger values oversubscribe the R workers.
+# max_cores: 12                                                 # --max-cores
+
+
+# ---------------------------------------------------------------------------
+# Per-step scalars — nested under the semantic step names.
+# Each key mirrors the matching --stepN-<param> CLI flag with underscores.
+# Uncomment only the ones you want to change from the packaged defaults.
+# ---------------------------------------------------------------------------
+
+xenium_preprocess:
+  x_source: maxpost_counts         # --step1-x-source           (maxpost_counts|expected_counts). Default: maxpost_counts
+  qc_min_counts_cell: 10           # --step1-qc-min-counts-cell (int).  Default: 10
+  # gex_only: true                 # --step1-gex-only           (bool). Default: true
+  # force_rerun: false             # --step1-force-rerun        (flag). Default: false
+
+ref_build:
+  donor_borrow_cap: 100            # --step3-donor-borrow-cap   (int).  Default: 100
+  # cell_min_instance: 20          # --step3-cell-min-instance  (int).  Default: 20
+  # min_umi: 10                    # --step3-min-umi            (int).  Default: 10
+  # random_seed: 42                # --step3-random-seed        (int).  Default: 42
+  # celltype_target_list: /path/to/targets.txt  # --step3-celltype-target-list. Default: null (marker JSON keys)
+
+rctd_split:
+  umi_min: 10                      # --step4-umi-min                 (int). Default: 10
+  doublet_mode: doublet            # --step4-doublet-mode            (str). Default: doublet
+  # counts_min: 10                 # --step4-counts-min              (int). Default: 10
+  # cell_min_instance: 20          # --step4-cell-min-instance       (int). Default: 20
+  # postprocess_min_counts: 50     # --step4-postprocess-min-counts  (int). Default: 50
+  # keep_intermediate: false       # --step4-keep-intermediate       (flag). Default: false

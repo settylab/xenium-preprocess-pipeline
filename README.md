@@ -246,6 +246,9 @@ Per-step keys use the **semantic step names** (`xenium_preprocess:`,
 landed alongside this feature. The driver refuses a numeric key
 loudly.
 
+A ready-to-copy template listing every supported key with comments
+lives at [`configs/example.yaml`](configs/example.yaml). Minimal shape:
+
 ```yaml
 # runs/MH10/MH10_cap100/config.yaml
 sample_id: MH10
