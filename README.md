@@ -290,6 +290,7 @@ All three steps write into a single run folder:
 ├── spatial_adata/                        # xenium-preprocess (rctd-split augments in place)
 │   ├── <sample>_proseg_raw.h5ad          # proseg cell×gene
 │   ├── <sample>_xenium_ranger.h5ad       # xenium-ranger cell×gene
+│   ├── <sample>_proseg_purified.h5ad     # rctd-split — SPLIT-purified cell×gene
 │   └── provenance/                       # verbatim copies of proseg-run scripts + configs
 ├── rctd/
 │   ├── <sample>_test_object.rds          # xenium-preprocess — RCTD test object (spatial query)
