@@ -333,6 +333,52 @@ def test_qc_report_happy_path(tmp_path: Path):
     assert rctd_csv.exists()
 
 
+def test_qc_report_html_provenance_section(tmp_path: Path):
+    """Provenance section in the HTML captures the invoking command line
+    and embeds the full merged config content (settylab/TracyY123-nexus#26
+    comment 5320970944, item 5)."""
+    from rctd_split._internal.layout import (
+        resolved_config_path,
+        summary_path,
+    )
+    from rctd_split.stages.qc_report import run_qc_report
+
+    output_root, _, _, _ = _setup_run(tmp_path)
+    argv = [
+        "rctd-split", "run",
+        "--sample-id", SAMPLE, "--run-id", RUN_ID,
+        "--output-root", str(output_root),
+    ]
+
+    run_qc_report(
+        sample_id=SAMPLE, run_id=RUN_ID,
+        output_root=output_root, force_rerun=False,
+        invoking_argv=argv,
+        **_DEFAULT_CALL,
+    )
+
+    body = summary_path(
+        output_root, SAMPLE, RUN_ID, "html_report",
+    ).read_text()
+
+    # Provenance heading + invocation row.
+    assert "<h2>Provenance</h2>" in body
+    assert "Invocation" in body
+    assert " ".join(argv) in body
+
+    # Resolved config path + full content embedded via <details>/<pre>.
+    cfg_path = str(resolved_config_path(output_root, SAMPLE, RUN_ID))
+    assert cfg_path in body
+    cfg_text = resolved_config_path(
+        output_root, SAMPLE, RUN_ID,
+    ).read_text()
+    # The fixture writes step1.qc_filter.min_counts_cell — pick a
+    # substring that would only appear if the config text made it into
+    # the report body.
+    assert "min_counts_cell" in cfg_text
+    assert "min_counts_cell" in body
+
+
 def test_qc_report_leaves_source_h5ads_untouched(tmp_path: Path):
     """Reproducibility invariant: qc_report is READ-ONLY on the three
     source h5ads. Hash before/after to prove no accidental rewrites."""

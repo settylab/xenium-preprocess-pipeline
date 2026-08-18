@@ -453,6 +453,7 @@ def run(cfg: dict, stages: list[str], argv: list[str]) -> int:
             ),
             raw_layer=qc_cfg.get("raw_layer", "maxpost_counts"),
             force_rerun=force_rerun,
+            invoking_argv=argv,
         )
         banner(f"stage {idx}/{n_stages}: qc_report — "
                f"complete in {time.time()-t0:.1f}s")

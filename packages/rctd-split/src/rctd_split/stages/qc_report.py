@@ -64,6 +64,7 @@ convention). Idempotent — re-runs are guarded by the sentinel unless
 """
 from __future__ import annotations
 
+import html
 import os
 import sys
 from pathlib import Path
@@ -773,8 +774,14 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     <tr><th>Python</th><td><code>{python_version}</code></td></tr>
     <tr><th>Package versions</th><td><code>{pkg_versions}</code></td></tr>
     <tr><th>Inputs</th><td><code>{input_paths}</code></td></tr>
+    <tr><th>Invocation</th><td><code>{invoking_command}</code></td></tr>
+    <tr><th>Resolved config</th><td><code>{resolved_config_path_str}</code></td></tr>
   </tbody>
 </table>
+<details>
+  <summary>Full resolved config (<code>{resolved_config_path_str}</code>)</summary>
+  <pre>{resolved_config_text}</pre>
+</details>
 </body>
 </html>
 """
@@ -860,6 +867,9 @@ def _render_html(
     raw_layer: str,
     pkg_versions: str,
     input_paths: str,
+    invoking_command: str,
+    resolved_config_path_str: str,
+    resolved_config_text: str,
 ) -> None:
     rows_html = "\n    ".join(
         (
@@ -917,11 +927,22 @@ def _render_html(
         python_version=sys.version.splitlines()[0],
         pkg_versions=pkg_versions,
         input_paths=input_paths,
+        invoking_command=_html_escape(invoking_command),
+        resolved_config_path_str=_html_escape(resolved_config_path_str),
+        resolved_config_text=_html_escape(resolved_config_text),
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     tmp = out_path.with_suffix(out_path.suffix + ".tmp")
     tmp.write_text(body)
     os.replace(tmp, out_path)
+
+
+def _html_escape(s: str) -> str:
+    """HTML-escape user-provided values before templating them into the
+    report — the invocation command, resolved config path, and full
+    config text all originate from the operator's shell / disk and can
+    contain `<`, `>`, `&` etc. that would otherwise render as tags."""
+    return html.escape(s, quote=False)
 
 
 def _pkg_versions() -> str:
@@ -1038,11 +1059,17 @@ def run_qc_report(
     purification_status_column: str,
     raw_layer: str,
     force_rerun: bool,
+    invoking_argv: list[str] | None = None,
 ) -> Path:
     """Generate QC HTML report + plots. Returns the sentinel path.
 
     Reads-only w.r.t. the three source h5ads. Writes to
     ``<run_dir>/summary/`` + a sentinel under ``intermediate/adata/``.
+
+    ``invoking_argv`` is captured at run start by the pipeline
+    entrypoint (`sys.argv`) and rendered verbatim into the HTML
+    report's Provenance section along with the merged config.yaml
+    contents (settylab/TracyY123-nexus#26 comment 5320970944, item 5).
     """
     import time
 
@@ -1221,6 +1248,21 @@ def run_qc_report(
     _write_rctd_summary_csv(rctd_summary_csv, rctd_summary)
     log(f"[qc_report] wrote RCTD summary {rctd_summary_csv}")
 
+    # Provenance: capture the invoking command line + full merged
+    # config content so the HTML report can render both. Missing
+    # config file (never written) or missing argv (called from a
+    # library import) both degrade gracefully to an inline note.
+    invoking_command = (
+        " ".join(invoking_argv) if invoking_argv else "(not captured)"
+    )
+    if resolved_yaml.exists():
+        try:
+            resolved_config_text = resolved_yaml.read_text()
+        except OSError as exc:
+            resolved_config_text = f"(unreadable: {exc})"
+    else:
+        resolved_config_text = "(config.yaml not found at expected path)"
+
     # HTML report with relative image paths (so the directory is
     # portable — you can rsync `summary/` anywhere and it renders).
     _render_html(
@@ -1253,6 +1295,9 @@ def run_qc_report(
         input_paths=(
             f"xenium={xenium_p}, raw={raw_p}, purified={purified_p}"
         ),
+        invoking_command=invoking_command,
+        resolved_config_path_str=str(resolved_yaml),
+        resolved_config_text=resolved_config_text,
     )
     log(f"[qc_report] wrote HTML {html_out}")
 
