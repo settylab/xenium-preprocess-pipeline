@@ -53,7 +53,7 @@ run_id: null
 
 # --flex-h5ad — the flex-preprocessed scRNA h5ad. Reference-in-place:
 # recorded verbatim under `step3.flex_h5ad_path` in the merged
-# resolved_config.yaml. No copy / no symlink. When null, no path is
+# config.yaml. No copy / no symlink. When null, no path is
 # recorded. If --primary-h5ad is not set, the flex path is used as
 # the primary input.
 flex_h5ad_path: null

@@ -26,12 +26,12 @@ All notable changes to rctd-split will be documented here. Follows
 - `qc_report` histograms now plot the distribution of ALL cells in
   each source h5ad rather than the previous positive-only slice. A
   dashed vertical line is drawn at the upstream filter threshold read
-  from the merged `resolved_config.yaml`:
+  from the merged `config.yaml`:
     - `proseg_raw` histogram: `step1.qc_filter.min_counts_cell`
     - `xenium_ranger` histogram: no line (step-1 has no min-counts
       gate on xenium_ranger)
     - `proseg_purified` histogram: `step4.postprocess.qc.min_counts`
-  Thresholds are strictly data-driven — if `resolved_config.yaml` is
+  Thresholds are strictly data-driven — if `config.yaml` is
   absent or a key is missing, the caption falls back to "no dashed
   threshold line drawn" (never a hard-coded value). Cells with counts
   ≤ 0 are drawn as a separate hatched leftmost bar so no cell is

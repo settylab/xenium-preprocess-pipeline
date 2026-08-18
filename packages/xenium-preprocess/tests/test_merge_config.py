@@ -16,7 +16,7 @@ import yaml
 def test_merge_config_writes_only_own_key(tmp_path: Path):
     from xenium_preprocess._internal.merge_config import merge_config
 
-    resolved = tmp_path / "resolved_config.yaml"
+    resolved = tmp_path / "config.yaml"
 
     # Step 1 writes first.
     merge_config(resolved, "step1", {"sample_id": "MH10", "run_id": "42"})
@@ -42,7 +42,7 @@ def test_merge_config_writes_only_own_key(tmp_path: Path):
 def test_merge_config_rejects_unknown_top_level_key(tmp_path: Path):
     from xenium_preprocess._internal.merge_config import merge_config
 
-    resolved = tmp_path / "resolved_config.yaml"
+    resolved = tmp_path / "config.yaml"
     with pytest.raises(SystemExit):
         merge_config(resolved, "step2", {"foo": 1})
     with pytest.raises(SystemExit):
@@ -52,7 +52,7 @@ def test_merge_config_rejects_unknown_top_level_key(tmp_path: Path):
 def test_merge_config_atomic_write_leaves_no_tmp(tmp_path: Path):
     from xenium_preprocess._internal.merge_config import merge_config
 
-    resolved = tmp_path / "resolved_config.yaml"
+    resolved = tmp_path / "config.yaml"
     merge_config(resolved, "step1", {"k": "v"})
     # No stray .tmp sidecar.
     siblings = list(resolved.parent.iterdir())
@@ -62,6 +62,6 @@ def test_merge_config_atomic_write_leaves_no_tmp(tmp_path: Path):
 def test_merge_config_creates_parent_dirs(tmp_path: Path):
     from xenium_preprocess._internal.merge_config import merge_config
 
-    deep = tmp_path / "a" / "b" / "resolved_config.yaml"
+    deep = tmp_path / "a" / "b" / "config.yaml"
     merge_config(deep, "step1", {"k": "v"})
     assert deep.exists()

@@ -41,7 +41,7 @@ split/unpurified/<sample>_unpurified_{counts.mtx.gz, features.tsv.gz, barcodes.t
 split/purified/<sample>_purified_{...same shape...}
 h5ad/<sample>_unpurified.h5ad
 h5ad/<sample>_purified.h5ad
-resolved_config.yaml
+config.yaml
 ```
 
 Downstream analysis (Stage E of `ref-build-summary-v3.md`) consumes the purified `.h5ad`.

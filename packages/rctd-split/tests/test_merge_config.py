@@ -13,7 +13,7 @@ from pathlib import Path
 def test_merge_config_creates_new_file(tmp_path: Path):
     from rctd_split._internal.merge_config import merge_config
 
-    p = tmp_path / "resolved_config.yaml"
+    p = tmp_path / "config.yaml"
     merged = merge_config(p, "step4", {"foo": 1})
     assert p.exists()
     assert merged == {"step4": {"foo": 1}}
@@ -24,7 +24,7 @@ def test_merge_config_preserves_siblings(tmp_path: Path):
     import yaml
     from rctd_split._internal.merge_config import merge_config
 
-    p = tmp_path / "resolved_config.yaml"
+    p = tmp_path / "config.yaml"
     # Simulate step 1 writing first.
     p.write_text(yaml.safe_dump({
         "step1": {"sample_id": "MH10", "output_root": "/tmp/o"},
@@ -44,7 +44,7 @@ def test_merge_config_overwrites_own_key(tmp_path: Path):
     """Rerunning step 4 replaces the step4: block wholesale."""
     from rctd_split._internal.merge_config import merge_config
 
-    p = tmp_path / "resolved_config.yaml"
+    p = tmp_path / "config.yaml"
     merge_config(p, "step4", {"a": 1})
     merged = merge_config(p, "step4", {"b": 2})
     assert merged["step4"] == {"b": 2}
@@ -54,7 +54,7 @@ def test_merge_config_rejects_unknown_step_key(tmp_path: Path):
     import pytest
     from rctd_split._internal.merge_config import merge_config
 
-    p = tmp_path / "resolved_config.yaml"
+    p = tmp_path / "config.yaml"
     with pytest.raises(SystemExit) as exc:
         merge_config(p, "step2", {"foo": 1})
     assert "step_key" in str(exc.value)
@@ -64,7 +64,7 @@ def test_merge_config_atomic_write(tmp_path: Path):
     """No .tmp file left after a successful write."""
     from rctd_split._internal.merge_config import merge_config
 
-    p = tmp_path / "resolved_config.yaml"
+    p = tmp_path / "config.yaml"
     merge_config(p, "step4", {"a": 1})
     tmp = p.with_suffix(p.suffix + ".tmp")
     assert not tmp.exists()

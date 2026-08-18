@@ -225,7 +225,7 @@ Overrides in precedence order (highest first):
 3. `config/default.yaml` — package-shipped defaults.
 
 The full effective config for a run is recorded at
-`<run-dir>/resolved_config.yaml`.
+`<run-dir>/config.yaml`.
 
 Per-step docs live under each package's `docs/` directory.
 
@@ -243,7 +243,7 @@ All three steps write into a single run folder:
 │   ├── <sample>_test_object.rds          # step 1 — RCTD test object (spatial query)
 │   ├── <sample>_reference.rds            # step 3 — RCTD reference (celltype pool)
 │   └── <sample>_rctd_split.rds           # step 4 — RCTD + SPLIT typing result
-├── resolved_config.yaml                  # merged effective config across the three steps
+├── config.yaml                  # merged effective config across the three steps
 └── logs/
     ├── slurm-<jobid>-xenium-preprocess.log
     ├── slurm-<jobid>-ref-build.log

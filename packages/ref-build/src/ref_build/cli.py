@@ -66,7 +66,7 @@ def _add_run_args(p: argparse.ArgumentParser) -> None:
                    help="Path to the flex-preprocessed scRNA h5ad (reference-"
                         "in-place). The pipeline records this path verbatim "
                         "under `step3.flex_h5ad_path` in the merged "
-                        "resolved_config.yaml — no copy, no symlink. When "
+                        "config.yaml — no copy, no symlink. When "
                         "--primary-h5ad is not passed the flex path is used "
                         "as the primary input.")
 

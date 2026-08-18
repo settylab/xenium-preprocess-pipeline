@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Mock ref-build CLI — creates step-3 target artifacts and merges step3
-# key into resolved_config.yaml (preserving step1: sibling).
+# key into config.yaml (preserving step1: sibling).
 set -euo pipefail
 
 cmd="${1:-}"
@@ -86,8 +86,8 @@ mkdir -p "$run_dir/rctd" "$run_dir/logs"
     echo "raw_argv=${raw_argv[*]}"
 } > "$run_dir/logs/step3.log"
 
-# Merge step3 key into resolved_config.yaml, preserving siblings.
-cfg="$run_dir/resolved_config.yaml"
+# Merge step3 key into config.yaml, preserving siblings.
+cfg="$run_dir/config.yaml"
 python3 - "$cfg" "$sample" "$run_id" "$flex_h5ad" <<'PY'
 import sys, os
 cfg_path, sample, run_id, flex = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]

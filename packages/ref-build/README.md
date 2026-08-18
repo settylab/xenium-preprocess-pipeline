@@ -179,7 +179,7 @@ mtx_bundle/<sample>_features.tsv.gz           — stage 4
 mtx_bundle/<sample>_barcodes.tsv.gz           — stage 4
 mtx_bundle/<sample>_metadata.csv              — stage 4
 rctd_reference/<sample>_scRNA_ref.rds         — stage 5 (the RCTD-ready reference)
-resolved_config.yaml                          — snapshot of the resolved config
+config.yaml                          — snapshot of the resolved config
 ```
 
 ## Configuration

@@ -17,7 +17,7 @@
 #     <output_root>/<sample_id>/<sample_id>_<run_id>/
 #         ├── spatial_adata/   ← step 1 + step 4 augmentations
 #         ├── rctd/            ← step 1 + step 3 + step 4
-#         ├── resolved_config.yaml  ← merged across steps
+#         ├── config.yaml  ← merged across steps
 #         └── logs/            ← step{1,3,4}.log
 #
 # RUN_ID precedence:
@@ -200,7 +200,7 @@ Usage: submit_workflow.sh --sample-id <S> --flex-h5ad <path>
 Required:
   --sample-id <S>              Sample identifier (e.g. MH10).
   --flex-h5ad <path>           Flex scRNA h5ad (recorded verbatim under
-                               step3.flex_h5ad_path in resolved_config.yaml;
+                               step3.flex_h5ad_path in config.yaml;
                                no copy / no symlink).
   --celltype-marker-json <p>   Marker-gene JSON declaring the expected
                                celltype set (step-3 required input;
@@ -780,7 +780,7 @@ _sbatch() {
 # where <stage> is the pipeline's package name — xenium-preprocess (step 1),
 # ref-build (step 3), rctd-split (step 4) — not the internal "stepN" label.
 # The step-numbering variables in this script (JOB1/JOB3/JOB4, --start-step,
-# step 1/3/4 summary lines, submit_stepN.sbatch filenames, resolved_config.yaml
+# step 1/3/4 summary lines, submit_stepN.sbatch filenames, config.yaml
 # stepN: keys) are unchanged — only the on-disk slurm log suffix.
 # Path template depends on when RUN_ID is bound:
 #   * Override case (--run-id / $RUN_ID): full path known up front —

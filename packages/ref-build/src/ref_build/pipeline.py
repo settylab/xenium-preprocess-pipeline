@@ -15,7 +15,7 @@ artifacts under `rctd/` — `<sample_id>_reference_post_rules.h5ad` (from
 `assemble`) and `<sample_id>_reference.rds` (from `rctd_reference_build`)
 — survive; they are the inputs step 4 consumes.
 
-Merged `resolved_config.yaml` is written via the shared
+Merged `config.yaml` is written via the shared
 `_internal.merge_config` helper under the `step3:` top-level key so
 step 1 / step 4 co-writing the same file don't clobber each other's
 sections.
@@ -103,7 +103,7 @@ def _write_merged_resolved_config(
     output_root: Path, sample_id: str, run_id: str, cfg: dict,
 ) -> Path:
     """Write only the `step3:` top-level key to the shared merged
-    `resolved_config.yaml` at `<run_dir>/resolved_config.yaml`.
+    `config.yaml` at `<run_dir>/config.yaml`.
     Preserves any sibling `step1:` / `step4:` / `driver:` sections
     written by adjacent pipelines in the same run.
 

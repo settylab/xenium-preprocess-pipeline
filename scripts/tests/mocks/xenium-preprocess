@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Mock xenium-preprocess CLI — creates the step-1 target artifacts and
-# writes step1 keys into resolved_config.yaml. Only understands the
+# writes step1 keys into config.yaml. Only understands the
 # subset of flags submit_step1.sbatch invokes.
 set -euo pipefail
 
@@ -64,8 +64,8 @@ mkdir -p "$run_dir/spatial_adata" "$run_dir/rctd" "$run_dir/logs"
     echo "raw_argv=${raw_argv[*]}"
 } > "$run_dir/logs/step1.log"
 
-# Merge step1 key into resolved_config.yaml (crude but preserves siblings).
-cfg="$run_dir/resolved_config.yaml"
+# Merge step1 key into config.yaml (crude but preserves siblings).
+cfg="$run_dir/config.yaml"
 python3 - "$cfg" "$sample" "$run_id" <<'PY'
 import sys, os
 cfg_path, sample, run_id = sys.argv[1], sys.argv[2], sys.argv[3]

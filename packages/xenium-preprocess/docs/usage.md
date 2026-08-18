@@ -113,4 +113,4 @@ CLI flags always win over the user YAML.
 
 ## Output layout
 
-See the [Outputs](../README.md#outputs) section of the README. Every run also writes a `resolved_config.yaml` at the run root, capturing the exact merged config that the run used — useful when reproducing a specific result months later.
+See the [Outputs](../README.md#outputs) section of the README. Every run also writes a `config.yaml` at the run root, capturing the exact merged config that the run used — useful when reproducing a specific result months later.

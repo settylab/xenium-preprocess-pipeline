@@ -20,7 +20,7 @@ Layout (locked in (internal issue review):
             │   │   └── <sample_id>_purified.rds
             │   ├── mtx/{unpurified,purified}/…
             │   └── adata/<sample_id>_step4_unpurified.h5ad
-            ├── resolved_config.yaml                     (merged across steps)
+            ├── config.yaml                     (merged across steps)
             └── logs/step4.log                           (this pipeline's log)
 
 `run_id` precedence (bound in cli._resolve_run_id): `--run-id` >
@@ -89,7 +89,7 @@ def logs_dir(output_root: Path, sample_id: str, run_id: str) -> Path:
 def resolved_config_path(
     output_root: Path, sample_id: str, run_id: str
 ) -> Path:
-    return run_dir(output_root, sample_id, run_id) / "resolved_config.yaml"
+    return run_dir(output_root, sample_id, run_id) / "config.yaml"
 
 
 def spatial_adata_path(

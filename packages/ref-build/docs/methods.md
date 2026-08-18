@@ -101,7 +101,7 @@ The resulting `.rds` is the RCTD "reference object" — downstream `spacexr::cre
 
 ## Reproducibility
 
-- Every run writes a `resolved_config.yaml` at the run root, capturing the exact merged config (default YAML + user YAML + CLI overrides).
+- Every run writes a `config.yaml` at the run root, capturing the exact merged config (default YAML + user YAML + CLI overrides).
 - The one RNG path — `donor_balanced_sample_by_reference` in the balanced case, and the round-robin cap in the borrowed case — is seeded from `census.random_state` (default 1, matching the notebook family). With the same seed + same inputs, the build is deterministic.
 - The `assemble` stage's O(cells) allocation and O(celltypes) census loop mean the runtime scales linearly in both. No per-cell branching costs; the census does the heavy per-celltype decision work once.
 - The `.rds` filename `<sample_id>_scRNA_ref.rds` matches the shipped-reference naming in summary Table 1 (lines 340-352) so downstream Stage-D driver code can pick up the reference without a rename.

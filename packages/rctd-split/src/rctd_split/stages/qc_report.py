@@ -41,7 +41,7 @@ Reproducibility:
   * The three count histograms plot the distribution for ALL cells in
     the source h5ad (no positive-only slice) and overlay a dashed
     vertical line at the upstream filter threshold, read from the
-    merged ``resolved_config.yaml`` (settylab/TracyY123-nexus#26
+    merged ``config.yaml`` (settylab/TracyY123-nexus#26
     comment 5275064492). Thresholds:
       - proseg_raw histogram: ``step1.qc_filter.min_counts_cell``
       - xenium_ranger histogram: no upstream min-counts gate, no line
@@ -298,7 +298,7 @@ def _rctd_summary_metrics(raw_adata) -> dict:
 
 def _read_hist_thresholds(resolved_yaml: Path) -> dict:
     """Read the three per-histogram filter thresholds from the merged
-    ``resolved_config.yaml`` so the dashed vertical line on each
+    ``config.yaml`` so the dashed vertical line on each
     histogram is data-driven (settylab/TracyY123-nexus#26 comment
     5275064492).
 
@@ -314,7 +314,7 @@ def _read_hist_thresholds(resolved_yaml: Path) -> dict:
     """
     result = {"raw": None, "xenium": None, "purified": None}
     if not resolved_yaml.exists():
-        log(f"[qc_report] resolved_config.yaml not found at {resolved_yaml} "
+        log(f"[qc_report] config.yaml not found at {resolved_yaml} "
             "— histogram threshold lines will be omitted.")
         return result
 
@@ -824,7 +824,7 @@ def _threshold_caption(source: str, threshold: float | None) -> str:
     if threshold is None:
         return (
             "<i>No upstream min-counts filter recorded in "
-            "<code>resolved_config.yaml</code>; no dashed threshold "
+            "<code>config.yaml</code>; no dashed threshold "
             "line drawn.</i>"
         )
     return (

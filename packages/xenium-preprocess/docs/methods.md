@@ -113,4 +113,4 @@ The resulting RDS is the RCTD "test object" — downstream `spacexr::create.RCTD
 
 ## Reproducibility
 
-Every run writes a `resolved_config.yaml` at the run root, capturing the exact merged config (default YAML + user YAML + CLI overrides) that the run used. The pipeline's random seeds — `random_state` in stage 2 for KNN + UMAP + Leiden — live in the config, so a re-run with the same seed + same input reproduces the same clustering.
+Every run writes a `config.yaml` at the run root, capturing the exact merged config (default YAML + user YAML + CLI overrides) that the run used. The pipeline's random seeds — `random_state` in stage 2 for KNN + UMAP + Leiden — live in the config, so a re-run with the same seed + same input reproduces the same clustering.

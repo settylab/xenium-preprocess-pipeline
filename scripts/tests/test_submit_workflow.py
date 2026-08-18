@@ -394,7 +394,7 @@ def test_end_to_end_layout(env, tmp_path):
         "rctd/MH10_test_object.rds",
         "rctd/MH10_reference.rds",
         "rctd/MH10_rctd_results.rds",
-        "resolved_config.yaml",
+        "config.yaml",
         "logs/step1.log",
         "logs/step3.log",
         "logs/step4.log",
@@ -409,7 +409,7 @@ def test_resolved_config_merged_across_steps(env, tmp_path):
                 "--flex-h5ad", _flex_h5ad(tmp_path), "--celltype-marker-json", _marker_json(tmp_path),
                 "--run-id", "e2e_merge")
     cfg = (env["output_root"] / "MH10" / "MH10_e2e_merge"
-           / "resolved_config.yaml").read_text()
+           / "config.yaml").read_text()
     # All three top-level keys survive (invariant enforced by the shared
     # _merge_config helper in each pipeline — the mocks here emulate it).
     assert "step1:" in cfg

@@ -1,7 +1,7 @@
-"""Shared merged `resolved_config.yaml` helper.
+"""Shared merged `config.yaml` helper.
 
 Merge invariant (from (internal issue review):
-each pipeline reads the current `resolved_config.yaml`, writes back
+each pipeline reads the current `config.yaml`, writes back
 ONLY its own top-level key (`step1:` / `step3:` / `step4:` / `driver:`),
 and PRESERVES all sibling top-level keys. This lets the three pipelines
 run in sequence under a shared `--run-id` folder without any pipeline
@@ -30,7 +30,7 @@ def merge_config(
     step_key: str,
     step_cfg: dict,
 ) -> dict:
-    """Read the merged `resolved_config.yaml`, replace ONLY `step_key`,
+    """Read the merged `config.yaml`, replace ONLY `step_key`,
     preserve every other top-level key, atomically write back.
 
     Returns the full merged dict (post-write) so the caller can log

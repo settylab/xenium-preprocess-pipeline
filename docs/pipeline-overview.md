@@ -107,4 +107,4 @@ Resume:
 Each package ships `config/default.yaml`. Overrides in precedence order
 (highest first): CLI flag, `--config user.yaml`, package default.
 The full effective config for a run is recorded at
-`<run-dir>/resolved_config.yaml`.
+`<run-dir>/config.yaml`.

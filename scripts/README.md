@@ -76,7 +76,7 @@ happens when no donors are supplied.
 │   ├── <S>_test_object.rds
 │   ├── <S>_reference.rds
 │   └── <S>_rctd_results.rds
-├── resolved_config.yaml
+├── config.yaml
 └── logs/{step1,step3,step4}.log
 ```
 

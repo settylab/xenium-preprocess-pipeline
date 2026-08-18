@@ -126,7 +126,7 @@ split/purified/<sample>_purified_metadata.csv
 split/purified/<sample>_purified_spatial_coords.csv.gz
 h5ad/<sample>_unpurified.h5ad                      — stage 4
 h5ad/<sample>_purified.h5ad                        — stage 4
-resolved_config.yaml                               — snapshot of the resolved config
+config.yaml                               — snapshot of the resolved config
 ```
 
 ## Configuration

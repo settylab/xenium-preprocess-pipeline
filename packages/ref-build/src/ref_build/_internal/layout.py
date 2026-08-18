@@ -11,7 +11,7 @@ Layout (locked in (internal issue review):
             │   ├── <sample_id>_reference_post_rules.h5ad   (THIS step)
             │   ├── <sample_id>_reference.rds               (THIS step)
             │   └── <sample_id>_rctd_results.rds      (step 4)
-            ├── resolved_config.yaml                  (merged across steps)
+            ├── config.yaml                  (merged across steps)
             └── logs/step{1,3,4}.log
 
 Intermediate outputs (`loaded/`, `census/`, `mtx_bundle/`) also land
@@ -53,7 +53,7 @@ def logs_dir(output_root: Path, sample_id: str, run_id: str) -> Path:
 
 
 def resolved_config_path(output_root: Path, sample_id: str, run_id: str) -> Path:
-    return run_dir(output_root, sample_id, run_id) / "resolved_config.yaml"
+    return run_dir(output_root, sample_id, run_id) / "config.yaml"
 
 
 def rctd_path(

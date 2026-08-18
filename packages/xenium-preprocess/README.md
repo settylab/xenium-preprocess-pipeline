@@ -152,7 +152,7 @@ spatial_adata/<sample>_proseg_raw.h5ad         — proseg_to_anndata (+ expected
 spatial_adata/<sample>_xenium_ranger.h5ad      — xenium_ranger_to_anndata; enrich_xenium_id then adds
                                                  .obs['proseg_cell_id_nn' + 'proseg_id_nn_distance'
                                                      + 'proseg_id_nn_note']
-resolved_config.yaml                           — snapshot of the resolved config (merged across steps)
+config.yaml                           — snapshot of the resolved config (merged across steps)
 logs/step1.log                                 — the step-1 log
 ```
 

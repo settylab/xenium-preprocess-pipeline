@@ -51,7 +51,7 @@ All three steps write into one run folder:
 <output-root>/<sample-id>/<sample-id>_<run-id>/
 ├── spatial_adata/
 ├── rctd/
-├── resolved_config.yaml
+├── config.yaml
 └── logs/
 ```
 

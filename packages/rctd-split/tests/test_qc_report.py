@@ -205,7 +205,7 @@ def _write_resolved_config(
     step1_min_counts_cell=10,
     step4_postprocess_min_counts=50,
 ):
-    """Write a minimal ``resolved_config.yaml`` under the run dir so
+    """Write a minimal ``config.yaml`` under the run dir so
     ``_read_hist_thresholds`` picks up the two threshold values.
 
     Pass ``None`` for either threshold to omit that config key (tests
@@ -614,7 +614,7 @@ def test_qc_report_fails_on_missing_first_type_on_raw(tmp_path: Path):
 
 
 def test_qc_report_hist_threshold_from_resolved_config(tmp_path: Path):
-    """Threshold values are read from ``resolved_config.yaml`` — the
+    """Threshold values are read from ``config.yaml`` — the
     HTML surface names the source config keys AND the numeric values.
     """
     from rctd_split._internal.layout import qc_path
@@ -641,7 +641,7 @@ def test_qc_report_hist_threshold_from_resolved_config(tmp_path: Path):
 
 
 def test_qc_report_hist_no_threshold_when_config_absent(tmp_path: Path):
-    """When ``resolved_config.yaml`` is missing entirely, the histograms
+    """When ``config.yaml`` is missing entirely, the histograms
     still render and the HTML explicitly says "no dashed threshold
     line drawn" — never falls back to a hard-coded value."""
     from rctd_split._internal.layout import (

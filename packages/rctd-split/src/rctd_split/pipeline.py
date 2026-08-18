@@ -5,7 +5,7 @@ own sentinel-existence resume check (nuke with ``force_rerun``).
 
 Post-2026-08-11 refactor: outputs live under
 ``<output_root>/<sample_id>/<sample_id>_<run_id>/{spatial_adata,rctd,intermediate}/``,
-and ``resolved_config.yaml`` at that run folder is written via the shared
+and ``config.yaml`` at that run folder is written via the shared
 ``_merge_config`` helper so step 1 / step 3 (spawned as separate sbatch
 jobs in the driver chain) don't clobber each other's config sections.
 
