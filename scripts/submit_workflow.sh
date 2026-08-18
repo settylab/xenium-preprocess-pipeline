@@ -153,6 +153,17 @@ MAX_CORES_OVERRIDE="${MAX_CORES:-}"
 # `rctd-split run --test-object … --reference-rds …`.
 TEST_OBJECT=""
 REFERENCE_RDS=""
+# Optional per-step conda env-name overrides
+# (settylab/TracyY123-nexus#26 comment 5333808085). Each sbatch script
+# already reads its own `_env_name="${VAR:-xenium}"` (submit_step1 →
+# XENIUM_PREPROCESS_ENV, submit_step3 → REF_BUILD_ENV, submit_step4 →
+# RCTD_SPLIT_ENV); these variables thread the driver's flags through to
+# those env vars. Empty ⇒ the sbatch script's own default ("xenium").
+# --env-name <name> is a convenience that sets ALL THREE to the same value
+# (the common case — one shared conda env for the whole workflow).
+XENIUM_PREPROCESS_ENV=""
+REF_BUILD_ENV=""
+RCTD_SPLIT_ENV=""
 
 # ---------------------------------------------------------------------------
 # Per-step named parameter overrides. Empty ⇒ step CLI's config default.
@@ -463,6 +474,28 @@ Optional:
                                auto-discovery. MUTUAL with
                                --test-object (see above). Same
                                --start-step 4 bypass semantics.
+  --env-name <name>            Convenience: set the conda env name
+                               for ALL three steps at once
+                               (xenium-preprocess, ref-build,
+                               rctd-split). Equivalent to passing
+                               --xenium-preprocess-env / --ref-build-env
+                               / --rctd-split-env with the same value.
+                               Per-step flags below OVERRIDE this if
+                               specified later on the CLI.
+                               Default: each sbatch script's own
+                               fallback ("xenium").
+  --xenium-preprocess-env <n>  Step-1 conda env name. Threaded to
+                               submit_step1.sbatch as
+                               XENIUM_PREPROCESS_ENV; the sbatch
+                               script activates it via micromamba
+                               or conda.
+                               Default: xenium.
+  --ref-build-env <n>          Step-3 conda env name. Threaded to
+                               submit_step3.sbatch as REF_BUILD_ENV.
+                               Default: xenium.
+  --rctd-split-env <n>         Step-4 conda env name. Threaded to
+                               submit_step4.sbatch as RCTD_SPLIT_ENV.
+                               Default: xenium.
 
 Per-step named parameters
 (TracyY123-nexus#26 comment 5277569725; every one maps to an existing
@@ -570,6 +603,19 @@ while [[ $# -gt 0 ]]; do
         --max-cores)             MAX_CORES_OVERRIDE="$2"; shift 2 ;;
         --test-object)           TEST_OBJECT="$2"; shift 2 ;;
         --reference-rds)         REFERENCE_RDS="$2"; shift 2 ;;
+        # Per-step conda env-name overrides. --env-name sets all three at once
+        # (the common case). Placed BEFORE the per-step flags so a caller can
+        # `--env-name shared --ref-build-env alt` and get {shared, alt, shared}
+        # — later CLI wins over the earlier bulk assignment.
+        --env-name)
+            XENIUM_PREPROCESS_ENV="$2"
+            REF_BUILD_ENV="$2"
+            RCTD_SPLIT_ENV="$2"
+            shift 2
+            ;;
+        --xenium-preprocess-env) XENIUM_PREPROCESS_ENV="$2"; shift 2 ;;
+        --ref-build-env)         REF_BUILD_ENV="$2"; shift 2 ;;
+        --rctd-split-env)        RCTD_SPLIT_ENV="$2"; shift 2 ;;
         # Step 1 named params
         --step1-x-source)                STEP1_X_SOURCE="$2"; shift 2 ;;
         --step1-qc-min-counts-cell)      STEP1_QC_MIN_COUNTS_CELL="$2"; shift 2 ;;
@@ -870,6 +916,19 @@ fi
 # --max-cores and $MAX_CORES env.
 if [[ -n "$MAX_CORES_OVERRIDE" ]]; then
     COMMON_EXPORTS="$COMMON_EXPORTS,MAX_CORES=$MAX_CORES_OVERRIDE"
+fi
+# Per-step conda env-name overrides — thread only when set, so each sbatch
+# script's `_env_name="${VAR:-xenium}"` falls through to its own default
+# ("xenium") when the caller omits the flag. Values are short identifiers
+# (no commas), safe under slurm's comma-separated --export payload.
+if [[ -n "$XENIUM_PREPROCESS_ENV" ]]; then
+    COMMON_EXPORTS="$COMMON_EXPORTS,XENIUM_PREPROCESS_ENV=$XENIUM_PREPROCESS_ENV"
+fi
+if [[ -n "$REF_BUILD_ENV" ]]; then
+    COMMON_EXPORTS="$COMMON_EXPORTS,REF_BUILD_ENV=$REF_BUILD_ENV"
+fi
+if [[ -n "$RCTD_SPLIT_ENV" ]]; then
+    COMMON_EXPORTS="$COMMON_EXPORTS,RCTD_SPLIT_ENV=$RCTD_SPLIT_ENV"
 fi
 # Step-4 explicit inputs (--test-object / --reference-rds). Validated
 # both-or-neither above, so either both are set or neither is; the sbatch

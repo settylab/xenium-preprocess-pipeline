@@ -44,6 +44,10 @@ Options:
 | `--start-step <name>` | Skip earlier steps and start submission at the named step. Accepts `xenium-preprocess` (default; full chain), `ref-build` (submits `ref-build` then `rctd-split`), or `rctd-split` (submits `rctd-split` only). Numeric aliases `1`/`3`/`4` are accepted for one release for backwards compat. Requires `--run-id`. Implies `--reuse-run-dir`. Fails loud if the resumed step's prior inputs are missing. |
 | `--reuse-run-dir` | Proceed even if `<run-dir>` exists, **keeping its contents**. Each step overwrites the files it writes; other files preserved. Recommended for resume flows. Mutually exclusive with `--force`. |
 | `--force` | `rm -rf <run-dir>` then proceed. Destructive; intended for from-scratch re-run under an already-used run-id. Rejected with `--start-step ref-build`/`rctd-split` (would wipe the prerequisites). |
+| `--env-name <name>` | Convenience: set the conda env name for **all three** steps at once. Equivalent to passing `--xenium-preprocess-env`/`--ref-build-env`/`--rctd-split-env` with the same value. Default: each `submit_stepN.sbatch`'s own fallback (`xenium`). |
+| `--xenium-preprocess-env <name>` | Conda env for `submit_step1.sbatch` (threaded via `XENIUM_PREPROCESS_ENV`). Default: `xenium`. |
+| `--ref-build-env <name>` | Conda env for `submit_step3.sbatch` (threaded via `REF_BUILD_ENV`). Default: `xenium`. |
+| `--rctd-split-env <name>` | Conda env for `submit_step4.sbatch` (threaded via `RCTD_SPLIT_ENV`). Default: `xenium`. |
 | `--dry-run` | Print sbatch commands without submitting. |
 
 ### Multi-donor invocation (donors + fallback)
@@ -63,6 +67,34 @@ in `config/default.yaml` (per the user's comment
 Both flags are safe to omit — `ref-build`'s Rule 5 fallback is
 skipped when no fallback donors are supplied and no supplementation
 happens when no donors are supplied.
+
+### Per-step conda envs
+
+By default every step activates the `xenium` conda env. Override
+per-step (e.g. one env for `xenium-preprocess`/`ref-build`, another
+for `rctd-split`):
+
+```bash
+./submit_workflow.sh --sample-id SAMPLE1 \
+                     --flex-h5ad          /data/SAMPLE1/scRNA/SAMPLE1_flex.h5ad \
+                     --celltype-marker-json /data/markers/markers.json \
+                     --xenium-preprocess-env xenium-test \
+                     --ref-build-env         xenium-test \
+                     --rctd-split-env        xenium-alt
+```
+
+For the common case of "one shared env for the whole workflow":
+
+```bash
+./submit_workflow.sh --sample-id SAMPLE1 \
+                     --flex-h5ad          /data/SAMPLE1/scRNA/SAMPLE1_flex.h5ad \
+                     --celltype-marker-json /data/markers/markers.json \
+                     --env-name xenium-test
+```
+
+`--env-name` sets all three at once; per-step flags **later on the
+CLI** override the bulk assignment (`--env-name shared
+--ref-build-env alt` → `{shared, alt, shared}`).
 
 ## Output layout (locked)
 
