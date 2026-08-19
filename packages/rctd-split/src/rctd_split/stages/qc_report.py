@@ -123,7 +123,7 @@ _REJECT_VALUES: frozenset[str] = frozenset({"reject", "rejected"})
 
 _PLOT_DPI = 150
 _PLOT_FIGSIZE = (6.0, 5.5)
-_PLOT_POINT_SIZE = 4.0
+_PLOT_POINT_SIZE = 1.5
 _PLOT_ALPHA = 0.7
 _PALETTE = "tab20"
 
