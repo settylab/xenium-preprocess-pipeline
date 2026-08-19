@@ -207,9 +207,9 @@ def test_three_jobs_submitted_in_order(env, tmp_path):
     assert len(records) == 3, f"expected 3 submits, got {len(records)}: {records}"
 
     j1, j3, j4 = records
-    assert j1["script"].endswith("submit_step1.sbatch")
-    assert j3["script"].endswith("submit_step3.sbatch")
-    assert j4["script"].endswith("submit_step4.sbatch")
+    assert j1["script"].endswith("submit_xenium-preprocess.sbatch")
+    assert j3["script"].endswith("submit_ref-build.sbatch")
+    assert j4["script"].endswith("submit_rctd-split.sbatch")
 
 
 def test_ref_build_afterok_xenium_preprocess(env, tmp_path):
@@ -439,7 +439,7 @@ def test_dry_run_submits_nothing(env, tmp_path):
 # --------------------------------------------------------------------------
 # --donor-h5ad / --fallback-donor-h5ad — Tracy's per-run inputs
 # (settylab/TracyY123-nexus#26 comment 5257935882). Optional, repeatable;
-# threaded to ref-build as numbered env vars, expanded in submit_step3.sbatch
+# threaded to ref-build as numbered env vars, expanded in submit_ref-build.sbatch
 # into --donor-h5ad / --fallback-donor-h5ad flags on `ref-build run`.
 # --------------------------------------------------------------------------
 
@@ -553,7 +553,7 @@ def test_donor_and_fallback_donor_h5ads_together(env, tmp_path):
 # --------------------------------------------------------------------------
 # --celltype-col-for-ref-build — Tracy's ref-build celltype-column override
 # (settylab/TracyY123-nexus#26 comment 5258483286). Optional; threaded via
-# CELLTYPE_COL_FOR_REF_BUILD env var; expanded in submit_step3.sbatch into
+# CELLTYPE_COL_FOR_REF_BUILD env var; expanded in submit_ref-build.sbatch into
 # `ref-build run --celltype-col <name>`. Unset ⇒ ref-build's config default.
 # --------------------------------------------------------------------------
 
@@ -570,7 +570,7 @@ def test_celltype_col_for_ref_build_unset_by_default(env, tmp_path):
         assert _export_field(rec, "CELLTYPE_COL_FOR_REF_BUILD") is None, rec
     log = _ref_build_log(env, "MH10", "no_ct_col")
     # Mock ref-build records an empty celltype_col when --celltype-col
-    # wasn't passed by submit_step3.sbatch.
+    # wasn't passed by submit_ref-build.sbatch.
     assert "celltype_col=" in log
     assert "celltype_col=refined" not in log
 
@@ -764,7 +764,7 @@ def test_start_step_default_is_xenium_preprocess(env, tmp_path):
     assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
     records = _parse_log(env["log"])
     assert len(records) == 3
-    assert records[0]["script"].endswith("submit_step1.sbatch")
+    assert records[0]["script"].endswith("submit_xenium-preprocess.sbatch")
 
 
 def test_start_step_invalid_value_rejected(env, tmp_path):
@@ -822,8 +822,8 @@ def test_start_step_ref_build_submits_ref_build_and_rctd_split_only(env, tmp_pat
     assert len(records) == 2, (
         f"expected 2 submits (ref-build + rctd-split), got {len(records)}"
     )
-    assert records[0]["script"].endswith("submit_step3.sbatch")
-    assert records[1]["script"].endswith("submit_step4.sbatch")
+    assert records[0]["script"].endswith("submit_ref-build.sbatch")
+    assert records[1]["script"].endswith("submit_rctd-split.sbatch")
     # ref-build has NO dependency (xenium-preprocess was skipped).
     assert records[0]["dependency"] == "", records[0]
     # rctd-split chains off ref-build's jobid.
@@ -854,7 +854,7 @@ def test_workflow_config_seeds_driver_defaults(env, tmp_path):
     assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
     records = _parse_log(env["log"])
     assert len(records) == 3
-    step3 = next(r for r in records if r["script"].endswith("submit_step3.sbatch"))
+    step3 = next(r for r in records if r["script"].endswith("submit_ref-build.sbatch"))
     assert "STEP3_DONOR_BORROW_CAP=137" in step3["export"]
 
 
@@ -874,10 +874,10 @@ def test_workflow_config_cli_wins_over_yaml(env, tmp_path):
                     "--ref-build-donor-borrow-cap", "42")
     assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
     records = _parse_log(env["log"])
-    xp = next(r for r in records if r["script"].endswith("submit_step1.sbatch"))
+    xp = next(r for r in records if r["script"].endswith("submit_xenium-preprocess.sbatch"))
     # CLI --sample-id wins over YAML sample_id.
     assert "SAMPLE=MH10" in xp["export"]
-    rb = next(r for r in records if r["script"].endswith("submit_step3.sbatch"))
+    rb = next(r for r in records if r["script"].endswith("submit_ref-build.sbatch"))
     # CLI --ref-build-donor-borrow-cap wins over YAML ref_build.donor_borrow_cap.
     assert "STEP3_DONOR_BORROW_CAP=42" in rb["export"]
 
@@ -934,9 +934,9 @@ def test_workflow_config_accepts_all_three_semantic_stage_keys(env, tmp_path):
     r = _run_driver(env, "--config", cfg)
     assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
     records = _parse_log(env["log"])
-    xp = next(r for r in records if r["script"].endswith("submit_step1.sbatch"))
-    rb = next(r for r in records if r["script"].endswith("submit_step3.sbatch"))
-    rs = next(r for r in records if r["script"].endswith("submit_step4.sbatch"))
+    xp = next(r for r in records if r["script"].endswith("submit_xenium-preprocess.sbatch"))
+    rb = next(r for r in records if r["script"].endswith("submit_ref-build.sbatch"))
+    rs = next(r for r in records if r["script"].endswith("submit_rctd-split.sbatch"))
     assert "STEP1_QC_MIN_COUNTS_CELL=11" in xp["export"]
     assert "STEP3_DONOR_BORROW_CAP=33"   in rb["export"]
     assert "STEP4_UMI_MIN=55"            in rs["export"]
@@ -956,8 +956,8 @@ def test_start_step_semantic_alias_ref_build(env, tmp_path):
     assert len(records) == 2, (
         f"expected 2 submits (ref-build + rctd-split), got {len(records)}"
     )
-    assert records[0]["script"].endswith("submit_step3.sbatch")
-    assert records[1]["script"].endswith("submit_step4.sbatch")
+    assert records[0]["script"].endswith("submit_ref-build.sbatch")
+    assert records[1]["script"].endswith("submit_rctd-split.sbatch")
 
 
 def test_start_step_semantic_alias_rctd_split(env, tmp_path):
@@ -972,7 +972,7 @@ def test_start_step_semantic_alias_rctd_split(env, tmp_path):
     assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
     records = _parse_log(env["log"])
     assert len(records) == 1, f"expected 1 submit (rctd-split only), got {len(records)}"
-    assert records[0]["script"].endswith("submit_step4.sbatch")
+    assert records[0]["script"].endswith("submit_rctd-split.sbatch")
 
 
 def test_start_step_semantic_alias_xenium_preprocess(env, tmp_path):
@@ -1033,7 +1033,7 @@ def test_start_step_rctd_split_submits_only_rctd_split(env, tmp_path):
     assert r.returncode == 0, f"stderr:\n{r.stderr}\nstdout:\n{r.stdout}"
     records = _parse_log(env["log"])
     assert len(records) == 1, f"expected 1 submit (rctd-split), got {len(records)}"
-    assert records[0]["script"].endswith("submit_step4.sbatch")
+    assert records[0]["script"].endswith("submit_rctd-split.sbatch")
     assert records[0]["dependency"] == ""
 
 

@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-#SBATCH --job-name=rs_step4
+#SBATCH --job-name=rctd-split
 #SBATCH --partition=campus-new
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=256G
 #SBATCH --time=24:00:00
 # NOTE: --output is set by submit_workflow.sh at submission time so the log
 #       lands under <output_root>/<sample>/<sample>_<run_id>/logs/, not the
-#       driver's CWD. A direct `sbatch submit_step4.sbatch` invocation will
+#       driver's CWD. A direct `sbatch submit_rctd-split.sbatch` invocation will
 #       fall through to slurm's default (slurm-<jobid>.log in the caller's
 #       CWD) — invoke via submit_workflow.sh instead.
-# submit_step4.sbatch — RCTD run + split + purify + writebacks (rctd-split).
+# submit_rctd-split.sbatch — RCTD run + split + purify + writebacks (rctd-split).
 #
 # Reads env vars set by submit_workflow.sh --export:
 #     SAMPLE               (required)  Sample id.
@@ -100,8 +100,8 @@ ml fhR/4.4.1-foss-2023b
 unset PYTHONPATH
 
 # Diagnostic breadcrumb — makes any downstream failure log self-explaining.
-echo "[step4] env=$_env_name  python=$(command -v python || echo '<none>')"
-echo "[step4] rctd-split -> $(command -v rctd-split || echo '<none>')"
+echo "[rctd-split] env=$_env_name  python=$(command -v python || echo '<none>')"
+echo "[rctd-split] rctd-split -> $(command -v rctd-split || echo '<none>')"
 
 # Preflight: the step's CLI must actually be installed in the activated env.
 # Without this check a missing install surfaces only as an opaque
@@ -138,7 +138,7 @@ MAX_CORES="${MAX_CORES:-12}"
 # STEP4_OVERRIDES_B64 unset, and CONFIG_ARGS stays empty.
 CONFIG_ARGS=()
 if [[ -n "${STEP4_OVERRIDES_B64:-}" ]]; then
-    STEP4_TMP_CFG=$(mktemp -t step4_cfg.XXXXXX.yaml)
+    STEP4_TMP_CFG=$(mktemp -t rctd-split_cfg.XXXXXX.yaml)
     trap 'rm -f "$STEP4_TMP_CFG"' EXIT
     printf '%s' "$STEP4_OVERRIDES_B64" | base64 -d > "$STEP4_TMP_CFG"
     CONFIG_ARGS=(--config "$STEP4_TMP_CFG")

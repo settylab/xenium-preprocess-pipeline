@@ -41,7 +41,7 @@ celltype_marker_json: /fh/fast/setty_m/user/ryang/data/markers.json # --celltype
 # Default: Final_level1_celltype_annotation.
 # celltype_col_for_ref_build: Final_level1_celltype_annotation  # --celltype-col-for-ref-build
 
-# rctd-split RCTD parallelism (submit_step4.sbatch --cpus-per-task=16 cap).
+# rctd-split RCTD parallelism (submit_rctd-split.sbatch --cpus-per-task=16 cap).
 # Default: 12. Larger values oversubscribe the R workers.
 # max_cores: 12                                                 # --max-cores
 

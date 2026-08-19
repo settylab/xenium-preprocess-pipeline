@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Mock xenium-preprocess CLI — creates the xenium-preprocess target
 # artifacts and writes the xenium_preprocess key into config.yaml. Only
-# understands the subset of flags submit_step1.sbatch invokes.
+# understands the subset of flags submit_xenium-preprocess.sbatch invokes.
 set -euo pipefail
 
 cmd="${1:-}"

@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-#SBATCH --job-name=rb_step3
+#SBATCH --job-name=ref-build
 #SBATCH --partition=campus-new
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=64G
 #SBATCH --time=6:00:00
 # NOTE: --output is set by submit_workflow.sh at submission time so the log
 #       lands under <output_root>/<sample>/<sample>_<run_id>/logs/, not the
-#       driver's CWD. A direct `sbatch submit_step3.sbatch` invocation will
+#       driver's CWD. A direct `sbatch submit_ref-build.sbatch` invocation will
 #       fall through to slurm's default (slurm-<jobid>.log in the caller's
 #       CWD) — invoke via submit_workflow.sh instead.
-# submit_step3.sbatch — RCTD reference build (ref-build).
+# submit_ref-build.sbatch — RCTD reference build (ref-build).
 #
 # Reads env vars set by submit_workflow.sh --export:
 #     SAMPLE               (required)  Sample id.
@@ -95,8 +95,8 @@ ml fhR/4.4.1-foss-2023b
 unset PYTHONPATH
 
 # Diagnostic breadcrumb — makes any downstream failure log self-explaining.
-echo "[step3] env=$_env_name  python=$(command -v python || echo '<none>')"
-echo "[step3] ref-build -> $(command -v ref-build || echo '<none>')"
+echo "[ref-build] env=$_env_name  python=$(command -v python || echo '<none>')"
+echo "[ref-build] ref-build -> $(command -v ref-build || echo '<none>')"
 
 # Preflight: the step's CLI must actually be installed in the activated env.
 # Without this check a missing install surfaces only as an opaque
@@ -149,7 +149,7 @@ fi
 # STEP3_OVERRIDES_B64 unset, and CONFIG_ARGS stays empty.
 CONFIG_ARGS=()
 if [[ -n "${STEP3_OVERRIDES_B64:-}" ]]; then
-    STEP3_TMP_CFG=$(mktemp -t step3_cfg.XXXXXX.yaml)
+    STEP3_TMP_CFG=$(mktemp -t ref-build_cfg.XXXXXX.yaml)
     trap 'rm -f "$STEP3_TMP_CFG"' EXIT
     printf '%s' "$STEP3_OVERRIDES_B64" | base64 -d > "$STEP3_TMP_CFG"
     CONFIG_ARGS=(--config "$STEP3_TMP_CFG")

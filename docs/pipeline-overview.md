@@ -90,8 +90,8 @@ Chains the three steps via Slurm `--dependency=afterok:`.
 `xenium-preprocess` and `ref-build` are independent (both fan out
 from the same driver call); `rctd-split` depends on both.
 
-`scripts/submit_step{1,3,4}.sbatch` are the per-step Slurm templates
-the driver submits. Each writes a per-step log to
+`scripts/submit_{xenium-preprocess,ref-build,rctd-split}.sbatch` are
+the per-step Slurm templates the driver submits. Each writes a per-step log to
 `<run-dir>/logs/slurm-<jobid>-<step>.log`; the driver itself writes
 `workflow-submit.log` recording the dependency chain.
 

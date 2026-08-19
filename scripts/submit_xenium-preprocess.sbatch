@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-#SBATCH --job-name=xp_step1
+#SBATCH --job-name=xenium-preprocess
 #SBATCH --partition=campus-new
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=64G
 #SBATCH --time=12:00:00
 # NOTE: --output is set by submit_workflow.sh at submission time so the log
 #       lands under <output_root>/<sample>/<sample>_<run_id>/logs/, not the
-#       driver's CWD. A direct `sbatch submit_step1.sbatch` invocation will
-#       fall through to slurm's default (slurm-<jobid>.log in the caller's
+#       driver's CWD. A direct `sbatch submit_xenium-preprocess.sbatch` invocation
+#       will fall through to slurm's default (slurm-<jobid>.log in the caller's
 #       CWD) — invoke via submit_workflow.sh instead.
-# submit_step1.sbatch — spatial preprocessing (xenium-preprocess).
+# submit_xenium-preprocess.sbatch — spatial preprocessing (xenium-preprocess).
 #
 # Reads env vars set by submit_workflow.sh --export:
 #     SAMPLE               (required)  Sample id, e.g. MH10.
@@ -78,8 +78,8 @@ unset PYTHONPATH
 # Diagnostic breadcrumb — makes any downstream failure log self-explaining.
 # `command -v python` reports Lmod's Python (which the shebang overrides),
 # so also record the shebang-python that xenium-preprocess will actually use.
-echo "[step1] env=$_env_name  python=$(command -v python || echo '<none>')"
-echo "[step1] xenium-preprocess -> $(command -v xenium-preprocess || echo '<none>')"
+echo "[xenium-preprocess] env=$_env_name  python=$(command -v python || echo '<none>')"
+echo "[xenium-preprocess] xenium-preprocess -> $(command -v xenium-preprocess || echo '<none>')"
 
 # Preflight: the step's CLI must actually be installed in the activated env.
 # Without this check a missing install surfaces only as an opaque
@@ -120,7 +120,7 @@ fi
 # xenium_preprocess.<key>=<val>. When neither was set the driver leaves
 # STEP1_OVERRIDES_B64 unset, and this block is a no-op.
 if [[ -n "${STEP1_OVERRIDES_B64:-}" ]]; then
-    STEP1_TMP_CFG=$(mktemp -t step1_cfg.XXXXXX.yaml)
+    STEP1_TMP_CFG=$(mktemp -t xenium-preprocess_cfg.XXXXXX.yaml)
     trap 'rm -f "$STEP1_TMP_CFG"' EXIT
     printf '%s' "$STEP1_OVERRIDES_B64" | base64 -d > "$STEP1_TMP_CFG"
     extra+=(--config "$STEP1_TMP_CFG")

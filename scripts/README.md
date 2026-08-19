@@ -13,9 +13,9 @@ Specification: (internal issue review) comment
   `--force` guard, submits `xenium-preprocess`, then chains `ref-build`
   (`afterok:JOB1`) and `rctd-split` (`afterok:JOB3`) with a shared
   `RUN_ID` threaded via `sbatch --export=ALL,…,RUN_ID=…`.
-- `submit_step1.sbatch` — invokes `xenium-preprocess run`.
-- `submit_step3.sbatch` — invokes `ref-build run --flex-h5ad …`.
-- `submit_step4.sbatch` — invokes `rctd-split run`.
+- `submit_xenium-preprocess.sbatch` — invokes `xenium-preprocess run`.
+- `submit_ref-build.sbatch` — invokes `ref-build run --flex-h5ad …`.
+- `submit_rctd-split.sbatch` — invokes `rctd-split run`.
 - `tests/test_submit_workflow.py` — integration test (18 cases) using
   mock `sbatch` + mock package CLIs on `PATH`.
 
@@ -45,9 +45,9 @@ Options:
 | `--reuse-run-dir` | Proceed even if `<run-dir>` exists, **keeping its contents**. Each stage overwrites the files it writes; other files preserved. Recommended for resume flows. Mutually exclusive with `--force`. |
 | `--force` | `rm -rf <run-dir>` then proceed. Destructive; intended for from-scratch re-run under an already-used run-id. Rejected with `--start-step ref-build`/`rctd-split` (would wipe the prerequisites). |
 | `--env-name <name>` | Convenience: set the conda env name for **all three** stages at once. Equivalent to passing `--xenium-preprocess-env`/`--ref-build-env`/`--rctd-split-env` with the same value. Default: each per-stage sbatch script's own fallback (`xenium`). |
-| `--xenium-preprocess-env <name>` | Conda env for `submit_step1.sbatch` (threaded via `XENIUM_PREPROCESS_ENV`). Default: `xenium`. |
-| `--ref-build-env <name>` | Conda env for `submit_step3.sbatch` (threaded via `REF_BUILD_ENV`). Default: `xenium`. |
-| `--rctd-split-env <name>` | Conda env for `submit_step4.sbatch` (threaded via `RCTD_SPLIT_ENV`). Default: `xenium`. |
+| `--xenium-preprocess-env <name>` | Conda env for `submit_xenium-preprocess.sbatch` (threaded via `XENIUM_PREPROCESS_ENV`). Default: `xenium`. |
+| `--ref-build-env <name>` | Conda env for `submit_ref-build.sbatch` (threaded via `REF_BUILD_ENV`). Default: `xenium`. |
+| `--rctd-split-env <name>` | Conda env for `submit_rctd-split.sbatch` (threaded via `RCTD_SPLIT_ENV`). Default: `xenium`. |
 | `--dry-run` | Print sbatch commands without submitting. |
 
 ### Multi-donor invocation (donors + fallback)

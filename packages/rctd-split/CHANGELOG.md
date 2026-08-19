@@ -5,6 +5,13 @@ All notable changes to rctd-split will be documented here. Follows
 
 ## [Unreleased]
 
+### Changed (2026-08-18)
+- Top-level driver-side rename: `scripts/submit_step4.sbatch` →
+  `scripts/submit_rctd-split.sbatch`. The Python package surface is
+  unaffected; only affects direct-sbatch callers (the documented
+  flow is `submit_workflow.sh`). See top-level `CHANGELOG.md` §0.2.0
+  for the sibling renames.
+
 ### Changed
 - `qc_report` proseg_purified histogram now sources `nCount_Proseg`
   from `intermediate/adata/<S>_unpurified.h5ad` (the pre-filter

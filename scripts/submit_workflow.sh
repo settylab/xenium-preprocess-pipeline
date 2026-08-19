@@ -71,7 +71,7 @@
 #     path down to ref-build via numbered env vars:
 #       DONOR_H5AD_COUNT=N, DONOR_H5AD_1=…, DONOR_H5AD_2=…, …
 #       FALLBACK_H5AD_COUNT=M, FALLBACK_H5AD_1=…, FALLBACK_H5AD_2=…, …
-#     submit_step3.sbatch expands them into --donor-h5ad / --fallback-donor-h5ad
+#     submit_ref-build.sbatch expands them into --donor-h5ad / --fallback-donor-h5ad
 #     args on `ref-build run`. Empty (default) is safe: ref-build's Rule 5
 #     fallback path is skipped when no fallback donors are passed and no
 #     supplementation happens when no donors are passed.
@@ -86,7 +86,7 @@
 #           --reference-rds …MH2_scRNA_ref.rds`).
 #     Both flags are OPTIONAL, but MUTUAL — passing only one is
 #     a hard error. When both are set, the driver threads the
-#     paths to submit_step4.sbatch (STEP4_TEST_OBJECT /
+#     paths to submit_rctd-split.sbatch (STEP4_TEST_OBJECT /
 #     STEP4_REFERENCE_RDS), which materialises them as
 #     `rctd-split run --test-object … --reference-rds …`; the
 #     CLI marks them as `source: config` and does NOT touch the
@@ -103,7 +103,7 @@
 #     into split_purify. Standalone flag (not mutual with
 #     --test-object / --reference-rds; reference_rds is only
 #     needed by rctd_run, which is dropped). Threaded to
-#     submit_step4.sbatch as STEP4_RCTD_RESULTS_RDS →
+#     submit_rctd-split.sbatch as STEP4_RCTD_RESULTS_RDS →
 #     `rctd-split run --rctd-results-rds …`.
 #
 # Per-stage parameter exposure
@@ -159,9 +159,9 @@ FALLBACK_H5ADS=()
 # per-cell celltype label (threaded to `ref-build run --celltype-col`).
 # Empty ⇒ ref-build's config default (Final_level1_celltype_annotation).
 CELLTYPE_COL_FOR_REF_BUILD=""
-# Optional rctd-split override: RCTD parallelism. Threaded to submit_step4.sbatch
+# Optional rctd-split override: RCTD parallelism. Threaded to submit_rctd-split.sbatch
 # as MAX_CORES → `rctd-split run --max-cores N`. Also honors $MAX_CORES env.
-# Empty ⇒ submit_step4.sbatch's own default (12). NOTE: only meaningful up to
+# Empty ⇒ submit_rctd-split.sbatch's own default (12). NOTE: only meaningful up to
 # rctd-split's sbatch alloc (--cpus-per-task=16); larger values will oversubscribe.
 MAX_CORES_OVERRIDE="${MAX_CORES:-}"
 # Optional rctd-split explicit inputs — bypass the run-folder layout
@@ -179,8 +179,8 @@ REFERENCE_RDS=""
 RCTD_RESULTS_RDS=""
 # Optional per-stage conda env-name overrides
 # (settylab/TracyY123-nexus#26 comment 5333808085). Each sbatch script
-# already reads its own `_env_name="${VAR:-xenium}"` (submit_step1 →
-# XENIUM_PREPROCESS_ENV, submit_step3 → REF_BUILD_ENV, submit_step4 →
+# already reads its own `_env_name="${VAR:-xenium}"` (submit_xenium-preprocess →
+# XENIUM_PREPROCESS_ENV, submit_ref-build → REF_BUILD_ENV, submit_rctd-split →
 # RCTD_SPLIT_ENV); these variables thread the driver's flags through to
 # those env vars. Empty ⇒ the sbatch script's own default ("xenium").
 # --env-name <name> is a convenience that sets ALL THREE to the same value
@@ -489,9 +489,9 @@ Optional:
                                Default: ref-build's config default
                                (Final_level1_celltype_annotation).
   --max-cores <N>              rctd-split override: RCTD parallelism.
-                               Threaded to submit_step4.sbatch as
+                               Threaded to submit_rctd-split.sbatch as
                                MAX_CORES → `rctd-split run --max-cores N`.
-                               Default: submit_step4.sbatch default (12).
+                               Default: submit_rctd-split.sbatch default (12).
                                Only meaningful up to rctd-split's sbatch
                                alloc (--cpus-per-task=16); larger
                                values oversubscribe the R workers.
@@ -542,16 +542,16 @@ Optional:
                                Default: each sbatch script's own
                                fallback ("xenium").
   --xenium-preprocess-env <n>  xenium-preprocess conda env name. Threaded
-                               to submit_step1.sbatch as
+                               to submit_xenium-preprocess.sbatch as
                                XENIUM_PREPROCESS_ENV; the sbatch
                                script activates it via micromamba
                                or conda.
                                Default: xenium.
   --ref-build-env <n>          ref-build conda env name. Threaded to
-                               submit_step3.sbatch as REF_BUILD_ENV.
+                               submit_ref-build.sbatch as REF_BUILD_ENV.
                                Default: xenium.
   --rctd-split-env <n>         rctd-split conda env name. Threaded to
-                               submit_step4.sbatch as RCTD_SPLIT_ENV.
+                               submit_rctd-split.sbatch as RCTD_SPLIT_ENV.
                                Default: xenium.
 
 Per-stage named parameters
@@ -977,7 +977,7 @@ fi
 # Build the --export payload common to all submitted jobs. RUN_ID is
 # APPENDED only when we can bind it up front (either --run-id/RUN_ID given,
 # or after JOB1 is submitted). Extra xenium-preprocess inputs are threaded
-# via env vars consumed by submit_step1.sbatch.
+# via env vars consumed by submit_xenium-preprocess.sbatch.
 # ---------------------------------------------------------------------------
 
 # Common exports (SAMPLE, OUTPUT_ROOT, FLEX_H5AD, CELLTYPE_MARKER_JSON
@@ -996,7 +996,7 @@ fi
 # Donor + fallback donor h5ads: numbered env vars, one per path. Empty
 # arrays => COUNT=0 (ref-build skips the corresponding --donor-h5ad /
 # --fallback-donor-h5ad thread). We ALWAYS emit COUNT (including 0) so
-# submit_step3.sbatch can rely on `${DONOR_H5AD_COUNT:-0}` returning a
+# submit_ref-build.sbatch can rely on `${DONOR_H5AD_COUNT:-0}` returning a
 # canonical value rather than a leaked-in stale one from the shell env.
 COMMON_EXPORTS="$COMMON_EXPORTS,DONOR_H5AD_COUNT=${#DONOR_H5ADS[@]}"
 for i in "${!DONOR_H5ADS[@]}"; do
@@ -1007,12 +1007,12 @@ for i in "${!FALLBACK_H5ADS[@]}"; do
     COMMON_EXPORTS="$COMMON_EXPORTS,FALLBACK_H5AD_$((i+1))=${FALLBACK_H5ADS[$i]}"
 done
 # ref-build celltype-column override — thread only when set, so
-# submit_step3.sbatch falls through to ref-build's own default when the
+# submit_ref-build.sbatch falls through to ref-build's own default when the
 # caller omits the flag.
 if [[ -n "$CELLTYPE_COL_FOR_REF_BUILD" ]]; then
     COMMON_EXPORTS="$COMMON_EXPORTS,CELLTYPE_COL_FOR_REF_BUILD=$CELLTYPE_COL_FOR_REF_BUILD"
 fi
-# rctd-split max-cores override — thread only when set, so submit_step4.sbatch
+# rctd-split max-cores override — thread only when set, so submit_rctd-split.sbatch
 # falls through to its own MAX_CORES default (12) when the caller omits both
 # --max-cores and $MAX_CORES env.
 if [[ -n "$MAX_CORES_OVERRIDE" ]]; then
@@ -1255,7 +1255,7 @@ fi
 
 # ---------------------------------------------------------------------------
 # Submit xenium-preprocess (unless --start-step is past it). If the caller
-# pinned a RUN_ID, thread it. Otherwise omit it: submit_step1.sbatch's own
+# pinned a RUN_ID, thread it. Otherwise omit it: submit_xenium-preprocess.sbatch's own
 # internal default (RUN_ID=${RUN_ID:-$SLURM_JOB_ID}) picks up JOB1's
 # SLURM_JOB_ID.
 # ---------------------------------------------------------------------------
@@ -1270,7 +1270,7 @@ if [[ "$START_STEP" -le 1 ]]; then
     JOB1=$(_sbatch --parsable \
         --output="$JOB1_OUTPUT" \
         --export="$JOB1_EXPORTS" \
-        "$SCRIPT_DIR/submit_step1.sbatch")
+        "$SCRIPT_DIR/submit_xenium-preprocess.sbatch")
 fi
 
 # Bind RUN_ID for downstream jobs.
@@ -1304,7 +1304,7 @@ if [[ "$START_STEP" -le 3 ]]; then
         "${_dep_args[@]}" \
         --output="$LOG_DIR/slurm-%j-ref-build.log" \
         --export="$DOWNSTREAM_EXPORTS" \
-        "$SCRIPT_DIR/submit_step3.sbatch")
+        "$SCRIPT_DIR/submit_ref-build.sbatch")
 fi
 
 # ---------------------------------------------------------------------------
@@ -1320,7 +1320,7 @@ JOB4=$(_sbatch --parsable \
     "${_dep_args[@]}" \
     --output="$LOG_DIR/slurm-%j-rctd-split.log" \
     --export="$DOWNSTREAM_EXPORTS" \
-    "$SCRIPT_DIR/submit_step4.sbatch")
+    "$SCRIPT_DIR/submit_rctd-split.sbatch")
 
 # ---------------------------------------------------------------------------
 # Report — echoed to the caller AND mirrored to <run>/logs/workflow-submit.log
