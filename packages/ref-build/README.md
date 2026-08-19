@@ -67,7 +67,7 @@ intermediate/assembled/reference.h5ad                  assemble
 intermediate/mtx_bundle/<sample>_{counts,features,barcodes}.*   export_mtx
 rctd/<sample>_reference.rds                            rctd_reference_build — RCTD-ready reference
 config.yaml                                            resolved config (this stage writes the ref_build: key)
-logs/ref-build.log                                     stage log
+logs/slurm-<jobid>-ref-build.log                       slurm-captured stdout+stderr for the stage
 ```
 
 ## Configuration

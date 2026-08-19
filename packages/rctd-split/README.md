@@ -70,7 +70,7 @@ spatial_adata/<sample>_proseg_raw.h5ad         writeback_to_raw augments in plac
 spatial_adata/<sample>_xenium_ranger.h5ad      celltype_writeback augments in place
 summary/<sample>_summary_report.html           qc_report — the per-run summary
 config.yaml                                    resolved config (this stage writes the rctd_split: key)
-logs/rctd-split.log                            stage log
+logs/slurm-<jobid>-rctd-split.log              slurm-captured stdout+stderr for the stage
 ```
 
 ## Configuration

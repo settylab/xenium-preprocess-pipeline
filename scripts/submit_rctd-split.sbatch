@@ -67,7 +67,8 @@
 #                                                       cols augmented by
 #                                                       celltype_writeback)
 #     config.yaml (rctd_split: key)
-#     logs/rctd-split.log
+#     logs/slurm-<jobid>-rctd-split.log
+#       (slurm-captured stdout+stderr; the stub does not write a separate app log)
 
 set -euo pipefail
 

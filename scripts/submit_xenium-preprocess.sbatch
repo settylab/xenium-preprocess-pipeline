@@ -44,7 +44,8 @@
 #     <OUTPUT_ROOT>/<SAMPLE>/<SAMPLE>_<RUN_ID>/spatial_adata/*.h5ad
 #     <OUTPUT_ROOT>/<SAMPLE>/<SAMPLE>_<RUN_ID>/rctd/<SAMPLE>_test_object.rds
 #     <OUTPUT_ROOT>/<SAMPLE>/<SAMPLE>_<RUN_ID>/config.yaml (xenium_preprocess: key)
-#     <OUTPUT_ROOT>/<SAMPLE>/<SAMPLE>_<RUN_ID>/logs/xenium-preprocess.log
+#     <OUTPUT_ROOT>/<SAMPLE>/<SAMPLE>_<RUN_ID>/logs/slurm-<jobid>-xenium-preprocess.log
+#       (slurm-captured stdout+stderr; the stub does not write a separate app log)
 
 set -euo pipefail
 

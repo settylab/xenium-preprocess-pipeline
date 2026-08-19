@@ -53,7 +53,7 @@ spatial_adata/<sample>_proseg_raw.h5ad         proseg counts + qc_filter flag + 
 spatial_adata/<sample>_xenium_ranger.h5ad      xenium-ranger counts + proseg cell-id nearest-neighbour join
 rctd/<sample>_test_object.rds                  RCTD-ready spatial test object (Seurat + spacexr contract)
 config.yaml                                    resolved config (this stage writes the xenium_preprocess: key)
-logs/xenium-preprocess.log                     stage log
+logs/slurm-<jobid>-xenium-preprocess.log       slurm-captured stdout+stderr for the stage
 ```
 
 ## Configuration

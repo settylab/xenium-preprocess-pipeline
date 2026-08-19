@@ -317,12 +317,16 @@ All three steps write into a single run folder:
 │   └── <sample>_rctd_split.rds           # rctd-split — RCTD + SPLIT typing result
 ├── config.yaml                  # merged effective config across the three steps
 └── logs/
-    ├── slurm-<jobid>-xenium-preprocess.log
-    ├── slurm-<jobid>-ref-build.log
-    ├── slurm-<jobid>-rctd-split.log
-    ├── xenium-preprocess.log  ref-build.log  rctd-split.log   # per-step app logs
-    └── workflow-submit.log               # authoritative record of jobids + dep chain
+    ├── slurm-<jobid>-xenium-preprocess.log   # slurm-captured stdout+stderr of the xenium-preprocess sbatch job
+    ├── slurm-<jobid>-ref-build.log           # same, for ref-build
+    ├── slurm-<jobid>-rctd-split.log          # same, for rctd-split
+    └── workflow-submit.log                   # authoritative record of jobids + dep chain
 ```
+
+Each `slurm-<jobid>-<stage>.log` is the FULL per-stage log — the stage's
+Python + R shell-outs print progress lines to stdout, slurm captures both
+stdout and stderr into that single file. There is no separate
+`<stage>.log` sidecar; the sbatch stubs don't write one.
 
 ### What `spatial_adata/provenance/` is
 
