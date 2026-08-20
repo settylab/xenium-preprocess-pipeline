@@ -170,24 +170,55 @@ outputs colocate under one folder.
 # --start-step past xenium-preprocess implies --reuse-run-dir
 ```
 
-Resume policy:
+Resume behaviour depends on which flag you pass. Three levels of
+"force", coarsest first:
 
-- `--reuse-run-dir` (implied by `--start-step ref-build` or `rctd-split`) —
-  proceed against an existing run folder; each step overwrites only the
-  files it writes, everything else is preserved. This is the everyday
-  "resume the chain" flag.
-- `--force` — `rm -rf` the run folder, then run from xenium-preprocess.
-  Destructive; for a from-scratch re-run under an already-used `--run-id`.
-  Rejected together with `--start-step ref-build` / `rctd-split`.
+- `--force` — **DESTRUCTIVE**: `rm -rf` the entire
+  `<output-root>/<sample>/<sample>_<run-id>/` folder, then re-run
+  the whole pipeline from `xenium-preprocess`. Use ONLY for a
+  clean-slate re-run under an already-used `--run-id`. Rejected
+  together with `--start-step ref-build` / `--start-step
+  rctd-split` (which would wipe the very outputs those flags need
+  to resume from), and with `--reuse-run-dir`.
+- `--reuse-run-dir` (implied by `--start-step ref-build` or
+  `--start-step rctd-split`) — proceed against the existing run
+  folder; each step overwrites only the files it writes,
+  everything else preserved. This is the everyday "resume the
+  chain" flag.
+- **Per-step force-rerun** — narrower than `--force`; wipes only
+  ONE step's sentinels + outputs and re-runs that step, leaving
+  other steps' outputs intact:
+  - `--xenium-preprocess-force-rerun` — re-run xenium-preprocess only.
+  - `--ref-build-force-rerun` — re-run ref-build only.
+  - `--rctd-split-force-rerun` — re-run rctd-split only.
+
+  Combines with `--start-step` and `--<pkg>-stages` (see next
+  section) for even narrower re-runs — e.g. re-render only
+  rctd-split's `qc_report` sub-stage against an existing run:
+
+  ```bash
+  ./scripts/submit_workflow.sh \
+      --sample-id             SAMPLE1 \
+      --output-root           /data/workflow_runs \
+      --run-id                demo_v1 \
+      --flex-h5ad             /data/SAMPLE1/scRNA/SAMPLE1_flex.h5ad \
+      --celltype-marker-json  /data/markers/markers.json \
+      --start-step            rctd-split \
+      --rctd-split-stages     qc_report \
+      --rctd-split-force-rerun
+  ```
 
 #### Run a subset of sub-stages
 
-The driver forwards a per-step `--stages` subset via three semantic
+The driver forwards a per-step sub-stage subset via three semantic
 flags — `--xenium-preprocess-stages`, `--ref-build-stages`,
 `--rctd-split-stages` — each taking a comma-separated stage list.
-Composes with `--start-step`:
+Composes with `--start-step` and the per-step force-rerun flags:
 
 ```bash
+# ref-build was interrupted mid-pipeline; resume from `census`
+# (assumes load_primary_and_donors already wrote intermediate/loaded/concat.h5ad
+# on the previous run under the same --run-id).
 ./scripts/submit_workflow.sh \
     --sample-id            SAMPLE1 \
     --output-root          /data/workflow_runs \
@@ -198,11 +229,11 @@ Composes with `--start-step`:
     --ref-build-stages     census,assemble,export_mtx,rctd_reference_build
 ```
 
-resumes the chain at `ref-build` from the `census` stage. Empty ⇒ that
-step's `DEFAULT_STAGES` (the full list).
-
-Stages are sentinel-gated — reruns skip already-done work; pass
-`--force-rerun` to redo.
+Omit `--<pkg>-stages` to fall back to that package's
+`DEFAULT_STAGES` (the full list). Sub-stages are sentinel-gated —
+re-runs skip work whose sentinel already exists — so if you want
+to force a specific sub-stage to redo, combine `--<pkg>-stages
+<name>` with the matching `--<pkg>-force-rerun` (see above).
 
 ### Advanced: single-package usage without the driver
 
