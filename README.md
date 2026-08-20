@@ -381,10 +381,10 @@ with `--celltype-col-for-ref-build`). Missing celltypes get a
 fallback) get `decision=missing_no_donor` in the census with a
 warning.
 
-For a working reference on the shared drive:
-`/fh/fast/setty_m/metx_liver_met/supplementary_data/marker_genes/markers_NonTumor_level1.json`
-(8 celltypes: B, Plasma, Myeloid, Fibroblast, T/NK, endothelial,
-RBC, epithelial). Copy + edit for your own celltype set.
+A ready-to-copy template lives at
+[`configs/example_markers.json`](configs/example_markers.json)
+(5 generic celltypes with 2-4 markers each). Copy + edit for
+your own celltype set.
 
 ## Outputs
 
