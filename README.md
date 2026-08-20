@@ -317,6 +317,47 @@ rctd_split:
     --ref-build-donor-borrow-cap 200
 ```
 
+### Cell-type marker JSON
+
+`ref-build` needs a JSON file declaring the celltypes it will build a
+reference for, with one list of marker genes per celltype. The
+pipeline doesn't ship one — it's data-dependent (which celltypes are
+in your Flex scRNA and which genes read as markers in your panel).
+Pass the path via `--celltype-marker-json` (driver flag), or under
+`celltype_marker_json:` in a YAML config.
+
+**Schema.** One top-level JSON object. Keys are `<CellType>_marker` or
+`<CellType>_markers` (both accepted; trailing suffix stripped when
+the census matches celltype names in `.obs`). Values are lists of
+HGNC gene symbols. Example:
+
+```json
+{
+  "B_marker":          ["MS4A1", "CD79A", "CD79B", "CD19", "BANK1"],
+  "Plasma_marker":     ["MZB1", "XBP1", "DERL3", "FKBP11", "TENT5C"],
+  "Myeloid_marker":    ["CD14", "CD68", "MRC1", "CSF1R", "CD163", "SPI1"],
+  "Fibroblast_marker": ["POSTN", "THY1", "PDGFRA", "CXCL12", "FAP", "COL5A1"],
+  "T/NK_marker":       ["CD8A", "CD3D", "CD3E", "NKG7", "GZMB", "PRF1"],
+  "endothelial_marker":["PECAM1", "VWF", "CDH5", "KDR", "ENG"],
+  "RBC_markers":       ["HBB", "HBA1", "HBA2", "ALAS2"],
+  "epithelial_markers":["EPCAM", "KRT8", "KRT18", "KRT19", "CDH1"]
+}
+```
+
+The keys must cover every celltype present in your Flex data's
+`.obs[celltype_col]` (default column name
+`Final_level1_celltype_annotation`; override with
+`--celltype-col-for-ref-build`). Missing celltypes get a `WARN` in
+`census.csv` and are dropped from the reference. Extra celltypes
+(present in the JSON but with zero cells across primary + donors +
+fallback) get `decision=missing_no_donor` in the census with a
+warning.
+
+For a working reference on the shared drive:
+`/fh/fast/setty_m/metx_liver_met/supplementary_data/marker_genes/markers_NonTumor_level1.json`
+(8 celltypes: B, Plasma, Myeloid, Fibroblast, T/NK, endothelial,
+RBC, epithelial). Copy + edit for your own celltype set.
+
 ## Outputs
 
 All three steps write into a single run folder:
