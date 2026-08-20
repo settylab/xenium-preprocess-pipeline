@@ -314,19 +314,19 @@ A ready-to-copy template listing every supported key with comments
 lives at [`configs/example.yaml`](configs/example.yaml). Minimal shape:
 
 ```yaml
-# runs/MH10/MH10_cap100/config.yaml
-sample_id: MH10
-run_id: cap100
-output_root: /fh/fast/setty_m/user/ryang/workflow_runs
+# /data/workflow_runs/SAMPLE1/SAMPLE1_demo_v1/config.yaml
+sample_id: SAMPLE1
+run_id: demo_v1
+output_root: /data/workflow_runs
 
-flex_h5ad: /fh/fast/setty_m/user/ryang/data/MH10_flex.h5ad
-celltype_marker_json: /fh/fast/setty_m/user/ryang/data/markers.json
+flex_h5ad: /data/SAMPLE1/scRNA/SAMPLE1_flex.h5ad
+celltype_marker_json: /data/markers/markers.json
 
 # Optional rctd-split explicit inputs — bypasses the run-folder layout
 # auto-discovery. Use to mix a test_object from one sample with a
 # reference from another.
-test_object:   /fh/fast/setty_m/user/ryang/other/MH3_test_object.rds
-reference_rds: /fh/fast/setty_m/user/ryang/refs/MH2_scRNA_ref.rds
+test_object:   /data/SAMPLE_A/rctd/SAMPLE_A_test_object.rds
+reference_rds: /data/SAMPLE_B/rctd/SAMPLE_B_reference.rds
 
 xenium_preprocess:
   x_source: maxpost_counts
@@ -339,9 +339,9 @@ rctd_split:
 ```
 
 ```bash
-./scripts/submit_workflow.sh --config runs/MH10/MH10_cap100/config.yaml
+./scripts/submit_workflow.sh --config /data/workflow_runs/SAMPLE1/SAMPLE1_demo_v1/config.yaml
 # CLI still wins — same YAML with a knob overridden:
-./scripts/submit_workflow.sh --config runs/MH10/MH10_cap100/config.yaml \
+./scripts/submit_workflow.sh --config /data/workflow_runs/SAMPLE1/SAMPLE1_demo_v1/config.yaml \
     --ref-build-donor-borrow-cap 200
 ```
 
