@@ -38,8 +38,8 @@ celltype_marker_json: /fh/fast/setty_m/user/ryang/data/markers.json # --celltype
 # reference_rds: /fh/fast/setty_m/user/ryang/refs/MH2_scRNA_ref.rds        # --reference-rds
 
 # ref-build override — which .obs column ref-build reads for celltype label.
-# Default: Final_level1_celltype_annotation.
-# celltype_col_for_ref_build: Final_level1_celltype_annotation  # --celltype-col-for-ref-build
+# Default: celltypes.
+# celltype_col_for_ref_build: celltypes  # --celltype-col-for-ref-build
 
 # rctd-split RCTD parallelism (submit_rctd-split.sbatch --cpus-per-task=16 cap).
 # Default: 12. Larger values oversubscribe the R workers.

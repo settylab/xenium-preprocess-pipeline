@@ -78,8 +78,7 @@ Every knob lives in `config/default.yaml`. Override precedence:
 Required-at-runtime: `sample_id`, `run_id`, `output_root`, `primary_h5ad`,
 `celltype_marker_json`. `primary_h5ad` and every `donor_h5ad` must have integer
 counts in `layers["counts"]` (or `layers["raw_count"]` / `.X`) and a `.obs`
-celltype column (default `Final_level1_celltype_annotation`; override via
-`--celltype-col`).
+celltype column (default `celltypes`; override via `--celltype-col`).
 
 Key optional knobs (defaults in parentheses):
 

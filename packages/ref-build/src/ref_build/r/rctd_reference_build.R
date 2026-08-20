@@ -19,7 +19,7 @@
 #       --out-rds=<output.rds> \
 #       --min-umi=10 \
 #       --require-int=TRUE \
-#       --celltype-col=Final_level1_celltype_annotation \
+#       --celltype-col=celltypes \
 #       --label-slash-replacement=_
 #
 # Files consumed under <mtx-dir>:

@@ -38,8 +38,7 @@
 #                                      for the per-cell celltype label.
 #                                      Passed as --celltype-col to
 #                                      `ref-build run`. Unset ⇒ ref-build's
-#                                      config default
-#                                      (Final_level1_celltype_annotation).
+#                                      config default (celltypes).
 #     STEP3_DONOR_BORROW_CAP     (optional) Passed as --donor-borrow-cap.
 #     STEP3_CELL_MIN_INSTANCE    (optional) Passed as --cell-min-instance.
 #     STEP3_MIN_UMI              (optional) Passed as --min-umi.
@@ -139,7 +138,7 @@ done
 
 # Optional celltype-col override — only appended when the driver was
 # invoked with --celltype-col-for-ref-build; otherwise ref-build falls
-# through to its own config default (Final_level1_celltype_annotation).
+# through to its own config default (celltypes).
 CELLTYPE_COL_ARGS=()
 if [[ -n "${CELLTYPE_COL_FOR_REF_BUILD:-}" ]]; then
     CELLTYPE_COL_ARGS=(--celltype-col "$CELLTYPE_COL_FOR_REF_BUILD")

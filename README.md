@@ -373,9 +373,9 @@ HGNC gene symbols. Example:
 ```
 
 The keys must cover every celltype present in your Flex data's
-`.obs[celltype_col]` (default column name
-`Final_level1_celltype_annotation`; override with
-`--celltype-col-for-ref-build`). Missing celltypes get a `WARN` in
+`.obs[celltype_col]` (default column name `celltypes`; override
+with `--celltype-col-for-ref-build`). Missing celltypes get a
+`WARN` in
 `census.csv` and are dropped from the reference. Extra celltypes
 (present in the JSON but with zero cells across primary + donors +
 fallback) get `decision=missing_no_donor` in the census with a

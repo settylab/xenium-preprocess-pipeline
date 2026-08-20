@@ -123,7 +123,7 @@ def _add_run_args(p: argparse.ArgumentParser) -> None:
     # load_primary_and_donors
     p.add_argument("--celltype-col", default=None,
                    help="Per-cell celltype-annotation column in .obs "
-                        "(default: Final_level1_celltype_annotation).")
+                        "(default: celltypes).")
 
     # census
     p.add_argument("--donor-borrow-cap", type=int, default=None,

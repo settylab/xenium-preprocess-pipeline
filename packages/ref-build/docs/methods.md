@@ -84,7 +84,7 @@ Python (`ref_build.stages.rctd_reference_build`) shells out to `Rscript src/ref_
 1. Prepends `~/.claude/r_libs/4.4.1` to `.libPaths()` so the user-local `spacexr` install is found (idempotent — the prepend is skipped if the dir doesn't exist).
 2. Loads `Seurat`, `Matrix`, `spacexr`.
 3. `Seurat::ReadMtx(mtx=…, features=…, cells=…, feature.column=1, cell.column=1)` on the mtx bundle.
-4. Reads the metadata CSV, joins by cell id, extracts the celltype column (default `Final_level1_celltype_annotation`).
+4. Reads the metadata CSV, joins by cell id, extracts the celltype column (default `celltypes`).
 5. Replaces `/` in celltype labels with `_` (default; configurable) — `spacexr::Reference` factor levels reject slashes (e.g. `B/Plasma_T/NK_rbc` → `B_Plasma_T_NK_rbc`, per summary line 262).
 6. Calls
    ```r

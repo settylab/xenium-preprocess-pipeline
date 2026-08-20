@@ -157,7 +157,7 @@ DONOR_H5ADS=()
 FALLBACK_H5ADS=()
 # Optional ref-build override: which .obs column ref-build reads for the
 # per-cell celltype label (threaded to `ref-build run --celltype-col`).
-# Empty ⇒ ref-build's config default (Final_level1_celltype_annotation).
+# Empty ⇒ ref-build's config default (celltypes).
 CELLTYPE_COL_FOR_REF_BUILD=""
 # Optional rctd-split override: RCTD parallelism. Threaded to submit_rctd-split.sbatch
 # as MAX_CORES → `rctd-split run --max-cores N`. Also honors $MAX_CORES env.
@@ -487,7 +487,7 @@ Optional:
                                celltype label (threaded to
                                `ref-build run --celltype-col`).
                                Default: ref-build's config default
-                               (Final_level1_celltype_annotation).
+                               (celltypes).
   --max-cores <N>              rctd-split override: RCTD parallelism.
                                Threaded to submit_rctd-split.sbatch as
                                MAX_CORES → `rctd-split run --max-cores N`.

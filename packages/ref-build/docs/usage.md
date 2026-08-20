@@ -52,7 +52,7 @@ the rules (internal issue review) are configurable:
 - `--donor-borrow-cap 100` — max donor cells to borrow per missing celltype (rule 2).
 - `--primary-only-celltype tumor --primary-only-celltype liver` — celltypes always sourced exclusively from the primary. Pass repeatedly. Guards summary Caveat §1.
 - `--random-state 1` — seed for `donor_balanced_sample_by_reference` in the balanced (intermediate) case.
-- `--celltype-col Final_level1_celltype_annotation` — per-cell celltype column in `.obs`. Same column across primary + all donors.
+- `--celltype-col celltypes` — per-cell celltype column in `.obs`. Same column across primary + all donors.
 
 ### Stage-C (R side) flags
 
