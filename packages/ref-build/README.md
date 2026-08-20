@@ -88,7 +88,7 @@ Key optional knobs (defaults in parentheses):
 | `rule1_threshold`          | `100`                          | Primary count above which donors are ignored. |
 | `primary_only_celltypes`   | `[tumor, liver]`               | Always primary-only regardless of census. |
 | `census.variant`           | `original`                     | `original` (per-donor cap) or `balanced` (total donor = primary_count). |
-| `random_state`             | `1`                            | Seed for donor sampling. |
+| `random_seed`              | `42`                           | Seed for donor sampling. `random_state` accepted as a deprecated alias. |
 | `min_UMI` / `require_int`  | `10` / `true`                  | Passed to `spacexr::Reference`. |
 
 Full CLI reference: `ref-build run --help`.

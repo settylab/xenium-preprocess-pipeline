@@ -31,7 +31,7 @@
                         └──────────────────┘
                                  │
                                  ▼
-                          rctd/*_rctd_split.rds
+                          rctd/*_rctd_results.rds
                           spatial_adata/ (typed)
 ```
 
@@ -80,7 +80,7 @@ Key knobs:
 
 - `--max-cores` — parallelism cap (benefits from 16 CPUs).
 
-Outputs: `rctd/<sample>_rctd_split.rds`, plus a typed `spatial_adata/`
+Outputs: `rctd/<sample>_rctd_results.rds`, plus a typed `spatial_adata/`
 h5ad written in-place.
 
 Full CLI: `rctd-split --help`; docs under `packages/rctd-split/docs/`.

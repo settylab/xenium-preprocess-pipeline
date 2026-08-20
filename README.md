@@ -71,7 +71,7 @@ dependencies:
                         └──────────────────┘
                                  │
                                  ▼
-                          rctd/*_rctd_split.rds
+                          rctd/*_rctd_results.rds
                           spatial_adata/ (typed)
 ```
 
@@ -119,6 +119,12 @@ a user library — see [`docs/installation.md`](docs/installation.md) for
 the recipe.
 
 ## Usage
+
+All invocations below assume you are at the repo root
+(the folder that contains `scripts/`, `packages/`, and
+`environments/`). If you haven't already, `cd
+xenium-preprocess-pipeline` first — the `./scripts/…`
+paths in the examples are relative.
 
 `scripts/submit_workflow.sh` is the primary entry point — it chains
 xenium-preprocess → ref-build → rctd-split via Slurm
@@ -273,13 +279,13 @@ only part of a step:
 xenium-preprocess run \
     --sample-id SAMPLE1 --run-id demo_v1 \
     --output-root /data/workflow_runs \
-    --stages preprocess mtx
+    --stages proseg_to_anndata qc_filter
 
 ref-build run \
     --sample-id SAMPLE1 --run-id demo_v1 \
     --output-root /data/workflow_runs \
     --flex-h5ad /data/SAMPLE1/scRNA/SAMPLE1_flex.h5ad --celltype-marker-json /data/markers/markers.json \
-    --stages assemble_reference validate_reference
+    --stages census assemble
 ```
 
 ## Configuration
@@ -399,7 +405,7 @@ All three steps write into a single run folder:
 ├── rctd/
 │   ├── <sample>_test_object.rds          # xenium-preprocess — RCTD test object (spatial query)
 │   ├── <sample>_reference.rds            # ref-build — RCTD reference (celltype pool)
-│   └── <sample>_rctd_split.rds           # rctd-split — RCTD + SPLIT typing result
+│   └── <sample>_rctd_results.rds         # rctd-split — RCTD + SPLIT typing result
 ├── config.yaml                  # merged effective config across the three steps
 └── logs/
     ├── slurm-<jobid>-xenium-preprocess.log   # slurm-captured stdout+stderr of the xenium-preprocess sbatch job
