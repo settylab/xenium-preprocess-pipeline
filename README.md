@@ -307,11 +307,8 @@ can layer overrides on top of.
 Recommended location: colocated with the run's outputs at
 `<output_root>/<sample>/<sample>_<run_id>/config.yaml`.
 
-Per-step keys use the **semantic step names** (`xenium_preprocess:`,
-`ref_build:`, `rctd_split:`) — never numeric (`step1:` / `step3:` /
-`step4:`). This mirrors `--start-step`, whose semantic-alias migration
-landed alongside this feature. The driver refuses a numeric key
-loudly.
+Per-step keys use the semantic step names (`xenium_preprocess:`,
+`ref_build:`, `rctd_split:`).
 
 A ready-to-copy template listing every supported key with comments
 lives at [`configs/example.yaml`](configs/example.yaml). Minimal shape:
