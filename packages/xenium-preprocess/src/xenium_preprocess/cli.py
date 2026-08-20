@@ -92,8 +92,11 @@ def _add_run_args(p: argparse.ArgumentParser) -> None:
                    help="Explicit path to the proseg cell metadata "
                         "(.parquet or .csv).")
     p.add_argument("--proseg-run-script", type=Path, default=None,
-                   help="Optional path to the proseg-run shell script; "
-                        "copied verbatim to spatial_adata/provenance/.")
+                   help="Optional audit trail: path to the proseg-run "
+                        "shell script that produced the counts. When set, "
+                        "copied verbatim to spatial_adata/provenance/"
+                        "<script-name> alongside the h5ads. Omitted when "
+                        "unset; no empty folder is created.")
     p.add_argument("--x-source",
                    choices=("maxpost_counts", "expected_counts"),
                    default=None,

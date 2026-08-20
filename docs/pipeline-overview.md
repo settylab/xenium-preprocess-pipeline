@@ -45,7 +45,8 @@ Stages (sentinel-gated):
 1. `preprocess` — proseg output → `<sample>_proseg_raw.h5ad`.
 2. `xenium_ranger` — Xenium Ranger output → `<sample>_xenium_ranger.h5ad`.
 3. `provenance` — copies proseg run scripts + configs into
-   `spatial_adata/provenance/`.
+   `spatial_adata/provenance/`. Opt-in via `--proseg-run-script`;
+   omitted when the flag is not set.
 4. `mtx` — writes matrix/barcodes/features for downstream SPLIT.
 5. `rctd_prep` — builds the RCTD test object (spatial query).
 

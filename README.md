@@ -326,8 +326,7 @@ All three steps write into a single run folder:
 ├── spatial_adata/                        # xenium-preprocess (rctd-split augments in place)
 │   ├── <sample>_proseg_raw.h5ad          # proseg cell×gene
 │   ├── <sample>_xenium_ranger.h5ad       # xenium-ranger cell×gene
-│   ├── <sample>_proseg_purified.h5ad     # rctd-split — SPLIT-purified cell×gene
-│   └── provenance/                       # verbatim copies of proseg-run scripts + configs
+│   └── <sample>_proseg_purified.h5ad     # rctd-split — SPLIT-purified cell×gene
 ├── rctd/
 │   ├── <sample>_test_object.rds          # xenium-preprocess — RCTD test object (spatial query)
 │   ├── <sample>_reference.rds            # ref-build — RCTD reference (celltype pool)
@@ -344,36 +343,6 @@ Each `slurm-<jobid>-<stage>.log` is the FULL per-stage log — the stage's
 Python + R shell-outs print progress lines to stdout, slurm captures both
 stdout and stderr into that single file. There is no separate
 `<stage>.log` sidecar; the sbatch stubs don't write one.
-
-### What `spatial_adata/provenance/` is
-
-Written only when `xenium-preprocess` is invoked with
-`--proseg-run-script <path>` (or the equivalent
-`proseg_to_anndata.proseg_run_script` key in the config).
-The `proseg_to_anndata` stage then copies that shell script
-verbatim into `spatial_adata/provenance/<script-name>` alongside
-the `.h5ad` outputs.
-
-Purpose: audit trail. `<sample>_proseg_raw.h5ad` is downstream
-of the proseg run; `provenance/` records the exact upstream
-invocation (proseg CLI flags, model params, seed) that produced
-those counts, so a reader of the run folder can trace the
-raw h5ad back to the proseg invocation without having to
-consult external notes.
-
-Note that this is NOT the same as the "Provenance" section in
-`summary/<sample>_summary_report.html`, which captures the
-rctd-split QC report's own invocation (`sys.argv`), merged
-`config.yaml`, and package versions. Both exist:
-
-- `spatial_adata/provenance/` = the proseg-run script that
-  produced the input counts (populated by xenium-preprocess).
-- `summary/<sample>_summary_report.html` "Provenance" section
-  = rctd-split's Python invocation + merged config + package
-  versions (populated by rctd-split's `qc_report`).
-
-If `--proseg-run-script` was not supplied, the folder is
-omitted (no empty directory left behind).
 
 ## Testing
 
