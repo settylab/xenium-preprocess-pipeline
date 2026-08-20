@@ -120,8 +120,17 @@ the recipe.
 
 ## Usage
 
-### Run the full pipeline (xenium-preprocess → ref-build → rctd-split)
+`scripts/submit_workflow.sh` is the primary entry point — it chains
+xenium-preprocess → ref-build → rctd-split via Slurm
+`--dependency=afterok:` and exposes step + sub-stage selection flags.
+For running a single package's CLI in isolation (no Slurm; quick
+sanity checks on a laptop; debugging one step in isolation), see
+[Advanced: single-package usage without the driver](#advanced-single-package-usage-without-the-driver)
+below.
 
+### Via the driver (recommended)
+
+#### Run the full pipeline (xenium-preprocess → ref-build → rctd-split)
 
 ```bash
 # Replace the YOUR_PARTITION with your own cluster's partition. At here, campus-new is the example.
@@ -146,70 +155,7 @@ Submits three chained Slurm jobs via `--dependency=afterok:` and prints
 their job ids + dependency chain. All jobs share the `--run-id` so
 outputs colocate under one folder.
 
-### Run one step directly
-
-Each package installs its own CLI:
-
-```bash
-xenium-preprocess run \
-    --sample-id   SAMPLE1 --run-id demo_v1 \
-    --output-root /data/workflow_runs \
-    --proseg-dir  /data/SAMPLE1/proseg --xenium-ranger-dir /data/SAMPLE1/xenium_ranger
-
-ref-build run \
-    --sample-id            SAMPLE1 --run-id demo_v1 \
-    --output-root          /data/workflow_runs \
-    --flex-h5ad            /data/SAMPLE1/scRNA/SAMPLE1_flex.h5ad \
-    --celltype-marker-json /data/markers/markers.json \
-    --donor-h5ad           /data/SAMPLE2/scRNA/SAMPLE2_flex.h5ad
-
-rctd-split run \
-    --sample-id   SAMPLE1 --run-id demo_v1 \
-    --output-root /data/workflow_runs \
-    --max-cores   12
-```
-
-### Run a subset of sub-stages
-
-Each `run` subcommand takes a `--stages` flag; pass a subset to run only
-part of a step:
-
-```bash
-xenium-preprocess run \
-    --sample-id SAMPLE1 --run-id demo_v1 \
-    --output-root /data/workflow_runs \
-    --stages preprocess mtx
-
-ref-build run \
-    --sample-id SAMPLE1 --run-id demo_v1 \
-    --output-root /data/workflow_runs \
-    --flex-h5ad /data/SAMPLE1/scRNA/SAMPLE1_flex.h5ad --celltype-marker-json /data/markers/markers.json \
-    --stages assemble_reference validate_reference
-```
-
-The driver forwards a per-step `--stages` subset via three semantic
-flags — `--xenium-preprocess-stages`, `--ref-build-stages`,
-`--rctd-split-stages` — each taking a comma-separated stage list.
-Composes with `--start-step`, so e.g.
-
-```bash
-./scripts/submit_workflow.sh \
-    --sample-id            SAMPLE1 \
-    --output-root          /data/workflow_runs \
-    --run-id               demo_v1 \
-    --flex-h5ad            /data/SAMPLE1/scRNA/SAMPLE1_flex.h5ad \
-    --celltype-marker-json /data/markers/markers.json \
-    --start-step           ref-build \
-    --ref-build-stages     census,assemble,export_mtx,rctd_reference_build
-```
-
-resumes the chain at `ref-build` from the `census` stage. Empty ⇒ that
-step's `DEFAULT_STAGES` (the full list).
-
-Stages are sentinel-gated — reruns skip already-done work; pass
-`--force-rerun` to redo.
-
-### Resume a run from a specific step
+#### Resume a run from a specific step
 
 ```bash
 
@@ -233,6 +179,77 @@ Resume policy:
 - `--force` — `rm -rf` the run folder, then run from xenium-preprocess.
   Destructive; for a from-scratch re-run under an already-used `--run-id`.
   Rejected together with `--start-step ref-build` / `rctd-split`.
+
+#### Run a subset of sub-stages
+
+The driver forwards a per-step `--stages` subset via three semantic
+flags — `--xenium-preprocess-stages`, `--ref-build-stages`,
+`--rctd-split-stages` — each taking a comma-separated stage list.
+Composes with `--start-step`:
+
+```bash
+./scripts/submit_workflow.sh \
+    --sample-id            SAMPLE1 \
+    --output-root          /data/workflow_runs \
+    --run-id               demo_v1 \
+    --flex-h5ad            /data/SAMPLE1/scRNA/SAMPLE1_flex.h5ad \
+    --celltype-marker-json /data/markers/markers.json \
+    --start-step           ref-build \
+    --ref-build-stages     census,assemble,export_mtx,rctd_reference_build
+```
+
+resumes the chain at `ref-build` from the `census` stage. Empty ⇒ that
+step's `DEFAULT_STAGES` (the full list).
+
+Stages are sentinel-gated — reruns skip already-done work; pass
+`--force-rerun` to redo.
+
+### Advanced: single-package usage without the driver
+
+Use these paths when you don't have Slurm, or when you want to run ONE
+package in isolation (debugging one step, quick sanity check on a
+laptop). Each package installs its own CLI via
+`pip install -e packages/<name>` and accepts the same run scope
+(`--sample-id`, `--run-id`, `--output-root`) as the driver.
+
+#### Run one package's CLI directly
+
+```bash
+xenium-preprocess run \
+    --sample-id   SAMPLE1 --run-id demo_v1 \
+    --output-root /data/workflow_runs \
+    --proseg-dir  /data/SAMPLE1/proseg --xenium-ranger-dir /data/SAMPLE1/xenium_ranger
+
+ref-build run \
+    --sample-id            SAMPLE1 --run-id demo_v1 \
+    --output-root          /data/workflow_runs \
+    --flex-h5ad            /data/SAMPLE1/scRNA/SAMPLE1_flex.h5ad \
+    --celltype-marker-json /data/markers/markers.json \
+    --donor-h5ad           /data/SAMPLE2/scRNA/SAMPLE2_flex.h5ad
+
+rctd-split run \
+    --sample-id   SAMPLE1 --run-id demo_v1 \
+    --output-root /data/workflow_runs \
+    --max-cores   12
+```
+
+#### Run a subset of that package's stages
+
+Each `run` subcommand takes a `--stages` flag; pass a subset to run
+only part of a step:
+
+```bash
+xenium-preprocess run \
+    --sample-id SAMPLE1 --run-id demo_v1 \
+    --output-root /data/workflow_runs \
+    --stages preprocess mtx
+
+ref-build run \
+    --sample-id SAMPLE1 --run-id demo_v1 \
+    --output-root /data/workflow_runs \
+    --flex-h5ad /data/SAMPLE1/scRNA/SAMPLE1_flex.h5ad --celltype-marker-json /data/markers/markers.json \
+    --stages assemble_reference validate_reference
+```
 
 ## Configuration
 
