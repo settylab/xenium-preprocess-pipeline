@@ -338,6 +338,7 @@ def run(cfg: dict, stages: list[str], argv: list[str]) -> int:
             label_slash_replacement=rr.get("label_slash_replacement", "_"),
             force_rerun=force_rerun,
             run_id=run_id,
+            r_lib_paths=cfg.get("r_lib_paths", []) or [],
         )
         ran_rctd_reference_build = True
         banner(f"stage {idx}/{n_stages}: rctd_reference_build — complete in {time.time()-t0:.1f}s")

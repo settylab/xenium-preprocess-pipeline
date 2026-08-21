@@ -120,6 +120,12 @@ def _add_run_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--force-rerun", action="store_true",
                    help="Re-run all stages even if sentinel outputs exist.")
 
+    # Cross-stage R config
+    p.add_argument("--r-lib-paths", nargs="+", default=None,
+                   help="R library paths prepended to R_LIBS_USER for the "
+                        "rctd_reference_build R stage. Typically the renv "
+                        "library dir(s) that hold spacexr + Seurat.")
+
     # load_primary_and_donors
     p.add_argument("--celltype-col", default=None,
                    help="Per-cell celltype-annotation column in .obs "
@@ -218,6 +224,8 @@ def _resolve_config(args: argparse.Namespace) -> dict:
         overrides["output_root"] = str(args.output_root)
     if args.force_rerun:
         overrides["force_rerun"] = True
+    if args.r_lib_paths is not None:
+        overrides["r_lib_paths"] = [str(p) for p in args.r_lib_paths]
 
     lpd_over = {}
     if args.celltype_col is not None:

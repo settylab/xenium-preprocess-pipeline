@@ -19,6 +19,15 @@ force_rerun: false               # nuke per-stage sentinels and re-run
 # Leaving `run_id: null` here means the CLI resolves it at invocation.
 run_id: null
 
+# ----- Cross-stage R config -----------------------------------------
+# R library paths prepended to the child Rscript's `R_LIBS_USER` for
+# the rctd_prep stage. Set this to the renv/user-library dir containing
+# Seurat + SpatialExperiment (+ readr). Leave empty to use the
+# environment's default R library search path (e.g., after
+# `ml fhR/4.4.1-foss-2023b` + a user library at
+# ~/R/x86_64-pc-linux-gnu-library/4.4).
+r_lib_paths: []
+
 # ----- Stage 1: proseg_to_anndata ---------------------------------
 # Adapted from the internal proseg-to-anndata reference script.
 proseg_to_anndata:

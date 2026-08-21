@@ -81,6 +81,12 @@ def _add_run_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--force-rerun", action="store_true",
                    help="Re-run all stages even if sentinel outputs exist.")
 
+    # Cross-stage R config
+    p.add_argument("--r-lib-paths", nargs="+", default=None,
+                   help="R library paths prepended to R_LIBS_USER for the "
+                        "rctd_prep R stage. Typically the renv library "
+                        "dir(s) that hold Seurat + SpatialExperiment.")
+
     # proseg_to_anndata
     p.add_argument("--count-matrix", type=Path, default=None,
                    help="Explicit path to the proseg expected-counts matrix "
@@ -183,6 +189,8 @@ def _resolve_config(args: argparse.Namespace) -> dict:
         overrides["output_root"] = str(args.output_root)
     if args.force_rerun:
         overrides["force_rerun"] = True
+    if args.r_lib_paths is not None:
+        overrides["r_lib_paths"] = [str(p) for p in args.r_lib_paths]
 
     # run_id: resolve precedence HERE so downstream sees a concrete id.
     overrides["run_id"] = _resolve_run_id(getattr(args, "run_id", None))

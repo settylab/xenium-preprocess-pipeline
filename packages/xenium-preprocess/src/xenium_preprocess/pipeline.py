@@ -359,6 +359,7 @@ def run(cfg: dict, stages: list[str], argv: list[str]) -> int:
             assay_name=rp.get("assay_name", "Proseg"),
             spatial_key=rp.get("spatial_key", "ST_"),
             force_rerun=force_rerun,
+            r_lib_paths=cfg.get("r_lib_paths", []) or [],
         )
 
         if split_is_transient and split_dir.exists():
