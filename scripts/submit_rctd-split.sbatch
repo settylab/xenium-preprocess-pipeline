@@ -73,26 +73,35 @@
 set -euo pipefail
 
 # --- Python + R environments -------------------------------------------------
-# Tracy's env is named `xenium` (issue #26 comment 5258774668). Override
-# RCTD_SPLIT_ENV in your calling shell (or here) if you use a different env
-# for rctd-split. Tries micromamba first, falls back to conda, so the same
-# block works for either. `ml fhR/4.4.1-foss-2023b` provides Seurat + spacexr
-# + SPLIT for the rctd_run and split_purify R stages (see
-# scratch/rctd-split/README.md).
-export PATH="$HOME/.local/bin:$PATH"        # so `micromamba`/`conda` resolves
-_env_name="${RCTD_SPLIT_ENV:-xenium}"
-if command -v micromamba >/dev/null 2>&1; then
-    eval "$(micromamba shell hook --shell bash)"
-    micromamba activate "$_env_name"
-elif command -v conda >/dev/null 2>&1; then
-    eval "$(conda shell.bash hook)"
-    conda activate "$_env_name"
-else
-    echo "error: neither micromamba nor conda found on PATH." >&2
-    echo "       See scratch/rctd-split/README.md § Installation." >&2
-    exit 4
-fi
-ml fhR/4.4.1-foss-2023b
+# Resolved from scripts/env.local.conf (scripts/write-env-config.sh),
+# NEVER re-derived from `$HOME` here: the two failures this pipeline
+# has actually hit (missing spacexr's R library; micromamba's own
+# root-prefix resolving to the wrong place) were both cases of a
+# `$HOME`-relative path resolving differently INSIDE the job than in
+# the submitting shell. A file on shared storage, holding already-
+# resolved absolute values, is immune to that; `--export=ALL` is not
+# (it forwards env VAR values faithfully, but does nothing to stop
+# `$HOME` itself from resolving to a different instance once the job's
+# own shell starts). See scripts/lib/env_config.sh for the full
+# rationale. Activation is by absolute PREFIX, never by name, for the
+# same reason.
+# PIPELINE_SCRIPT_DIR is set by submit_workflow.sh (the only place
+# BASH_SOURCE resolution is reliable — this job's own BASH_SOURCE
+# array can be empty under some sbatch launchers, which would make
+# `${BASH_SOURCE[0]}` an unbound array element under `set -u`).
+# Fall back to self-resolution for a manual/direct `sbatch` invocation.
+SCRIPT_DIR="${PIPELINE_SCRIPT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)}"
+# shellcheck source=lib/env_config.sh
+source "$SCRIPT_DIR/lib/env_config.sh"
+
+eval "$("$MICROMAMBA_BIN" shell hook --shell bash)"
+micromamba activate "$XENIUM_ENV_PREFIX"
+
+ml "$R_MODULE"
+# `fhR` provides Seurat + Matrix, but NOT spacexr or SPLIT (verified
+# against a live `.libPaths()`). Both are supplied via
+# `--r-lib-paths "$R_LIB_DIR"` below (config key r_lib_paths — this
+# package already had the mechanism; see rctd_split/stages/*.py).
 # fhR pulls in Python/3.11 + SciPy-bundle/2023.11 as deps and sets
 # PYTHONPATH to their python3.11/site-packages. The micromamba env's
 # python (3.13) then imports numpy from that path and crashes on the
@@ -101,7 +110,7 @@ ml fhR/4.4.1-foss-2023b
 unset PYTHONPATH
 
 # Diagnostic breadcrumb — makes any downstream failure log self-explaining.
-echo "[rctd-split] env=$_env_name  python=$(command -v python || echo '<none>')"
+echo "[rctd-split] env=$XENIUM_ENV_PREFIX  python=$(command -v python || echo '<none>')"
 echo "[rctd-split] rctd-split -> $(command -v rctd-split || echo '<none>')"
 
 # Preflight: the step's CLI must actually be installed in the activated env.
@@ -111,9 +120,9 @@ _cli="rctd-split"
 _pkg_src="/fh/fast/setty_m/user/ryang/nexus/nexus-code/scratch/rctd-split"
 if ! command -v "$_cli" >/dev/null 2>&1; then
     cat >&2 <<EOF
-error: '$_cli' is not installed in env '$_env_name'.
+error: '$_cli' is not installed in env '$XENIUM_ENV_PREFIX'.
        Install it once, from a login node:
-           micromamba activate $_env_name
+           micromamba activate $XENIUM_ENV_PREFIX
            pip install -e $_pkg_src
        Then re-submit the workflow.
 EOF
@@ -201,6 +210,7 @@ rctd-split run \
     --output-root "$OUTPUT_ROOT" \
     --run-id      "$RUN_ID" \
     --max-cores   "$MAX_CORES" \
+    --r-lib-paths "$R_LIB_DIR" \
     "${CONFIG_ARGS[@]}" \
     "${NAMED_ARGS[@]}" \
     "${STAGES_ARGS[@]}"

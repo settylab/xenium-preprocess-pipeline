@@ -147,6 +147,11 @@ FORCE=0
 REUSE_RUN_DIR=0
 DRY_RUN=0
 START_STEP=1
+# XENIUM_SKIP_PREFLIGHT lets the test suite (which exercises job-chaining
+# logic against mock sbatch/CLIs, not a real R/micromamba environment)
+# opt out without touching every test call site; production callers use
+# --skip-preflight below instead.
+SKIP_PREFLIGHT="${XENIUM_SKIP_PREFLIGHT:-0}"
 # Optional extra xenium-preprocess inputs (all resolved by config/default.yaml
 # if omitted, but Tracy's normal flow needs them named).
 PROSEG_DIR=""
@@ -651,6 +656,14 @@ Per-stage catch-all overrides
                                above still win over --override.
 
   --dry-run                    Print sbatch commands but don't submit.
+  --skip-preflight              Skip the resolved-environment preflight
+                               (scripts/env-preflight.sh) that runs by
+                               default before any job is dispatched. The
+                               preflight fails fast (seconds) on a stale
+                               or missing scripts/env.local.conf instead
+                               of after a queue wait; skip only if you
+                               know the environment is already good
+                               (e.g. re-running --dry-run repeatedly).
   -h, --help                   Show this message.
 
 Env vars honored:
@@ -755,6 +768,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         --force)                 FORCE=1; shift ;;
         --dry-run)               DRY_RUN=1; shift ;;
+        --skip-preflight)        SKIP_PREFLIGHT=1; shift ;;
         -h|--help)               usage; exit 0 ;;
         *)                       echo "unknown arg: $1" >&2; usage >&2; exit 2 ;;
     esac
@@ -983,7 +997,16 @@ fi
 # Common exports (SAMPLE, OUTPUT_ROOT, FLEX_H5AD, CELLTYPE_MARKER_JSON
 # threaded through — even to steps that don't consume them, so an operator
 # inspecting a downstream job knows the origin).
-COMMON_EXPORTS="ALL,SAMPLE=$SAMPLE_ID,OUTPUT_ROOT=$OUTPUT_ROOT,FLEX_H5AD=$FLEX_H5AD,CELLTYPE_MARKER_JSON=$CELLTYPE_MARKER_JSON"
+#
+# PIPELINE_SCRIPT_DIR: some sbatch launchers do not preserve
+# `${BASH_SOURCE[0]}` inside the running job (observed here: the job
+# gets an EMPTY BASH_SOURCE array, so `${BASH_SOURCE[0]}` is an unbound
+# array element under `set -u` and kills the script before it reaches
+# `lib/env_config.sh`). SCRIPT_DIR is only reliable in THIS driver
+# process (which runs interactively, not inside a dispatched job), so
+# resolve it once here and pass it through — same "resolve once,
+# forward the absolute value" principle as env.local.conf.
+COMMON_EXPORTS="ALL,SAMPLE=$SAMPLE_ID,OUTPUT_ROOT=$OUTPUT_ROOT,FLEX_H5AD=$FLEX_H5AD,CELLTYPE_MARKER_JSON=$CELLTYPE_MARKER_JSON,PIPELINE_SCRIPT_DIR=$SCRIPT_DIR"
 if [[ -n "$PROSEG_DIR" ]]; then
     COMMON_EXPORTS="$COMMON_EXPORTS,PROSEG_DIR=$PROSEG_DIR"
 fi
@@ -1205,6 +1228,19 @@ fi
 STEP4_OVERRIDES_B64=$(_encode_stage_overrides "$STEP4_CONFIG" "${STEP4_OVERRIDES[@]}")
 if [[ -n "$STEP4_OVERRIDES_B64" ]]; then
     COMMON_EXPORTS="$COMMON_EXPORTS,STEP4_OVERRIDES_B64=$STEP4_OVERRIDES_B64"
+fi
+
+# Submit-time preflight (item 3 / #35): fail in SECONDS on a stale or
+# missing scripts/env.local.conf, or an R library that doesn't actually
+# resolve spacexr + SPLIT, instead of discovering it after a queue wait
+# (exactly what happened to job 65884087). Skipped under --dry-run (no
+# job is actually dispatched) and --skip-preflight/$XENIUM_SKIP_PREFLIGHT.
+if [[ "$DRY_RUN" -eq 0 && "$SKIP_PREFLIGHT" -eq 0 ]]; then
+    if ! "$SCRIPT_DIR/env-preflight.sh"; then
+        echo "error: submit-time preflight failed (see above). Pass" >&2
+        echo "       --skip-preflight to bypass (not recommended)." >&2
+        exit 7
+    fi
 fi
 
 _sbatch() {
