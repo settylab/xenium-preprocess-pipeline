@@ -15,7 +15,10 @@
 #     SAMPLE               (required)  Sample id.
 #     OUTPUT_ROOT          (required)  Root output directory.
 #     RUN_ID               (required)  Shared run id.
-#     MAX_CORES            (optional)  Passed as --max-cores. Default: 12.
+#     MAX_CORES            (optional)  Passed as --max-cores. Default:
+#                                      $SLURM_CPUS_PER_TASK (the actual
+#                                      --cpus-per-task allocation above),
+#                                      falling back to 12 outside Slurm.
 #     STEP4_UMI_MIN        (optional)  Passed as --umi-min.
 #     STEP4_COUNTS_MIN     (optional)  Passed as --counts-min.
 #     STEP4_CELL_MIN_INSTANCE (optional) Passed as --cell-min-instance.
@@ -135,13 +138,26 @@ fi
 
 RUN_ID="${RUN_ID:-$SLURM_JOB_ID}"
 
-# MAX_CORES: RCTD parallelism. sbatch alloc is 16 CPUs (--cpus-per-task
-# above); default here is 12 (headroom for R workers + parent process).
-# Editing rctd_run.max_cores in <run>/config.yaml does NOT flow
-# back into the pipeline — that file is a write-only snapshot the pipeline
-# overwrites at every stage. Override per-run by exporting MAX_CORES=<N>
-# before invoking submit_workflow.sh.
-MAX_CORES="${MAX_CORES:-12}"
+# MAX_CORES: RCTD parallelism. Defaults to the ACTUAL allocation
+# ($SLURM_CPUS_PER_TASK, set by --cpus-per-task above) rather than a
+# constant, so raising/lowering --cpus-per-task changes RCTD's core
+# count automatically instead of silently doing nothing (operator
+# request, 2026-08-21: "make sure RCTD uses the number of cores as
+# requested for job submission"). Trade-off: this reserves NO headroom
+# for the parent R process alongside its `max_cores` workers — if you
+# want headroom, either bump --cpus-per-task above what you want RCTD
+# to use, or export MAX_CORES=<N> explicitly (still wins over both).
+# 12 remains the fallback for a direct `sbatch submit_rctd-split.sbatch`
+# invocation outside Slurm's allocation context, where
+# $SLURM_CPUS_PER_TASK is unset.
+#
+# Editing rctd_run.max_cores in <run>/config.yaml does NOT flow back
+# into the pipeline — that file is a write-only snapshot the pipeline
+# overwrites at every stage; THIS env var (MAX_CORES, from
+# $SLURM_CPUS_PER_TASK or an explicit export) is what actually wins.
+# Override per-run by exporting MAX_CORES=<N> before invoking
+# submit_workflow.sh.
+MAX_CORES="${MAX_CORES:-${SLURM_CPUS_PER_TASK:-12}}"
 
 # --config passthrough from driver's --rctd-split-config + --override
 # rctd_split.<key>=<val>. When neither was set the driver leaves
