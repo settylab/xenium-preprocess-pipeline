@@ -64,7 +64,7 @@ def _write_marker_json(tmp_path: Path, celltypes: list[str]) -> Path:
 
 
 def _read_census(output_root: Path, sample_id: str) -> pd.DataFrame:
-    return pd.read_csv(output_root / sample_id / "census" / "census.csv")
+    return pd.read_csv(output_root / sample_id / f"{sample_id}_test" / "census" / "census.csv")
 
 
 def test_rule1_primary_only_when_count_exceeds_cap(tmp_path):
@@ -95,6 +95,7 @@ def test_rule1_primary_only_when_count_exceeds_cap(tmp_path):
         cell_min_instance=20,
         primary_only_celltypes=["tumor", "liver"],
         force_rerun=True,
+        run_id="test",
     )
     df = _read_census(tmp_path, "MHTEST")
 
@@ -140,6 +141,7 @@ def test_rule1_gate_at_exactly_cap_still_reaches_rule2(tmp_path):
         cell_min_instance=20,
         primary_only_celltypes=["tumor", "liver"],
         force_rerun=True,
+        run_id="test",
     )
     df = _read_census(tmp_path, "MHTEST")
     fib = df.loc[df["celltype"] == "fibroblast"].iloc[0]
@@ -181,6 +183,7 @@ def test_primary_only_celltypes_override_beats_borrowed(tmp_path):
         cell_min_instance=20,
         primary_only_celltypes=["tumor", "liver"],
         force_rerun=True,
+        run_id="test",
     )
     df = _read_census(tmp_path, "MHTEST")
     tumor = df.loc[df["celltype"] == "tumor"].iloc[0]
@@ -227,6 +230,7 @@ def test_missing_from_all_including_fallback_stays_missing_no_donor(tmp_path):
             cell_min_instance=20,
             primary_only_celltypes=["tumor", "liver"],
             force_rerun=True,
+        run_id="test",
         )
     finally:
         sys.stdout = old_stdout

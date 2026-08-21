@@ -104,7 +104,7 @@ def _write_nested_target_json(tmp_path: Path,
 
 
 def _read_census(output_root: Path, sample_id: str) -> pd.DataFrame:
-    return pd.read_csv(output_root / sample_id / "census" / "census.csv")
+    return pd.read_csv(output_root / sample_id / f"{sample_id}_test" / "census" / "census.csv")
 
 
 def _run_load_and_census(
@@ -131,11 +131,11 @@ def _run_load_and_census(
         output_root=tmp_path,
         celltype_col="Final_level1_celltype_annotation",
         force_rerun=True,
+        run_id="test",
         tumor_type=None,
-        legacy_symlinks=True,
         fallback_donor_h5ads=fallback_donor_h5ads,
     )
-    concat_h5ad = tmp_path / f"refbuild_{sample_id}" / "loaded_concat.h5ad"
+    concat_h5ad = tmp_path / sample_id / f"{sample_id}_test" / "loaded" / "concat.h5ad"
     run_census(
         sample_id=sample_id,
         concat_h5ad=concat_h5ad,
@@ -148,6 +148,7 @@ def _run_load_and_census(
         force_rerun=True,
         celltype_target_list=celltype_target_list,
         celltype_target_key=celltype_target_key,
+        run_id="test",
     )
     return concat_h5ad
 
@@ -409,9 +410,10 @@ def test_load_stage_writes_fallback_ids_sidecar(tmp_path):
         output_root=tmp_path,
         celltype_col="Final_level1_celltype_annotation",
         force_rerun=True,
+        run_id="test",
         fallback_donor_h5ads=[fb1, fb2],
     )
-    sidecar = tmp_path / "refbuild_MHTEST" / "fallback_ids.json"
+    sidecar = tmp_path / "MHTEST" / "MHTEST_test" / "loaded" / "fallback_ids.json"
     assert sidecar.exists(), f"sidecar missing at {sidecar}"
     with open(sidecar) as f:
         d = json.load(f)
@@ -441,14 +443,15 @@ def test_assemble_fallback_borrow_tops_up_to_cap_from_fallback(tmp_path):
     run_assemble(
         sample_id="MHTEST",
         concat_h5ad=concat_path,
-        census_csv=tmp_path / "MHTEST" / "census" / "census.csv",
+        census_csv=tmp_path / "MHTEST" / "MHTEST_test" / "census" / "census.csv",
         output_root=tmp_path,
         celltype_col="Final_level1_celltype_annotation",
         donor_borrow_cap=100,
         random_state=42,
         force_rerun=True,
+        run_id="test",
     )
-    ref_path = tmp_path / "refbuild_MHTEST" / "assembled_reference.h5ad"
+    ref_path = tmp_path / "MHTEST" / "MHTEST_test" / "rctd" / "MHTEST_reference_post_rules.h5ad"
     ref = ad.read_h5ad(ref_path)
 
     tnk = ref.obs[ref.obs["Final_level1_celltype_annotation"] == "T/NK"]
@@ -484,14 +487,15 @@ def test_assemble_fallback_borrow_keeps_primary_and_donor(tmp_path):
     run_assemble(
         sample_id="MHTEST",
         concat_h5ad=concat_path,
-        census_csv=tmp_path / "MHTEST" / "census" / "census.csv",
+        census_csv=tmp_path / "MHTEST" / "MHTEST_test" / "census" / "census.csv",
         output_root=tmp_path,
         celltype_col="Final_level1_celltype_annotation",
         donor_borrow_cap=100,
         random_state=42,
         force_rerun=True,
+        run_id="test",
     )
-    ref_path = tmp_path / "refbuild_MHTEST" / "assembled_reference.h5ad"
+    ref_path = tmp_path / "MHTEST" / "MHTEST_test" / "rctd" / "MHTEST_reference_post_rules.h5ad"
     ref = ad.read_h5ad(ref_path)
 
     tnk = ref.obs[ref.obs["Final_level1_celltype_annotation"] == "T/NK"]
@@ -526,9 +530,10 @@ def test_fallback_column_autodetect_refined_celltype(tmp_path):
         output_root=tmp_path,
         celltype_col="Final_level1_celltype_annotation",
         force_rerun=True,
+        run_id="test",
         fallback_donor_h5ads=[fb],
     )
-    concat_h5ad = tmp_path / "refbuild_MHTEST" / "loaded_concat.h5ad"
+    concat_h5ad = tmp_path / "MHTEST" / "MHTEST_test" / "loaded" / "concat.h5ad"
     concat = ad.read_h5ad(concat_h5ad)
     fb_cells = concat.obs[concat.obs["sample_ID"] == "fallback:IMMUNEATLAS"]
     # The fallback's cells should carry the standardised column name.
@@ -551,9 +556,10 @@ def test_fallback_column_autodetect_typo_column(tmp_path):
         output_root=tmp_path,
         celltype_col="Final_level1_celltype_annotation",
         force_rerun=True,
+        run_id="test",
         fallback_donor_h5ads=[fb],
     )
-    concat_h5ad = tmp_path / "refbuild_MHTEST" / "loaded_concat.h5ad"
+    concat_h5ad = tmp_path / "MHTEST" / "MHTEST_test" / "loaded" / "concat.h5ad"
     concat = ad.read_h5ad(concat_h5ad)
     fb_cells = concat.obs[concat.obs["sample_ID"] == "fallback:TYPOATLAS"]
     assert (fb_cells["Final_level1_celltype_annotation"] == "B/Plasma").sum() == 300
@@ -576,6 +582,7 @@ def test_fallback_column_autodetect_fails_loudly_on_unknown(tmp_path):
             output_root=tmp_path,
             celltype_col="Final_level1_celltype_annotation",
             force_rerun=True,
+        run_id="test",
             fallback_donor_h5ads=[fb],
         )
     msg = str(exc.value)

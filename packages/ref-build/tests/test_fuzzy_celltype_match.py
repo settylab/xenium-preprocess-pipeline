@@ -198,10 +198,11 @@ def test_census_fuzzy_counts_composite_and_unknown_maybe(tmp_path):
         cell_min_instance=20,
         primary_only_celltypes=["tumor", "liver"],
         force_rerun=True,
+        run_id="test",
         fuzzy_matching=True,
         include_unknown_maybe=True,
     )
-    df = pd.read_csv(tmp_path / "MHTEST" / "census" / "census.csv")
+    df = pd.read_csv(tmp_path / "MHTEST" / "MHTEST_test" / "census" / "census.csv")
 
     # T/NK: 1 exact + 1 unknown_maybe + 1 composite = 3.
     tnk = df.loc[df["celltype"] == "T/NK"].iloc[0]
@@ -266,6 +267,7 @@ def test_assemble_dedupes_composite_cells(tmp_path):
         cell_min_instance=20,
         primary_only_celltypes=["tumor", "liver"],
         force_rerun=True,
+        run_id="test",
         fuzzy_matching=True,
         include_unknown_maybe=True,
     )
@@ -273,17 +275,18 @@ def test_assemble_dedupes_composite_cells(tmp_path):
     run_assemble(
         sample_id="MHTEST",
         concat_h5ad=concat_dir / "concat.h5ad",
-        census_csv=tmp_path / "MHTEST" / "census" / "census.csv",
+        census_csv=tmp_path / "MHTEST" / "MHTEST_test" / "census" / "census.csv",
         output_root=tmp_path,
         celltype_col="Final_level1_celltype_annotation",
         donor_borrow_cap=100,
         random_state=1,
         force_rerun=True,
+        run_id="test",
         fuzzy_matching=True,
         include_unknown_maybe=True,
     )
 
-    ref = ad.read_h5ad(tmp_path / "MHTEST" / "assembled" / "reference.h5ad")
+    ref = ad.read_h5ad(tmp_path / "MHTEST" / "MHTEST_test" / "rctd" / "MHTEST_reference_post_rules.h5ad")
     # Cell ids are unique.
     assert ref.n_obs == len(set(ref.obs_names)), (
         f"assembled reference has duplicate cell ids: n_obs={ref.n_obs}, "
@@ -335,10 +338,11 @@ def test_rule2_fuzzy_fires_with_primary_when_all_unknown_maybe(tmp_path):
         cell_min_instance=20,
         primary_only_celltypes=["tumor", "liver"],
         force_rerun=True,
+        run_id="test",
         fuzzy_matching=True,
         include_unknown_maybe=True,
     )
-    df = pd.read_csv(tmp_path / "MHTEST" / "census" / "census.csv")
+    df = pd.read_csv(tmp_path / "MHTEST" / "MHTEST_test" / "census" / "census.csv")
     tnk = df.loc[df["celltype"] == "T/NK"].iloc[0]
 
     # Not `missing_no_donor` — the strict-equality regression Tracy caught.
@@ -363,10 +367,11 @@ def test_rule2_fuzzy_fires_with_primary_when_all_unknown_maybe(tmp_path):
         cell_min_instance=20,
         primary_only_celltypes=["tumor", "liver"],
         force_rerun=True,
+        run_id="test",
         fuzzy_matching=False,
         include_unknown_maybe=False,
     )
-    df_strict = pd.read_csv(tmp_path / "MHTEST" / "census" / "census.csv")
+    df_strict = pd.read_csv(tmp_path / "MHTEST" / "MHTEST_test" / "census" / "census.csv")
     tnk_strict = df_strict.loc[df_strict["celltype"] == "T/NK"].iloc[0]
     assert tnk_strict["decision"] == "missing_no_donor", (
         f"strict-equality (fuzzy=False, include_unknown_maybe=False) must "
@@ -441,10 +446,11 @@ def test_roundtrip_realistic_4sample(tmp_path):
         cell_min_instance=20,
         primary_only_celltypes=["tumor", "liver"],
         force_rerun=True,
+        run_id="test",
         fuzzy_matching=True,
         include_unknown_maybe=True,
     )
-    df = pd.read_csv(tmp_path / "MH9" / "census" / "census.csv")
+    df = pd.read_csv(tmp_path / "MH9" / "MH9_test" / "census" / "census.csv")
 
     # T/NK in MH9: 5 unknown_maybe + 10 composite = 15 primary.
     tnk = df.loc[df["celltype"] == "T/NK"].iloc[0]
@@ -471,16 +477,17 @@ def test_roundtrip_realistic_4sample(tmp_path):
     run_assemble(
         sample_id="MH9",
         concat_h5ad=concat_dir / "concat.h5ad",
-        census_csv=tmp_path / "MH9" / "census" / "census.csv",
+        census_csv=tmp_path / "MH9" / "MH9_test" / "census" / "census.csv",
         output_root=tmp_path,
         celltype_col="Final_level1_celltype_annotation",
         donor_borrow_cap=100,
         random_state=1,
         force_rerun=True,
+        run_id="test",
         fuzzy_matching=True,
         include_unknown_maybe=True,
     )
-    ref = ad.read_h5ad(tmp_path / "MH9" / "assembled" / "reference.h5ad")
+    ref = ad.read_h5ad(tmp_path / "MH9" / "MH9_test" / "rctd" / "MH9_reference_post_rules.h5ad")
 
     # Dedupe check: every cell in the reference is unique.
     assert ref.n_obs == len(set(ref.obs_names))

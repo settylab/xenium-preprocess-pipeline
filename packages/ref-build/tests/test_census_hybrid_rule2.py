@@ -73,7 +73,7 @@ def _write_concat(tmp_path: Path, sample_id: str, concat: "ad.AnnData") -> Path:
 
 
 def _read_census(output_root: Path, sample_id: str) -> pd.DataFrame:
-    return pd.read_csv(output_root / sample_id / "census" / "census.csv")
+    return pd.read_csv(output_root / sample_id / f"{sample_id}_test" / "census" / "census.csv")
 
 
 def _run_pair(tmp_path, counts_by_sample, expected_celltypes,
@@ -101,18 +101,20 @@ def _run_pair(tmp_path, counts_by_sample, expected_celltypes,
         cell_min_instance=cell_min_instance,
         primary_only_celltypes=list(primary_only_celltypes),
         force_rerun=True,
+        run_id="test",
     )
     run_assemble(
         sample_id="MHTEST",
         concat_h5ad=concat_path,
-        census_csv=tmp_path / "MHTEST" / "census" / "census.csv",
+        census_csv=tmp_path / "MHTEST" / "MHTEST_test" / "census" / "census.csv",
         output_root=tmp_path,
         celltype_col="Final_level1_celltype_annotation",
         donor_borrow_cap=donor_borrow_cap,
         random_state=42,
         force_rerun=True,
+        run_id="test",
     )
-    return tmp_path / "MHTEST" / "assembled" / "reference.h5ad"
+    return tmp_path / "MHTEST" / "MHTEST_test" / "rctd" / "MHTEST_reference_post_rules.h5ad"
 
 
 # ------------------------------------------------------------------
@@ -145,6 +147,7 @@ def test_rule2_high_decision_when_primary_at_or_above_min_instance(tmp_path):
         cell_min_instance=20,
         primary_only_celltypes=["tumor", "liver"],
         force_rerun=True,
+        run_id="test",
     )
     df = _read_census(tmp_path, "MHTEST")
     fib = df.loc[df["celltype"] == "fibroblast"].iloc[0]
@@ -205,6 +208,7 @@ def test_rule2_low_decision_below_min_instance(tmp_path):
         cell_min_instance=20,
         primary_only_celltypes=["tumor", "liver"],
         force_rerun=True,
+        run_id="test",
     )
     df = _read_census(tmp_path, "MHTEST")
     fib = df.loc[df["celltype"] == "fibroblast"].iloc[0]
@@ -334,6 +338,7 @@ def test_rule2_low_primary_zero_still_hybrid_borrow(tmp_path):
         cell_min_instance=20,
         primary_only_celltypes=["tumor", "liver"],
         force_rerun=True,
+        run_id="test",
     )
     df = _read_census(tmp_path, "MHTEST")
     fib = df.loc[df["celltype"] == "fibroblast"].iloc[0]
