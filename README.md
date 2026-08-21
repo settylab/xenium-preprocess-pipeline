@@ -421,7 +421,15 @@ stdout and stderr into that single file. There is no separate
 
 ## Testing
 
+`pytest` itself is gated behind the `[test]` extra in each package's
+`pyproject.toml` — not part of `environments/xenium.yml` — so install
+it before running the suites (see `docs/installation.md` § 5):
+
 ```bash
+uv pip install -e "packages/xenium-preprocess[test]"
+uv pip install -e "packages/ref-build[test]"
+uv pip install -e "packages/rctd-split[test]"
+
 # Per-package pytest suites
 pytest packages/xenium-preprocess/tests
 pytest packages/ref-build/tests

@@ -4,6 +4,14 @@ Top-level sbatch driver + per-stage stubs for the user's
 `xenium-preprocess` → `ref-build` → `rctd-split` spatial-genomics
 workflow.
 
+> **BREAKING CHANGE for existing installs.** The `submit_*.sbatch` stubs now REQUIRE a
+> gitignored `env.local.conf` (resolved absolute paths) and refuse to run without one — they no
+> longer activate by `$HOME/.local/bin` + an env NAME, nor hardcode the R module. **Migration:
+> run `./write-env-config.sh` once.** Why: `$HOME` / an env NAME can resolve differently inside a
+> Slurm job than in the submitting shell (`sbatch --export=ALL` forwards VALUES, not path
+> resolution) — that's what actually broke this pipeline. No `$HOME`-derived fallback is
+> provided on purpose; see `lib/env_config.sh` and `docs/installation.md` for the full rationale.
+
 Specification: (internal issue review) comment
 (internal issue review).
 
@@ -16,8 +24,22 @@ Specification: (internal issue review) comment
 - `submit_xenium-preprocess.sbatch` — invokes `xenium-preprocess run`.
 - `submit_ref-build.sbatch` — invokes `ref-build run --flex-h5ad …`.
 - `submit_rctd-split.sbatch` — invokes `rctd-split run`.
-- `tests/test_submit_workflow.py` — integration test (18 cases) using
-  mock `sbatch` + mock package CLIs on `PATH`.
+- `write-env-config.sh` — one-time (per-install) step: resolves the
+  micromamba binary, env prefix, R library dir, and R module into
+  absolute values and writes the gitignored `env.local.conf`. Run this
+  as the last step of installation (docs/installation.md) — every
+  sbatch stub sources the result instead of re-deriving `$HOME`-relative
+  paths inside the job.
+- `env.local.conf` — gitignored, machine-local, written by
+  `write-env-config.sh`. Never commit; never hand-edit.
+- `env-preflight.sh` — submit-time preflight `submit_workflow.sh` runs
+  automatically (`--skip-preflight` to opt out): checks `env.local.conf`
+  is present + valid, and that its R library actually resolves
+  `spacexr`/`SPLIT` — fails in seconds instead of after a queue wait.
+- `lib/env_config.sh` — shared helper, sourced by the three sbatch
+  stubs and by `env-preflight.sh`; loads + validates `env.local.conf`.
+- `tests/test_submit_workflow.py` — integration test using mock
+  `sbatch` + mock package CLIs on `PATH`.
 
 ## Usage
 
