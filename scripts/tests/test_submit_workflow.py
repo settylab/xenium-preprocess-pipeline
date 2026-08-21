@@ -51,6 +51,16 @@ def env(tmp_path, monkeypatch):
     activate + Lmod's `ml`) is a no-op during tests. Otherwise `set -e` +
     a real micromamba+broken condarc / a missing Lmod would tear the
     sbatch script down before it ever reaches the mock package CLI.
+
+    Each sbatch script sources scripts/lib/env_config.sh, which reads
+    scripts/env.local.conf (see scripts/write-env-config.sh) — this
+    fixture points that at a fixture-local fake conf via
+    XENIUM_ENV_LOCAL_CONF (env_config.sh's test-only override) instead
+    of the real repo-level file, with dummy-but-valid (existing-path)
+    values. XENIUM_SKIP_PREFLIGHT=1 skips submit_workflow.sh's own
+    submit-time preflight (scripts/env-preflight.sh), which additionally
+    shells out to a real `Rscript` to check spacexr/SPLIT resolve —
+    these tests exercise job-chaining logic, not a real R environment.
     """
     output_root = tmp_path / "runs"
     output_root.mkdir()
@@ -79,6 +89,20 @@ def env(tmp_path, monkeypatch):
     ml_stub.write_text("#!/usr/bin/env bash\nexit 0\n")
     ml_stub.chmod(0o755)
 
+    # Fixture env.local.conf: dummy-but-existing paths so env_config.sh's
+    # existence checks pass without a real micromamba env / R library.
+    fake_env_prefix = tmp_path / "fake_env_prefix"
+    fake_env_prefix.mkdir()
+    fake_r_lib_dir = tmp_path / "fake_r_lib"
+    fake_r_lib_dir.mkdir()
+    fake_env_conf = tmp_path / "env.local.conf"
+    fake_env_conf.write_text(
+        f"MICROMAMBA_BIN={micromamba_stub}\n"
+        f"XENIUM_ENV_PREFIX={fake_env_prefix}\n"
+        f"R_LIB_DIR={fake_r_lib_dir}\n"
+        "R_MODULE=fhR/4.4.1-foss-2023b\n"
+    )
+
     original_path = os.environ.get("PATH", "")
     # Order: MOCKS (xenium-preprocess / ref-build / rctd-split / sbatch)
     # before stub_bin (micromamba, ml) before the inherited PATH (so the
@@ -95,6 +119,8 @@ def env(tmp_path, monkeypatch):
         # front, which would re-prepend the parent's real micromamba
         # (from ~/.local/bin) and shadow the stub above.
         "HOME": str(tmp_path),
+        "XENIUM_ENV_LOCAL_CONF": str(fake_env_conf),
+        "XENIUM_SKIP_PREFLIGHT": "1",
     }
     return {
         "env": e,
