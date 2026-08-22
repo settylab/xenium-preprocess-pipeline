@@ -33,7 +33,14 @@ _env_config_fail() {
     echo "error: $1" >&2
     echo "       Run scripts/write-env-config.sh to (re)generate "\
 "scripts/env.local.conf — see docs/installation.md." >&2
-    return 1 2>/dev/null || exit 1
+    # Unconditional exit, not `return`: `return 1` only aborts the sourcing
+    # script if that script itself runs under `set -e` -- a caller contract,
+    # not a property of this file. Every real call site (the 3 sbatch stubs,
+    # env-preflight.sh) does have `set -euo pipefail` before sourcing this,
+    # but this file's whole purpose is to fail loud unconditionally, so it
+    # shouldn't depend on that. This is never meant to be sourced from an
+    # interactive login shell, so `exit` (not `return`) is safe here.
+    exit 1
 }
 
 _ENV_CONFIG_LIB_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
