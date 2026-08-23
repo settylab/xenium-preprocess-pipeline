@@ -89,21 +89,36 @@ rctd-split        --help
 
 ```bash
 ml fhR/4.4.1-foss-2023b
-Rscript -e '
-  dir.create("~/R/x86_64-pc-linux-gnu-library/4.4", recursive = TRUE, showWarnings = FALSE)
-  .libPaths(c("~/R/x86_64-pc-linux-gnu-library/4.4", .libPaths()))
-  if (!requireNamespace("remotes", quietly = TRUE)) install.packages("remotes")
-  remotes::install_github("dmcable/spacexr")
-  remotes::install_github("bdsc-tds/SPLIT")
-'
+scripts/install-r-packages.sh --r-lib-dir ~/R/x86_64-pc-linux-gnu-library/4.4
 ```
+
+`remotes::install_github()` checks the installed SHA across **all**
+`.libPaths()` entries, not just the first — so simply prepending a
+fresh library directory (an earlier version of this doc did exactly
+that) does not protect the install from being silently **skipped** if
+a contaminated default library (`$R_LIBS_USER`, typically
+`~/R/x86_64-pc-linux-gnu-library/4.4`) already has a matching SHA. On
+any shared login node where multiple users' R sessions write to a
+common `$R_LIBS_USER` default, this is the common case, not the
+exception — and nothing errors when it happens; you're left believing
+you have an isolated install when you're actually running on
+contaminated shared state. `scripts/install-r-packages.sh` sets
+`R_LIBS_USER` explicitly to the target dir, strips any existing
+`$HOME/R/*` entry from `.libPaths()`, passes explicit `lib=` +
+`force=TRUE` to `remotes::install_github()` so the install cannot be
+silently skipped, and asserts afterward that spacexr + SPLIT actually
+landed in the target dir.
 
 ### Off-cluster
 
 Uncomment the R block in `environments/xenium.yml` and re-create the
 env, or install R 4.4+ separately and install Seurat + Matrix + readr
 + SpatialExperiment via `install.packages()` /
-`BiocManager::install()`. spacexr and SPLIT come from GitHub as above.
+`BiocManager::install()`. Then run:
+
+```bash
+scripts/install-r-packages.sh --r-lib-dir /abs/path/to/your/R/library
+```
 
 ## 5. Verify the install
 
