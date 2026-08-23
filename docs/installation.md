@@ -40,9 +40,30 @@ cd xenium-preprocess-pipeline
 ## 2. Create the Python environment
 
 ```bash
-micromamba create -n xenium -f environments/xenium.yml
+scripts/create-env.sh -n xenium -f environments/xenium.yml
 micromamba activate xenium
 ```
+
+`scripts/create-env.sh` is a thin wrapper around `micromamba create`.
+If you don't set `MAMBA_ROOT_PREFIX`, it's a plain passthrough. If you
+**do** set `MAMBA_ROOT_PREFIX` to keep this install fully isolated
+(e.g. off `$HOME`, for a scratch/test install, or to keep multiple
+installs from sharing state) — for example:
+
+```bash
+export MAMBA_ROOT_PREFIX=/abs/path/to/isolated/root
+scripts/create-env.sh -n xenium -f environments/xenium.yml
+```
+
+— the wrapper also exports `CONDA_PKGS_DIRS="$MAMBA_ROOT_PREFIX/pkgs"`
+and asserts afterward that `~/.mamba/pkgs` was not touched. Without
+this, micromamba's `pkgs_dirs` silently resolves to
+`[$MAMBA_ROOT_PREFIX/pkgs, ~/.mamba/pkgs]` — an undocumented second
+entry — so an "isolated" install can still quietly write package-cache
+state to `~/.mamba/pkgs`. Nothing errors when that happens; the
+wrapper's post-create check exists because this failure is otherwise
+invisible. A bare `micromamba create` still works exactly as before if
+you don't need isolation.
 
 ## 3. Install the three packages
 
