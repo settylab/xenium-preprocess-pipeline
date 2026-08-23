@@ -8,7 +8,7 @@ A single micromamba (or conda) environment spec covering the Python
 runtime for all three packages:
 
 ```bash
-micromamba create -n xenium -f environments/xenium.yml
+../scripts/create-env.sh -n xenium -f xenium.yml
 micromamba activate xenium
 
 uv pip install -e ../packages/xenium-preprocess

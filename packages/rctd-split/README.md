@@ -101,7 +101,7 @@ Full CLI reference: `rctd-split run --help`.
 ## Installation
 
 ```bash
-micromamba create -n xenium -f environment.yml   # once
+../../scripts/create-env.sh -n xenium -f environment.yml   # once
 micromamba activate xenium
 uv pip install -e .
 ```

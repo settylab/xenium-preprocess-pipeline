@@ -9,7 +9,10 @@
 "${SHELL}" <(curl -L micro.mamba.pm/install.sh)
 
 # 2. Create the env
-micromamba env create -f environment.yml
+# (../../scripts/create-env.sh wraps `micromamba env create`; if
+# MAMBA_ROOT_PREFIX is set for an isolated install, it also keeps the
+# package cache isolated — see docs/installation.md § 2 at the repo root)
+../../scripts/create-env.sh -f environment.yml
 micromamba activate xeniumPreprocess
 
 # 3. Editable install
@@ -45,7 +48,7 @@ Rscript -e "library(Seurat); library(spacexr); cat('ok\n')"
 
 ### Alternative: conda-native R
 
-If you don't have LMOD access, uncomment the R-side block in `environment.yml`, re-run `micromamba env create`, then finish the install manually because `spacexr` is not on conda:
+If you don't have LMOD access, uncomment the R-side block in `environment.yml`, re-run `../../scripts/create-env.sh`, then finish the install manually because `spacexr` is not on conda:
 
 ```r
 BiocManager::install("SpatialExperiment")

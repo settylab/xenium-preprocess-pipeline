@@ -47,7 +47,7 @@ done
 
 if [[ ! -d "$ENV_PREFIX" ]]; then
     echo "error: --env-prefix does not exist: $ENV_PREFIX" >&2
-    echo "       Create it first (micromamba create -p \"$ENV_PREFIX\" -f environments/xenium.yml)." >&2
+    echo "       Create it first (scripts/create-env.sh -p \"$ENV_PREFIX\" -f environments/xenium.yml)." >&2
     exit 3
 fi
 ENV_PREFIX=$(cd "$ENV_PREFIX" && pwd)   # canonicalize to an absolute path

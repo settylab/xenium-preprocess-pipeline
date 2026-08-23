@@ -17,7 +17,7 @@ every intermediate product traceable to the exact config that built it.
 git clone https://github.com/settylab/xenium-preprocess-pipeline
 cd xenium-preprocess-pipeline
 
-micromamba create -n xenium -f environments/xenium.yml
+scripts/create-env.sh -n xenium -f environments/xenium.yml
 micromamba activate xenium
 
 uv pip install -e packages/xenium-preprocess
@@ -94,7 +94,10 @@ Slurm layer on top.
 
 ```bash
 # Once per user / per machine
-micromamba create -n xenium -f environments/xenium.yml
+# (scripts/create-env.sh wraps `micromamba create`; if MAMBA_ROOT_PREFIX is
+# set for an isolated install, it also keeps the package cache isolated —
+# see docs/installation.md § 2)
+scripts/create-env.sh -n xenium -f environments/xenium.yml
 micromamba activate xenium
 
 # Editable installs of the three packages
