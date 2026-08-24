@@ -35,6 +35,19 @@ Stage 4 shells out to `Rscript`. The R environment must carry:
 - `SpatialExperiment`
 - `spacexr` (RCTD)
 
+`spacexr` installs via `remotes::install_github()` (see the conda-native
+path below), not CRAN — that needs outbound network access to
+`github.com` / `api.github.com`. **No GitHub credentials are required**
+— [`dmcable/spacexr`](https://github.com/dmcable/spacexr) is a public
+repo — but GitHub's unauthenticated API is capped at 60 requests/hour
+per source IP, easy to exhaust on shared infrastructure. If you already
+have `GITHUB_PAT`/`GITHUB_TOKEN` set, or have ever run `gh auth login`,
+`remotes` silently uses those credentials (raising the ceiling to
+5,000/hour) with no indication the install would otherwise be running
+against the smaller anonymous quota. See
+[`../../../docs/installation.md`](../../../docs/installation.md) §
+GitHub access for the full explanation.
+
 ### Recommended: Lmod R module
 
 `fhR/4.4.1-foss-2023b` module carries all of the above:

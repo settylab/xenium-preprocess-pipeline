@@ -79,6 +79,11 @@ SpatialExperiment, and spacexr — on Fred Hutch:
 ml fhR/4.4.1-foss-2023b
 ```
 
+`spacexr` installs from GitHub, not the module or CRAN — see
+[`docs/install.md`](docs/install.md) § R side. No GitHub credentials
+required (it's a public repo), but see that doc for GitHub's anonymous
+rate-limit caveat.
+
 ## Citation
 
 `CITATION.cff`. Upstream tools to cite alongside:

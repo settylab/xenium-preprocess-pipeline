@@ -89,6 +89,12 @@ Slurm layer on top.
 - **Disk**: ~50 GB per sample per run for intermediate + final outputs.
 - **Micromamba** (or `conda`), **`uv`**, and **R 4.4+** with `spacexr`,
   `SPLIT`, and `Seurat`.
+- Outbound network access to `github.com` / `api.github.com` — `spacexr`
+  and `SPLIT` install from GitHub, not CRAN. No GitHub credentials
+  required (both repos are public), but see
+  [`docs/installation.md`](docs/installation.md) § GitHub access —
+  GitHub's unauthenticated API rate limit is easy to hit on shared
+  infrastructure.
 
 ### Python environment
 
@@ -121,7 +127,9 @@ Seurat, Matrix, spacexr (RCTD), and SPLIT.
 On the cluster's `fhR/4.4.1-foss-2023b` module provides
 Seurat + Matrix + SpatialExperiment; `spacexr` and `SPLIT` install into
 a user library — see [`docs/installation.md`](docs/installation.md) for
-the recipe.
+the recipe. That install goes over GitHub's API, not CRAN — no
+credentials required (both repos are public), but see § GitHub access
+there for the anonymous rate-limit caveat.
 
 ## Usage
 

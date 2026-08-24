@@ -34,6 +34,20 @@ The R environment must carry:
 - `spacexr` (RCTD)
 - `SPLIT` (bdsc-tds/SPLIT)
 
+`spacexr` and `SPLIT` both install via `remotes::install_github()`
+below, not CRAN — that needs outbound network access to `github.com` /
+`api.github.com`. **No GitHub credentials are required** — both source
+repos ([`dmcable/spacexr`](https://github.com/dmcable/spacexr),
+[`bdsc-tds/SPLIT`](https://github.com/bdsc-tds/SPLIT)) are public — but
+GitHub's unauthenticated API is capped at 60 requests/hour per source
+IP, easy to exhaust on shared infrastructure. If you already have
+`GITHUB_PAT`/`GITHUB_TOKEN` set, or have ever run `gh auth login`,
+`remotes` silently uses those credentials (raising the ceiling to
+5,000/hour) with no indication the install would otherwise be running
+against the smaller anonymous quota. See
+[`../../../docs/installation.md`](../../../docs/installation.md) §
+GitHub access for the full explanation.
+
 ### Recommended: Lmod R module + user-local R lib
 
 `fhR/4.4.1-foss-2023b` module carries `Seurat` + `Matrix`, but NOT `spacexr` or `SPLIT`. Both need a one-time user-local install at `~/.claude/r_libs/4.4.1`:

@@ -43,7 +43,10 @@ ml fhR/4.4.1-foss-2023b
 library, as an earlier version of this doc did, doesn't stop a
 contaminated default library from silently absorbing the "install".
 See [`../docs/installation.md`](../docs/installation.md) § R side for
-why `scripts/install-r-packages.sh` exists.)
+why `scripts/install-r-packages.sh` exists — and § GitHub access for
+why this step needs `github.com`/`api.github.com` reachable, and no
+GitHub credentials strictly required but a rate-limit caveat if you
+don't have any.)
 
 ### Off-cluster
 

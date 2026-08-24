@@ -33,6 +33,19 @@ Stage 5 shells out to `Rscript`. The R environment must carry:
 - `Matrix`
 - `spacexr` (RCTD; **not** shipped by the LMOD module — one-time install below)
 
+`spacexr` installs via `remotes::install_github()` below, not CRAN —
+that needs outbound network access to `github.com` / `api.github.com`.
+**No GitHub credentials are required** —
+[`dmcable/spacexr`](https://github.com/dmcable/spacexr) is a public
+repo — but GitHub's unauthenticated API is capped at 60 requests/hour
+per source IP, easy to exhaust on shared infrastructure. If you already
+have `GITHUB_PAT`/`GITHUB_TOKEN` set, or have ever run `gh auth login`,
+`remotes` silently uses those credentials (raising the ceiling to
+5,000/hour) with no indication the install would otherwise be running
+against the smaller anonymous quota. See
+[`../../../docs/installation.md`](../../../docs/installation.md) §
+GitHub access for the full explanation.
+
 ### Recommended: Lmod R module + user-local `spacexr`
 
 `fhR/4.4.1-foss-2023b` module carries `Seurat` + `Matrix`. `spacexr` is not on the module; the ref-build recipe (see `the internal reference summary` lines 279-281) installs it once into a user-local R library at `~/.claude/r_libs/4.4.1` and reuses it across builds:

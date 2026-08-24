@@ -38,6 +38,11 @@ Full installation recipe for `xenium-preprocess-pipeline`.
   ```
 - [`uv`](https://docs.astral.sh/uv/) for the editable Python installs.
 - R 4.4+ with Seurat, Matrix, spacexr, SPLIT, SpatialExperiment.
+- Outbound network access to `github.com` / `api.github.com` for step 4 —
+  `spacexr` and `SPLIT` install via `remotes::install_github()`, not CRAN.
+  GitHub credentials are **not** required (both source repos are public),
+  but they raise GitHub's anonymous API rate limit; see step 4 § GitHub
+  access for why this matters on shared infrastructure.
 
 ## 1. Clone the repository
 
@@ -179,6 +184,37 @@ and via `R_REMOTES_UPGRADE`, so the install only ever adds the handful
 of packages fhR doesn't already ship. If fhR ships a dependency too old
 for spacexr/SPLIT, the install now fails loudly instead of silently
 diverging from the validated fhR stack.
+
+### GitHub access
+
+`remotes::install_github()` fetches both packages from GitHub's REST API
+(`api.github.com`), not CRAN. Verified empirically (both source repos —
+[`dmcable/spacexr`](https://github.com/dmcable/spacexr) and
+[`bdsc-tds/SPLIT`](https://github.com/bdsc-tds/SPLIT) — confirmed public
+via the API, `"private": false`): **GitHub credentials are not a hard
+requirement.** With no `GITHUB_PAT`/`GITHUB_TOKEN` set and no git
+credential store present, `scripts/install-r-packages.sh` downloads both
+packages successfully over GitHub's unauthenticated API.
+
+The real constraint is GitHub's **anonymous rate limit** — 60 requests
+per source IP per hour, versus 5,000/hour authenticated — and each
+`install_github()` call spends 2-3 of those. On a shared cluster where
+many users' traffic egresses through the same IP, that ceiling is easy
+to exhaust incidentally (any concurrent unauthenticated GitHub API
+traffic on the same egress IP counts against it, not just this script),
+and `remotes` then fails partway through the install with an HTTP 403
+rate-limit error.
+
+This is also why the failure is easy to miss in testing: `remotes`
+silently picks up `GITHUB_PAT`/`GITHUB_TOKEN`, or credentials already
+sitting in the git credential store (e.g. from a prior `gh auth login`)
+— printing `Using GitHub PAT from the git credential store.` and nothing
+else — so on any account with ambient credentials this step always
+works, with no indication that a credential-free account would be
+running against a much smaller, shared quota instead. **Recommended:**
+set `GITHUB_PAT` or `GITHUB_TOKEN` before running this step, or run `gh
+auth login` once (also picked up automatically), to raise the ceiling to
+5,000 requests/hour.
 
 ### Off-cluster
 
