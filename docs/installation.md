@@ -61,6 +61,8 @@ installs from sharing state) — for example:
 
 ```bash
 export MAMBA_ROOT_PREFIX=/abs/path/to/isolated/root
+export XDG_CACHE_HOME="$MAMBA_ROOT_PREFIX/xdg-cache"
+export XDG_CONFIG_HOME="$MAMBA_ROOT_PREFIX/xdg-config"
 scripts/create-env.sh -n xenium -f environments/xenium.yml
 ```
 
@@ -74,15 +76,41 @@ wrapper's post-create check exists because this failure is otherwise
 invisible. A bare `micromamba create` still works exactly as before if
 you don't need isolation.
 
+`scripts/uv-pip-install.sh` (step 3) covers uv's own package cache,
+but plenty of libraries importable from this env's packages fall back
+to the [XDG Base
+Directory](https://specifications.freedesktop.org/basedir-spec/latest/)
+spec (`$XDG_CACHE_HOME`, default `~/.cache`; `$XDG_CONFIG_HOME`,
+default `~/.config`) for their OWN caches, with no repo-specific
+wrapper to intercept them — e.g. `matplotlib` writes a font-list cache
+(`fontlist-*.json`) and a config dir the first time it's imported,
+confirmed to fire during step 5's `pytest` run. Exporting
+`XDG_CACHE_HOME`/`XDG_CONFIG_HOME` once, alongside `MAMBA_ROOT_PREFIX`
+above, redirects this whole class of dependency at the source instead
+of chasing each library that writes to `$HOME` one at a time. If you
+don't set `MAMBA_ROOT_PREFIX` (no isolation requested), leave these
+unset too — everything falls back to the normal `$HOME` locations.
+
 ## 3. Install the three packages
 
 Each package installs its own CLI entry point:
 
 ```bash
-uv pip install -e packages/xenium-preprocess
-uv pip install -e packages/ref-build
-uv pip install -e packages/rctd-split
+scripts/uv-pip-install.sh -e packages/xenium-preprocess
+scripts/uv-pip-install.sh -e packages/ref-build
+scripts/uv-pip-install.sh -e packages/rctd-split
 ```
+
+`scripts/uv-pip-install.sh` is a thin wrapper around `uv pip install`.
+Like `scripts/create-env.sh` (step 2), it's a plain passthrough unless
+`MAMBA_ROOT_PREFIX` is set — but if it IS set, plain `uv pip install`
+still writes its content-addressed cache to `~/.cache/uv` regardless
+(uv doesn't read micromamba's config), so an "isolated" install can
+quietly leave files behind in `$HOME` anyway. The wrapper overrides
+`UV_CACHE_DIR` into `$MAMBA_ROOT_PREFIX/uv-cache` and asserts
+afterward that `~/.cache/uv` was not touched — the same isolation
+guarantee `create-env.sh` gives the conda side. A bare `uv pip install
+-e ...` still works exactly as before if you don't need isolation.
 
 Verify:
 
@@ -96,10 +124,34 @@ rctd-split        --help
 
 ### On a cluster with Lmod
 
+**Run `ml` inside a subshell `( ... )`, not directly in your login shell.**
+Lmod's `ml` sets `PATH` *and* `PYTHONPATH` for the rest of the shell
+session it runs in — `PYTHONPATH` unconditionally, to point at every
+Lmod-managed `python3.x/site-packages` dir the module ships (Graphviz,
+SciPy-bundle, Python-bundle-PyPI, …). `micromamba activate` never
+touches `PYTHONPATH`, so once it's set it stays set: even after
+re-running `micromamba activate xenium`, the venv's own `pytest`
+binary still imports the wrong (Lmod) `_pytest` package via the
+leftover `PYTHONPATH` and crashes — and because PyYAML genuinely *is*
+installed correctly in the venv, the resulting error
+(`ModuleNotFoundError: No module named 'yaml'`, or an `ImportError`
+importing `_pytest.config`) points nowhere near the real cause. A
+subshell confines `ml`'s env changes to itself — nothing about the
+outer shell's `PATH`/`PYTHONPATH` changes once the `)` closes, so step
+5 sees the untouched, correctly-activated `xenium` env:
+
 ```bash
-ml fhR/4.4.1-foss-2023b
-scripts/install-r-packages.sh --r-lib-dir ~/R/x86_64-pc-linux-gnu-library/4.4
+(
+    ml fhR/4.4.1-foss-2023b
+    scripts/install-r-packages.sh --r-lib-dir ~/R/x86_64-pc-linux-gnu-library/4.4
+)
 ```
+
+If you ever DO run `ml` directly (outside a subshell) and see import
+errors afterward, the fix is `micromamba activate xenium && unset
+PYTHONPATH` — `scripts/check-python-env.sh` (step 5) catches and
+explains this case instead of leaving you to chase a misleading
+`ModuleNotFoundError`.
 
 `remotes::install_github()` checks the installed SHA across **all**
 `.libPaths()` entries, not just the first — so simply prepending a
@@ -149,9 +201,15 @@ before running bare `pytest` (omitting this step is the most common
 'pytest'`" report):
 
 ```bash
-uv pip install -e "packages/xenium-preprocess[test]"
-uv pip install -e "packages/ref-build[test]"
-uv pip install -e "packages/rctd-split[test]"
+scripts/uv-pip-install.sh -e "packages/xenium-preprocess[test]"
+scripts/uv-pip-install.sh -e "packages/ref-build[test]"
+scripts/uv-pip-install.sh -e "packages/rctd-split[test]"
+
+# Sanity check: confirms python/pytest actually resolve inside the
+# `xenium` env before running anything. Catches the ml/PYTHONPATH
+# shadowing described in step 4 loudly and accurately, instead of
+# `pytest` failing later with a misleading ModuleNotFoundError.
+scripts/check-python-env.sh --env-name xenium
 
 # Python side
 pytest packages/xenium-preprocess/tests

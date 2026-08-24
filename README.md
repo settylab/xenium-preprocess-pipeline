@@ -20,9 +20,9 @@ cd xenium-preprocess-pipeline
 scripts/create-env.sh -n xenium -f environments/xenium.yml
 micromamba activate xenium   # needs `micromamba shell hook` sourced first — see docs/installation.md § Prerequisites
 
-uv pip install -e packages/xenium-preprocess
-uv pip install -e packages/ref-build
-uv pip install -e packages/rctd-split
+scripts/uv-pip-install.sh -e packages/xenium-preprocess
+scripts/uv-pip-install.sh -e packages/ref-build
+scripts/uv-pip-install.sh -e packages/rctd-split
 
 ./scripts/submit_workflow.sh \
     --sample-id             SAMPLE1 \
@@ -101,9 +101,11 @@ scripts/create-env.sh -n xenium -f environments/xenium.yml
 micromamba activate xenium   # needs `micromamba shell hook` sourced first — see docs/installation.md § Prerequisites
 
 # Editable installs of the three packages
-uv pip install -e packages/xenium-preprocess
-uv pip install -e packages/ref-build
-uv pip install -e packages/rctd-split
+# (scripts/uv-pip-install.sh wraps `uv pip install`; if MAMBA_ROOT_PREFIX
+# is set, it also keeps uv's cache isolated — see docs/installation.md § 3)
+scripts/uv-pip-install.sh -e packages/xenium-preprocess
+scripts/uv-pip-install.sh -e packages/ref-build
+scripts/uv-pip-install.sh -e packages/rctd-split
 
 # Verify
 xenium-preprocess --help
@@ -429,9 +431,14 @@ stdout and stderr into that single file. There is no separate
 it before running the suites (see `docs/installation.md` § 5):
 
 ```bash
-uv pip install -e "packages/xenium-preprocess[test]"
-uv pip install -e "packages/ref-build[test]"
-uv pip install -e "packages/rctd-split[test]"
+scripts/uv-pip-install.sh -e "packages/xenium-preprocess[test]"
+scripts/uv-pip-install.sh -e "packages/ref-build[test]"
+scripts/uv-pip-install.sh -e "packages/rctd-split[test]"
+
+# Sanity check before running pytest — catches ml/PYTHONPATH env
+# shadowing loudly instead of a misleading ModuleNotFoundError (see
+# docs/installation.md § 4-5).
+scripts/check-python-env.sh --env-name xenium
 
 # Per-package pytest suites
 pytest packages/xenium-preprocess/tests
