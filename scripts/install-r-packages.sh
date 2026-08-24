@@ -78,14 +78,31 @@ R_LIBS_USER="$R_LIB_DIR" Rscript --vanilla -e '
     install.packages("remotes", lib = lib, repos = "https://cloud.r-project.org")
   }
 
-  remotes::install_github("dmcable/spacexr", lib = lib, force = TRUE)
-  remotes::install_github("bdsc-tds/SPLIT",   lib = lib, force = TRUE)
+  # Under non-interactive Rscript, remotes:::resolve_upgrade() defaults
+  # upgrade="ask" to upgrade="always" — silently rebuilding every
+  # dependency it can from source and discarding fhR'"'"'s pre-built
+  # versions. Pin it off at both the call site and via env var, so a
+  # transitive remotes call cannot reintroduce the behaviour.
+  Sys.setenv(R_REMOTES_UPGRADE = "never")
+
+  remotes::install_github("dmcable/spacexr", lib = lib, force = TRUE, upgrade = "never")
+  remotes::install_github("bdsc-tds/SPLIT",   lib = lib, force = TRUE, upgrade = "never")
 
   missing <- Filter(function(pkg) !dir.exists(file.path(lib, pkg)), c("spacexr", "SPLIT"))
   if (length(missing) > 0) {
     cat("ERROR: not installed into", lib, ":", paste(missing, collapse = ", "), "\n")
     quit(status = 1)
   }
-  cat("[install-r-packages] verified: spacexr + SPLIT installed in", lib, "\n")
+
+  # Absence-of-install was the original failure mode; upgrade="never"
+  # trades a silent divergence from fhR'"'"'s validated stack for a loud
+  # failure if fhR ships a dependency too old for these packages — so
+  # also assert the packages actually LOAD, not just that they landed.
+  unloadable <- Filter(function(pkg) !requireNamespace(pkg, lib.loc = lib, quietly = TRUE), c("spacexr", "SPLIT"))
+  if (length(unloadable) > 0) {
+    cat("ERROR: installed but failed to load from", lib, ":", paste(unloadable, collapse = ", "), "\n")
+    quit(status = 1)
+  }
+  cat("[install-r-packages] verified: spacexr + SPLIT installed in", lib, "and load successfully\n")
 '
 echo "[install-r-packages] done."

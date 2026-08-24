@@ -116,7 +116,17 @@ contaminated shared state. `scripts/install-r-packages.sh` sets
 `$HOME/R/*` entry from `.libPaths()`, passes explicit `lib=` +
 `force=TRUE` to `remotes::install_github()` so the install cannot be
 silently skipped, and asserts afterward that spacexr + SPLIT actually
-landed in the target dir.
+landed in the target dir **and load successfully**.
+
+`remotes::install_github()` also defaults `upgrade="ask"` under a
+non-interactive `Rscript`, which `remotes` resolves to `upgrade="always"`
+— silently upgrading every dependency it can and rebuilding it from
+source, discarding fhR's pre-built versions in the process.
+`scripts/install-r-packages.sh` pins `upgrade="never"` at the call site
+and via `R_REMOTES_UPGRADE`, so the install only ever adds the handful
+of packages fhR doesn't already ship. If fhR ships a dependency too old
+for spacexr/SPLIT, the install now fails loudly instead of silently
+diverging from the validated fhR stack.
 
 ### Off-cluster
 
