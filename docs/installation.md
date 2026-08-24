@@ -27,6 +27,15 @@ Full installation recipe for `xenium-preprocess-pipeline`.
   `scripts/env.local.conf` — it does not assume micromamba lives at any
   particular path (e.g. `$HOME/.local/bin`) or that a bare env NAME
   resolves the same way inside a Slurm job as it did in your login shell.
+  **`micromamba activate` (step 2 below) requires the shell hook to
+  already be sourced** — a fresh install of the raw `micromamba` binary
+  does not wire this up by itself. If `micromamba activate xenium` fails
+  with `critical libmamba Shell not initialized` / `'micromamba' is
+  running as a subprocess and can't modify the parent shell`, run this
+  once (add it to your shell rc to persist across sessions):
+  ```bash
+  eval "$(micromamba shell hook --shell bash)"   # or --shell zsh
+  ```
 - [`uv`](https://docs.astral.sh/uv/) for the editable Python installs.
 - R 4.4+ with Seurat, Matrix, spacexr, SPLIT, SpatialExperiment.
 
@@ -166,9 +175,19 @@ resolution) — see `scripts/lib/env_config.sh` for the full rationale.
 
 ```bash
 ./scripts/write-env-config.sh \
-    --env-prefix "$(micromamba env list | awk '/xenium/ {print $NF}')" \
-    --r-lib-dir  ~/R/x86_64-pc-linux-gnu-library/4.4
+    --env-name  xenium \
+    --r-lib-dir ~/R/x86_64-pc-linux-gnu-library/4.4
 ```
+
+`--env-name xenium` reads back the prefix that `scripts/create-env.sh`
+(step 2) already recorded to `scripts/.env-prefix-xenium` — it does not
+query `micromamba env list`, whose output accumulates one row per
+`xenium` env ever created on this account, across every
+`MAMBA_ROOT_PREFIX` ever used (not just this install), and so cannot be
+`awk`-matched by name safely once you have more than one. If you
+skipped `scripts/create-env.sh` and created the env some other way (a
+bare `micromamba create` / `conda create`), there is no receipt to read
+back — pass `--env-prefix /abs/path/to/the/env` directly instead.
 
 Then verify it end-to-end (also runs automatically before every
 `submit_workflow.sh` dispatch — `--skip-preflight` to opt out):

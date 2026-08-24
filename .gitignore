@@ -49,6 +49,10 @@ htmlcov/
 # never committed.
 scripts/env.local.conf
 
+# Machine-local env-prefix receipts (scripts/create-env.sh output) —
+# same rationale as env.local.conf above.
+scripts/.env-prefix-*
+
 # Slurm output logs (accumulate in checkout)
 slurm-*.log
 *.slurm.log

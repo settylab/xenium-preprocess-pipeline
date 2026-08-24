@@ -18,7 +18,7 @@ git clone https://github.com/settylab/xenium-preprocess-pipeline
 cd xenium-preprocess-pipeline
 
 scripts/create-env.sh -n xenium -f environments/xenium.yml
-micromamba activate xenium
+micromamba activate xenium   # needs `micromamba shell hook` sourced first — see docs/installation.md § Prerequisites
 
 uv pip install -e packages/xenium-preprocess
 uv pip install -e packages/ref-build
@@ -98,7 +98,7 @@ Slurm layer on top.
 # set for an isolated install, it also keeps the package cache isolated —
 # see docs/installation.md § 2)
 scripts/create-env.sh -n xenium -f environments/xenium.yml
-micromamba activate xenium
+micromamba activate xenium   # needs `micromamba shell hook` sourced first — see docs/installation.md § Prerequisites
 
 # Editable installs of the three packages
 uv pip install -e packages/xenium-preprocess

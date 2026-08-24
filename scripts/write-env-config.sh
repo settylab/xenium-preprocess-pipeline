@@ -18,6 +18,14 @@
 # docs/installation.md first). --r-module defaults to the module this
 # pipeline has always assumed; --micromamba-bin auto-detects via
 # `command -v micromamba` if not passed.
+#
+# --env-name <name> is an alternative to --env-prefix: it reads back
+# the prefix that `scripts/create-env.sh -n <name> ...` recorded to
+# `scripts/.env-prefix-<name>` at env-creation time, instead of you
+# having to resolve the path yourself. (Unrelated to the deprecated
+# `--env-name`/`$ENV_NAME` accepted by the sbatch submit scripts — see
+# their own header comments; this is write-env-config.sh's only use of
+# the name.) Pass at most one of --env-prefix / --env-name.
 
 set -euo pipefail
 
@@ -25,6 +33,7 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 OUT="$SCRIPT_DIR/env.local.conf"
 
 ENV_PREFIX=""
+ENV_NAME=""
 R_LIB_DIR=""
 R_MODULE="fhR/4.4.1-foss-2023b"
 MICROMAMBA_BIN=""
@@ -32,22 +41,39 @@ MICROMAMBA_BIN=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --env-prefix)      ENV_PREFIX="$2"; shift 2 ;;
+        --env-name)        ENV_NAME="$2"; shift 2 ;;
         --r-lib-dir)       R_LIB_DIR="$2"; shift 2 ;;
         --r-module)        R_MODULE="$2"; shift 2 ;;
         --micromamba-bin)  MICROMAMBA_BIN="$2"; shift 2 ;;
         -h|--help)
-            sed -n '2,20p' "$0"; exit 0 ;;
+            sed -n '2,28p' "$0"; exit 0 ;;
         *)
             echo "error: unknown argument: $1" >&2; exit 2 ;;
     esac
 done
 
-: "${ENV_PREFIX:?--env-prefix is required (absolute path to the micromamba env PREFIX)}"
+if [[ -n "$ENV_PREFIX" && -n "$ENV_NAME" ]]; then
+    echo "error: pass at most one of --env-prefix / --env-name, not both." >&2
+    exit 2
+fi
+
+if [[ -n "$ENV_NAME" ]]; then
+    RECEIPT="$SCRIPT_DIR/.env-prefix-$ENV_NAME"
+    if [[ ! -f "$RECEIPT" ]]; then
+        echo "error: --env-name $ENV_NAME: no receipt at $RECEIPT" >&2
+        echo "       Run scripts/create-env.sh -n $ENV_NAME -f environments/xenium.yml first" >&2
+        echo "       (it writes this file), or pass --env-prefix directly." >&2
+        exit 3
+    fi
+    ENV_PREFIX=$(<"$RECEIPT")
+fi
+
+: "${ENV_PREFIX:?--env-prefix or --env-name is required}"
 : "${R_LIB_DIR:?--r-lib-dir is required (absolute path to the R library holding spacexr/SPLIT)}"
 
 if [[ ! -d "$ENV_PREFIX" ]]; then
     echo "error: --env-prefix does not exist: $ENV_PREFIX" >&2
-    echo "       Create it first (scripts/create-env.sh -p \"$ENV_PREFIX\" -f environments/xenium.yml)." >&2
+    echo "       Create it first (scripts/create-env.sh -n xenium -f environments/xenium.yml)." >&2
     exit 3
 fi
 ENV_PREFIX=$(cd "$ENV_PREFIX" && pwd)   # canonicalize to an absolute path
