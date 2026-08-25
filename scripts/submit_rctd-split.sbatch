@@ -3,7 +3,7 @@
 #SBATCH --partition=campus-new
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=256G
-#SBATCH --time=24:00:00
+#SBATCH --time=6-00:00:00
 # NOTE: --output is set by submit_workflow.sh at submission time so the log
 #       lands under <output_root>/<sample>/<sample>_<run_id>/logs/, not the
 #       driver's CWD. A direct `sbatch submit_rctd-split.sbatch` invocation will
