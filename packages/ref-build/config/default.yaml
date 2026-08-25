@@ -1,4 +1,4 @@
-# Default configuration for the ref-build pipeline (step 3 of the
+# Default configuration for the ref-build pipeline (ref-build of the
 # Xenium spatial-data preprocessing pipeline).
 #
 # Every value here can be overridden on the CLI (--key value) or by a
@@ -12,7 +12,7 @@ primary_h5ad: null                    # REQUIRED on CLI: path to the primary's
                                       # on 2026-08-10 (internal issue review),
                                       # and this path now typically points at manual
                                       # scRNA prep. Input contract: .obs[celltype_col]
-                                      # populated (default Final_level1_celltype_annotation);
+                                      # populated (default celltypes);
                                       # counts source layers["counts"] → layers["raw_count"]
                                       # → .X (first present wins) and MUST be integer.
 donor_h5ads: []                       # OPTIONAL: list of same-primary-tumor-type donor
@@ -31,8 +31,9 @@ fallback_donor_h5ads: []              # OPTIONAL: list of FALLBACK donor h5ad pa
                                       # Rules 1-4 IGNORE these; Rule 5 is the only path
                                       # cells from these files can enter the reference.
                                       # Column resolution on the fallback h5ad is
-                                      # auto-detected (Final_level1_celltype_annotation,
-                                      # refined_celltype, refined_celltype_update_lymphocyes).
+                                      # auto-detected (celltypes,
+                                      # Final_level1_celltype_annotation, refined_celltype,
+                                      # refined_celltype_update_lymphocyes).
 output_root: null                     # REQUIRED on CLI: root output directory
 celltype_marker_json: null            # REQUIRED on CLI: marker-gene JSON declaring
                                       # the expected celltype set (same shape as step
@@ -51,9 +52,17 @@ force_rerun: false                    # nuke per-stage sentinels and re-run
 #   final `rctd/` outputs land.
 run_id: null
 
+# ----- Cross-stage R config -----------------------------------------
+# R library paths prepended to the child Rscript's `R_LIBS_USER` for
+# the rctd_reference_build stage. Set this to the renv/user-library
+# dir containing spacexr + Seurat. Leave empty to use the environment's
+# default R library search path (e.g., after `ml fhR/4.4.1-foss-2023b`
+# + a user library at ~/R/x86_64-pc-linux-gnu-library/4.4).
+r_lib_paths: []
+
 # --flex-h5ad — the flex-preprocessed scRNA h5ad. Reference-in-place:
-# recorded verbatim under `step3.flex_h5ad_path` in the merged
-# resolved_config.yaml. No copy / no symlink. When null, no path is
+# recorded verbatim under `ref_build.flex_h5ad_path` in the merged
+# config.yaml. No copy / no symlink. When null, no path is
 # recorded. If --primary-h5ad is not set, the flex path is used as
 # the primary input.
 flex_h5ad_path: null
@@ -65,7 +74,7 @@ flex_h5ad_path: null
 # (Stage B, steps 1-3): read each file, concat with join="outer",
 # fill_value=0, attach a sample_ID column.
 load_primary_and_donors:
-  celltype_col: Final_level1_celltype_annotation
+  celltype_col: celltypes
                                       # Per-cell celltype-annotation column in .obs.
                                       # Same column across primary + all donors.
   # If `celltype_col` is not present in an AnnData's .obs, walk this
@@ -79,7 +88,7 @@ load_primary_and_donors:
 # (internal issue review) per celltype declared in
 # celltype_marker_json.
 census:
-  celltype_col: Final_level1_celltype_annotation
+  celltype_col: celltypes
   donor_borrow_cap: 100               # Single cap serving three roles:
                                       #   Rule 1 gate  — primary_count > this
                                       #                  → primary_only.
@@ -135,7 +144,7 @@ census:
 # celltypes are deduped by cell id at the end (kept once, original
 # label preserved).
 assemble:
-  celltype_col: Final_level1_celltype_annotation
+  celltype_col: celltypes
 
 # Stage 4 — export_mtx
 # 10X-style bundle for the R side (Stage C) and any downstream RCTD

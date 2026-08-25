@@ -1,25 +1,27 @@
-"""Stage 7: writeback filter status + unpurified obs onto step-1's raw h5ad.
+"""Sub-stage 7: writeback filter status + unpurified obs onto
+xenium-preprocess's raw h5ad.
 
-Three joined operations, all additive-only obs joins on step-1's
+Three joined operations, all additive-only obs joins on xenium-preprocess's
 ``<S>_proseg_raw.h5ad``:
 
 **Part 1 — filter-status columns for every raw cell.**
 ``filter_status.csv`` has one row per unpurified cell; three booleans
 (``passed_rctd``, ``passed_split_purify``, ``filtered_by_purification``)
 are reindexed onto ``raw.obs_names``. Cells NOT in ``filter_status.csv``
-MUST have ``step-1 qc_filter`` say they were excluded (``qc_filtered==False``
-in step-1's convention: cells that FAILED the count threshold have
-``qc_filtered=False``). Anything else is an "unaccounted-for cells"
-fail-loud invariant — a CSV writeup is emitted and the stage raises.
+MUST have ``xenium-preprocess's qc_filter`` say they were excluded
+(``qc_filtered==False`` in xenium-preprocess's convention: cells that
+FAILED the count threshold have ``qc_filtered=False``). Anything else is
+an "unaccounted-for cells" fail-loud invariant — a CSV writeup is emitted
+and the stage raises.
 
 **Part 2 — fold unpurified.h5ad's .obs onto raw.**
-``step4_unpurified.h5ad`` is loaded, its .obs columns are reindexed onto
+``unpurified.h5ad`` is loaded, its .obs columns are reindexed onto
 raw's obs axis (NA where missing) and folded onto ``raw.obs`` under the
 configured ``exclude_obs_cols`` policy (default: exclude duplicates and
 the three filter-status columns already written by Part 1).
 
 **Part 3 — ``passed_purification`` from proseg_purified.h5ad.**
-The postprocess stage (stage 6) runs
+The postprocess sub-stage (sub-stage 6) runs
 ``sc.pp.filter_cells(min_counts=...)`` on ``proseg_purified.h5ad`` in
 place, dropping cells that fall below the count threshold. Cells still
 present after that filter are the "truly-purified" set; recording
@@ -31,9 +33,10 @@ Idempotent: writes are overwrites, never appends. Rerunning does not
 grow ``raw.obs`` schema or double-write. Sentinel is a marker file
 under ``intermediate/adata/``.
 
-**Ordering constraint**: this stage MUST run AFTER step-1's ``qc_filter``
-stage has written ``.obs['qc_filtered']`` on ``raw.h5ad``, and AFTER
-stage 6 ``postprocess`` has filtered ``proseg_purified.h5ad`` in place.
+**Ordering constraint**: this sub-stage MUST run AFTER xenium-preprocess's
+``qc_filter`` sub-stage has written ``.obs['qc_filtered']`` on
+``raw.h5ad``, and AFTER sub-stage 6 ``postprocess`` has filtered
+``proseg_purified.h5ad`` in place.
 """
 from __future__ import annotations
 
@@ -54,8 +57,8 @@ def _emit_unaccounted_summary(
     out_path: Path,
 ) -> None:
     """Write a CSV summary of raw cells that are neither in
-    ``filter_status.csv`` nor step-1-QC-dropped. Called only in the
-    fail-loud path."""
+    ``filter_status.csv`` nor xenium-preprocess-QC-dropped. Called only in
+    the fail-loud path."""
     import pandas as pd
 
     diag_cols = [
@@ -68,8 +71,8 @@ def _emit_unaccounted_summary(
     df = raw_obs.loc[unaccounted_mask, diag_cols].copy() \
         if diag_cols else pd.DataFrame(index=raw_obs.index[unaccounted_mask])
     df["note"] = (
-        "not in filter_status.csv AND step-1 qc_filtered=True — "
-        "investigate split_prep.filter_cells vs. step-1 qc_filter config"
+        "not in filter_status.csv AND xenium-preprocess qc_filtered=True — "
+        "investigate split_prep.filter_cells vs. xenium-preprocess qc_filter config"
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     tmp = out_path.with_suffix(out_path.suffix + ".tmp")
@@ -91,7 +94,7 @@ def _fold_filter_status(
     """
     import pandas as pd
 
-    log(f"[writeback_to_step1_raw]   reading filter_status {filter_status_csv}")
+    log(f"[writeback_to_raw]   reading filter_status {filter_status_csv}")
     fs = pd.read_csv(filter_status_csv, index_col=0)
     # DTYPE TRAP: filter_status.csv's cell_id may be int64 while
     # raw.obs_names is str. Coerce both sides to str for the join.
@@ -106,7 +109,7 @@ def _fold_filter_status(
     if n_present != len(fs):
         # Every filter_status.csv row must land on exactly one raw cell.
         raise SystemExit(
-            f"[writeback_to_step1_raw] filter_status has {len(fs)} rows "
+            f"[writeback_to_raw] filter_status has {len(fs)} rows "
             f"but only {n_present} align with raw.obs_names after dtype "
             "coercion. Check for a cell-id-scheme mismatch (proseg int vs. "
             "Xenium string)."
@@ -114,14 +117,14 @@ def _fold_filter_status(
 
     if qc_filtered_col not in raw_adata.obs.columns:
         raise SystemExit(
-            f"[writeback_to_step1_raw] raw h5ad has no .obs[{qc_filtered_col!r}]. "
-            "Run step 1's `qc_filter` stage first."
+            f"[writeback_to_raw] raw h5ad has no .obs[{qc_filtered_col!r}]. "
+            "Run xenium-preprocess's `qc_filter` sub-stage first."
         )
 
-    # step-1 convention: qc_filtered=True means "cell PASSED QC and is in
-    # the mtx bundle downstream stages consume". Cells with qc_filtered=False
-    # were dropped by step-1 QC. Cells NOT in filter_status.csv should be
-    # exactly those with qc_filtered=False.
+    # xenium-preprocess convention: qc_filtered=True means "cell PASSED QC and
+    # is in the mtx bundle downstream sub-stages consume". Cells with
+    # qc_filtered=False were dropped by xenium-preprocess QC. Cells NOT in
+    # filter_status.csv should be exactly those with qc_filtered=False.
     qc_passed = raw_adata.obs[qc_filtered_col].to_numpy(dtype=bool)
     unaccounted = missing_mask.to_numpy() & qc_passed
     n_unaccounted = int(unaccounted.sum())
@@ -131,13 +134,13 @@ def _fold_filter_status(
             raw_adata.obs, unaccounted, out_path=unaccounted_out_path,
         )
         raise SystemExit(
-            f"[writeback_to_step1_raw] {n_unaccounted} raw cells are neither "
-            f"in filter_status.csv nor step-1-QC-dropped (qc_filtered=False). "
-            f"See summary at {unaccounted_out_path}."
+            f"[writeback_to_raw] {n_unaccounted} raw cells are neither "
+            f"in filter_status.csv nor xenium-preprocess-QC-dropped "
+            f"(qc_filtered=False). See summary at {unaccounted_out_path}."
         )
 
     # For cells NOT in filter_status.csv, the three booleans default to
-    # False (they were dropped upstream by step-1 QC).
+    # False (they were dropped upstream by xenium-preprocess QC).
     for col in ("passed_rctd", "passed_split_purify", "filtered_by_purification"):
         vals = joined[col].to_numpy()
         vals = pd.Series(vals).where(~missing_mask.to_numpy(), other=False)
@@ -158,7 +161,7 @@ def _fold_unpurified_obs(
     import numpy as np
     import pandas as pd
 
-    log(f"[writeback_to_step1_raw]   reading unpurified {unpurified_h5ad}")
+    log(f"[writeback_to_raw]   reading unpurified {unpurified_h5ad}")
     unp = ad.read_h5ad(unpurified_h5ad)
     unp_obs = unp.obs.copy()
     unp_obs.index = unp_obs.index.astype(str)
@@ -219,14 +222,15 @@ def _fold_unpurified_obs(
     # columns are NEITHER removed from unpurified.obs NOR removed from
     # raw.obs; they simply are not re-copied from unpurified onto raw
     # because raw.obs already carries the full (all-cells) version from
-    # step-1's proseg / qc_filter / enrich_xenium_id stages. Skipping the
-    # copy preserves step-1's authoritative values (folding unpurified
-    # would overwrite them with a QC-passed subset).
+    # xenium-preprocess's proseg / qc_filter / enrich_xenium_id sub-stages.
+    # Skipping the copy preserves xenium-preprocess's authoritative values
+    # (folding unpurified would overwrite them with a QC-passed subset).
     skipped_present = sorted(c for c in exclude if c in unp_obs.columns)
-    log(f"[writeback_to_step1_raw]   folded {len(copied)} unpurified.obs "
+    log(f"[writeback_to_raw]   folded {len(copied)} unpurified.obs "
         f"columns onto raw.obs; skipped {len(skipped_present)} columns "
-        f"already present on raw.obs (from step-1) — not re-copied to "
-        f"preserve step-1 values: {skipped_present}")
+        f"already present on raw.obs (from xenium-preprocess) — not "
+        f"re-copied to preserve xenium-preprocess values: "
+        f"{skipped_present}")
     return copied
 
 
@@ -237,7 +241,7 @@ def _fold_passed_purification(
     """Part 3: set ``raw.obs['passed_purification'] =
     raw.obs_names.isin(purified.obs_names)``.
 
-    ``proseg_purified.h5ad`` after stage 6 ``postprocess`` contains only
+    ``proseg_purified.h5ad`` after sub-stage 6 ``postprocess`` contains only
     the cells that survived ``sc.pp.filter_cells(min_counts=...)``, so
     this bool column captures the effect of BOTH ``SPLIT::purify`` AND
     the postprocess min-counts filter. Returns the count of True cells
@@ -246,7 +250,7 @@ def _fold_passed_purification(
     """
     import anndata as ad
 
-    log(f"[writeback_to_step1_raw]   reading purified {purified_h5ad}")
+    log(f"[writeback_to_raw]   reading purified {purified_h5ad}")
     purified = ad.read_h5ad(purified_h5ad)
     raw_names_str = raw_adata.obs_names.astype(str)
     purified_names_str = purified.obs_names.astype(str)
@@ -255,7 +259,7 @@ def _fold_passed_purification(
     return int(passed.sum())
 
 
-def run_writeback_to_step1_raw(
+def run_writeback_to_raw(
     sample_id: str,
     run_id: str,
     output_root: Path,
@@ -265,7 +269,8 @@ def run_writeback_to_step1_raw(
     h5ad_compression: str | None,
     force_rerun: bool,
 ) -> Path:
-    """Write filter-status + unpurified.obs back onto step-1's raw h5ad.
+    """Write filter-status + unpurified.obs back onto xenium-preprocess's
+    raw h5ad.
 
     Idempotent: overwrites obs columns in place. Sentinel path returned.
     """
@@ -294,41 +299,42 @@ def run_writeback_to_step1_raw(
     )
 
     if sentinel_exists(sentinel, force_rerun):
-        log(f"[writeback_to_step1_raw] sentinel exists: {sentinel} — "
+        log(f"[writeback_to_raw] sentinel exists: {sentinel} — "
             "skipping (pass --force-rerun to re-run).")
         return sentinel
 
     if not raw_h5ad.exists():
         raise SystemExit(
-            f"[writeback_to_step1_raw] step-1 raw h5ad not found: {raw_h5ad}. "
-            "Run step 1 first (or pass --step1-raw-h5ad)."
+            f"[writeback_to_raw] xenium-preprocess raw h5ad not found: "
+            f"{raw_h5ad}. Run xenium-preprocess first (or pass "
+            f"--xenium-preprocess-raw-h5ad)."
         )
     if not filter_status_csv.exists():
         raise SystemExit(
-            f"[writeback_to_step1_raw] filter_status.csv not found: "
+            f"[writeback_to_raw] filter_status.csv not found: "
             f"{filter_status_csv}. This file lives under intermediate/ "
             f"and (pre-fix) was dropped after celltype_writeback "
             f"completed. Regenerate by re-running the upstream chain: "
             f"`--stages split_purify export_mtx mtx_to_h5ad "
-            f"filter_status writeback_to_step1_raw` (add "
+            f"filter_status writeback_to_raw` (add "
             f"`--keep-intermediate` to persist for future re-runs)."
         )
     if not unpurified_h5ad.exists():
         raise SystemExit(
-            f"[writeback_to_step1_raw] unpurified h5ad not found: "
+            f"[writeback_to_raw] unpurified h5ad not found: "
             f"{unpurified_h5ad}. This file lives under intermediate/ "
             f"and (pre-fix) was dropped after celltype_writeback "
             f"completed. Regenerate by re-running the upstream chain: "
             f"`--stages split_purify export_mtx mtx_to_h5ad "
-            f"writeback_to_step1_raw` (add `--keep-intermediate`)."
+            f"writeback_to_raw` (add `--keep-intermediate`)."
         )
     if not purified_h5ad.exists():
         raise SystemExit(
-            f"[writeback_to_step1_raw] purified h5ad not found: "
+            f"[writeback_to_raw] purified h5ad not found: "
             f"{purified_h5ad}. Run the postprocess stage first."
         )
 
-    log(f"[writeback_to_step1_raw] reading {raw_h5ad}")
+    log(f"[writeback_to_raw] reading {raw_h5ad}")
     raw = ad.read_h5ad(raw_h5ad)
 
     n_present, n_missing = _fold_filter_status(
@@ -337,7 +343,7 @@ def run_writeback_to_step1_raw(
         qc_filtered_col=qc_filtered_col,
         unaccounted_out_path=unaccounted_out_path,
     )
-    log(f"[writeback_to_step1_raw] filter-status: {n_present} matched, "
+    log(f"[writeback_to_raw] filter-status: {n_present} matched, "
         f"{n_missing} raw cells absent (marked False on all three cols)")
 
     copied = _fold_unpurified_obs(
@@ -350,23 +356,23 @@ def run_writeback_to_step1_raw(
         raw_adata=raw,
         purified_h5ad=purified_h5ad,
     )
-    log(f"[writeback_to_step1_raw] passed_purification: "
+    log(f"[writeback_to_raw] passed_purification: "
         f"{n_passed_purification}/{raw.n_obs} raw cells present in "
         f"proseg_purified.h5ad (post-min_counts filter)")
 
     write_kwargs = {"compression": h5ad_compression} if h5ad_compression else {}
     atomic_write_h5ad(raw, raw_h5ad, **write_kwargs)
-    log(f"[writeback_to_step1_raw] wrote augmented {raw_h5ad} "
+    log(f"[writeback_to_raw] wrote augmented {raw_h5ad} "
         f"(+3 filter-status cols +{len(copied)} unpurified obs cols "
         f"+1 passed_purification col)")
 
     sentinel.parent.mkdir(parents=True, exist_ok=True)
     sentinel.write_text(
-        f"writeback_to_step1_raw complete: {sample_id}\n"
+        f"writeback_to_raw complete: {sample_id}\n"
         f"n_raw={raw.n_obs} n_filter_status_matched={n_present} "
         f"n_absent_from_filter_status={n_missing} "
         f"n_unpurified_obs_cols_copied={len(copied)} "
         f"n_passed_purification={n_passed_purification}\n"
     )
-    log(f"[writeback_to_step1_raw] wrote sentinel {sentinel}")
+    log(f"[writeback_to_raw] wrote sentinel {sentinel}")
     return sentinel

@@ -39,6 +39,30 @@ def _str2bool(v):
     raise argparse.ArgumentTypeError(f"expected boolean, got {v!r}")
 
 
+def _parse_extra_reports(raw: list[str]) -> list[dict]:
+    """Parse each ``--extra-report`` CLI value into a validated dict.
+
+    Accepts the shorthand ``PATH,NAME`` (single-comma split); anything
+    after the first comma is treated as part of the name so display
+    names can themselves contain commas. Both fields are required —
+    fail-loud on either missing.
+    """
+    out: list[dict] = []
+    for token in raw:
+        if "," not in token:
+            raise SystemExit(
+                f"[cli] --extra-report expected 'PATH,NAME'; got {token!r}"
+            )
+        path, name = token.split(",", 1)
+        path, name = path.strip(), name.strip()
+        if not path or not name:
+            raise SystemExit(
+                f"[cli] --extra-report has empty PATH or NAME: {token!r}"
+            )
+        out.append({"path": path, "name": name})
+    return out
+
+
 def _resolve_run_id(cli_run_id: str | None) -> str:
     """`--run-id` > `$SLURM_JOB_ID` > `YYYYMMDD_HHMMSS` timestamp.
 
@@ -69,19 +93,32 @@ def _add_run_args(p: argparse.ArgumentParser) -> None:
                    help="Sample identifier (e.g. SAMPLE1).")
     p.add_argument("--test-object", type=Path,
                    help="Path to the spatial test object RDS "
-                        "(step 1 rctd_prep output). Optional — when "
+                        "(xenium-preprocess rctd_prep output). Optional — when "
                         "omitted, resolves to "
                         "<output_root>/<sample>/<sample>_<run_id>/rctd/"
                         "<sample>_test_object.rds (the standard "
                         "workflow layout).")
     p.add_argument("--reference-rds", type=Path,
                    help="Path to the scRNA reference RDS "
-                        "(step 3 rctd_reference_build output — a "
+                        "(ref-build rctd_reference_build output — a "
                         "spacexr::Reference object). Optional — when "
                         "omitted, resolves to "
                         "<output_root>/<sample>/<sample>_<run_id>/rctd/"
                         "<sample>_reference.rds (the standard workflow "
                         "layout).")
+    p.add_argument("--rctd-results-rds", type=Path,
+                   help="Path to an existing rctd_results.rds "
+                        "(rctd_run stage output — a spacexr::RCTD "
+                        "object). Optional — when omitted, resolves "
+                        "to <output_root>/<sample>/<sample>_<run_id>/"
+                        "rctd/<sample>_rctd_results.rds (the standard "
+                        "workflow layout). When set explicitly, the "
+                        "rctd_run stage is dropped from --stages "
+                        "automatically (the results are already in "
+                        "hand); split_purify reads from the provided "
+                        "path. Mirrors --test-object / --reference-rds "
+                        "so an RCTD result from another run folder "
+                        "can be reused.")
     p.add_argument("--output-root", type=Path,
                    help="Root output directory.")
     p.add_argument("--force-rerun", action="store_true",
@@ -151,16 +188,16 @@ def _add_run_args(p: argparse.ArgumentParser) -> None:
                    help="postprocess: also compute PCA/UMAP on "
                         "layers['unpurified_counts'] (default: true).")
 
-    # writeback_to_step1_raw
-    p.add_argument("--step1-raw-h5ad", type=Path, default=None,
-                   help="writeback_to_step1_raw: path to step-1's "
+    # writeback_to_raw
+    p.add_argument("--xenium-preprocess-raw-h5ad", type=Path, default=None,
+                   help="writeback_to_raw: path to xenium-preprocess's "
                         "<S>_proseg_raw.h5ad. Default resolves to "
                         "<output_root>/<sample>/<sample>_<run_id>/"
                         "spatial_adata/<sample>_proseg_raw.h5ad.")
 
     # celltype_writeback
-    p.add_argument("--step1-xenium-ranger-h5ad", type=Path, default=None,
-                   help="celltype_writeback: path to step-1's "
+    p.add_argument("--xenium-preprocess-xenium-ranger-h5ad", type=Path, default=None,
+                   help="celltype_writeback: path to xenium-preprocess's "
                         "<S>_xenium_ranger.h5ad. Default resolves to "
                         "<output_root>/<sample>/<sample>_<run_id>/"
                         "spatial_adata/<sample>_xenium_ranger.h5ad.")
@@ -175,6 +212,15 @@ def _add_run_args(p: argparse.ArgumentParser) -> None:
                    help="qc_report: layer on proseg_raw.h5ad whose "
                         "matrix drives raw-side QC metrics + histogram "
                         "(default: maxpost_counts; fail-loud if absent).")
+    p.add_argument("--extra-report", action="append", default=None,
+                   metavar="PATH,NAME",
+                   help="qc_report: append a link to an external HTML "
+                        "report at the bottom of the summary_report.html. "
+                        "Format is 'PATH,NAME' (single comma splits into "
+                        "the HTML path and the display name). May be "
+                        "repeated for multiple reports; equivalent to "
+                        "`qc_report.extra_reports: [{path, name}, ...]` "
+                        "in the config YAML.")
 
 
 def _add_strip_purified_obs_args(p: argparse.ArgumentParser) -> None:
@@ -230,6 +276,8 @@ def _resolve_config(args: argparse.Namespace) -> dict:
         overrides["test_object"] = str(args.test_object)
     if args.reference_rds is not None:
         overrides["reference_rds"] = str(args.reference_rds)
+    if args.rctd_results_rds is not None:
+        overrides["rctd_results_rds"] = str(args.rctd_results_rds)
     if args.output_root is not None:
         overrides["output_root"] = str(args.output_root)
     if args.force_rerun:
@@ -315,14 +363,14 @@ def _resolve_config(args: argparse.Namespace) -> dict:
         overrides["postprocess"] = pp_over
 
     wb_over: dict = {}
-    if args.step1_raw_h5ad is not None:
-        wb_over["raw_h5ad"] = str(args.step1_raw_h5ad)
+    if args.xenium_preprocess_raw_h5ad is not None:
+        wb_over["raw_h5ad"] = str(args.xenium_preprocess_raw_h5ad)
     if wb_over:
-        overrides["writeback_to_step1_raw"] = wb_over
+        overrides["writeback_to_raw"] = wb_over
 
     ct_over: dict = {}
-    if args.step1_xenium_ranger_h5ad is not None:
-        ct_over["xenium_ranger_h5ad"] = str(args.step1_xenium_ranger_h5ad)
+    if args.xenium_preprocess_xenium_ranger_h5ad is not None:
+        ct_over["xenium_ranger_h5ad"] = str(args.xenium_preprocess_xenium_ranger_h5ad)
     if ct_over:
         overrides["celltype_writeback"] = ct_over
 
@@ -331,6 +379,8 @@ def _resolve_config(args: argparse.Namespace) -> dict:
         qc_over["purification_status_column"] = args.qc_purification_status_column
     if args.qc_raw_layer is not None:
         qc_over["raw_layer"] = args.qc_raw_layer
+    if getattr(args, "extra_report", None):
+        qc_over["extra_reports"] = _parse_extra_reports(args.extra_report)
     if qc_over:
         overrides["qc_report"] = qc_over
 

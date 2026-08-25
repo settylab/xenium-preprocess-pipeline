@@ -1,19 +1,22 @@
-"""Stage-orchestration loop for rctd-split (step 4).
+"""Sub-stage orchestration loop for rctd-split.
 
-Runs the requested subset of the pipeline stages, each guarded by its
+Runs the requested subset of the sub-stages, each guarded by its
 own sentinel-existence resume check (nuke with ``force_rerun``).
 
 Post-2026-08-11 refactor: outputs live under
 ``<output_root>/<sample_id>/<sample_id>_<run_id>/{spatial_adata,rctd,intermediate}/``,
-and ``resolved_config.yaml`` at that run folder is written via the shared
-``_merge_config`` helper so step 1 / step 3 (spawned as separate sbatch
-jobs in the driver chain) don't clobber each other's config sections.
+and ``config.yaml`` at that run folder is written via the shared
+``_merge_config`` helper so xenium-preprocess / ref-build (spawned as
+separate sbatch jobs in the driver chain) don't clobber each other's
+config sections.
 
-After the terminal stage (``qc_report``) succeeds the
+After the terminal stage (``qc_report``) succeeds the entire
 ``intermediate/`` subfolder is DROPPED (mirrors ref-build; the
-final artifacts under ``spatial_adata/``, ``rctd/``, and ``qc/``
+final artifacts under ``spatial_adata/``, ``rctd/``, and ``summary/``
 survive). Pass ``--keep-intermediate`` / ``keep_intermediate: true``
-to retain it for debugging / QC (internal issue review).
+to retain it for debugging / QC or for a follow-up
+``--stages writeback_to_raw`` re-run
+(settylab/TracyY123-nexus#26 comment 5322401335).
 """
 from __future__ import annotations
 
@@ -37,39 +40,28 @@ from rctd_split._internal.merge_config import merge_config
 def _drop_intermediate_outputs(
     output_root: Path, sample_id: str, run_id: str,
 ) -> None:
-    """Selectively prune `<run_dir>/intermediate/` after the terminal
-    stage (`qc_report`) succeeds.
+    """Drop the entire `<run_dir>/intermediate/` directory after the
+    terminal stage (`qc_report`) succeeds.
 
-    Drops:
-      * `intermediate/split/` — heavy R-side `.rds` working files.
-      * `intermediate/mtx/` — 10X-style mtx bundles.
-      * `intermediate/adata/*.done` — stage sentinels (so a later
-        `--stages writeback_to_step1_raw` isn't short-circuited).
+    Removes the heavy R-side `.rds` working files under `split/`, the
+    10X-style mtx bundles under `mtx/`, and the intermediate adata
+    h5ads / csvs / sentinels under `adata/`. The persisted final
+    artifacts under `spatial_adata/`, `rctd/`, and `summary/` are
+    untouched.
 
-    Keeps `intermediate/adata/*.h5ad` and `intermediate/adata/*.csv`
-    (lightweight; `writeback_to_step1_raw` reads `filter_status.csv`
-    and `step4_unpurified.h5ad` from here, so preserving them lets
-    that stage re-run cleanly against an already-completed run without
-    redoing SPLIT/mtx/adata; (internal issue review) comment
-    (internal issue review)). Idempotent — no-op when the folder is already gone
-    (internal issue review)."""
+    Users who need to re-run `--stages writeback_to_raw` against
+    an already-completed run without redoing SPLIT/mtx/adata should
+    pass `--keep-intermediate` / `keep_intermediate: true` at the
+    original invocation to opt out of cleanup (matches Tracy's ask on
+    settylab/TracyY123-nexus#26 comment 5322401335). Idempotent — no-op
+    when the folder is already gone."""
     p = intermediate_dir(output_root, sample_id, run_id)
     if not p.exists():
         return
-    for sub in ("split", "mtx"):
-        target = p / sub
-        if target.exists():
-            log(f"[pipeline] dropping intermediate/{sub}/: {target}")
-            shutil.rmtree(target)
-    adata_dir = p / "adata"
-    if adata_dir.exists():
-        for entry in adata_dir.iterdir():
-            if entry.is_file() and entry.suffix == ".done":
-                log(f"[pipeline] dropping stale sentinel: {entry}")
-                entry.unlink()
-    log("[pipeline] intermediate/ pruned; kept adata/*.h5ad + adata/*.csv "
-        "so `--stages writeback_to_step1_raw` can re-run without "
-        "re-doing SPLIT/mtx.")
+    log(f"[pipeline] dropping intermediate/: {p}")
+    shutil.rmtree(p)
+    log("[pipeline] intermediate/ pruned; pass --keep-intermediate to preserve "
+        "for `--stages writeback_to_raw` re-runs.")
 
 
 def _raise_missing_input(
@@ -112,13 +104,14 @@ def log_invocation_banner(argv: list[str], stages: list[str], cfg: dict) -> None
     log(f"pid:           {os.getpid()}")
     log(f"python:        {sys.executable}")
     log(f"python ver:    {sys.version.splitlines()[0]}")
-    log(f"sample_id:     {cfg.get('sample_id')}")
-    log(f"run_id:        {cfg.get('run_id')}")
-    log(f"test_object:   {cfg.get('test_object')}")
-    log(f"reference_rds: {cfg.get('reference_rds')}")
-    log(f"output_root:   {cfg.get('output_root')}")
-    log(f"stages:        {stages}")
-    log(f"force_rerun:   {cfg.get('force_rerun', False)}")
+    log(f"sample_id:        {cfg.get('sample_id')}")
+    log(f"run_id:           {cfg.get('run_id')}")
+    log(f"test_object:      {cfg.get('test_object')}")
+    log(f"reference_rds:    {cfg.get('reference_rds')}")
+    log(f"rctd_results_rds: {cfg.get('rctd_results_rds')}")
+    log(f"output_root:      {cfg.get('output_root')}")
+    log(f"stages:           {stages}")
+    log(f"force_rerun:      {cfg.get('force_rerun', False)}")
     for name in ("numpy", "yaml", "scipy", "pandas", "scanpy", "anndata"):
         try:
             mod = __import__(name)
@@ -137,13 +130,14 @@ def run(cfg: dict, stages: list[str], argv: list[str]) -> int:
     force_rerun = bool(cfg.get("force_rerun", False))
     keep_intermediate = bool(cfg.get("keep_intermediate", False))
 
-    # `test_object` and `reference_rds` auto-derive from the run-folder
-    # layout convention when not explicitly set — step 1 (rctd_prep)
-    # writes to <run-dir>/rctd/<S>_test_object.rds and step 3
-    # (rctd_reference_build) writes to <run-dir>/rctd/<S>_reference.rds,
-    # so the workflow-driver chain wires up with no explicit paths.
-    # Explicit config values still win (backward compat + one-off
-    # experiments with a foreign test-object or reference).
+    # `test_object`, `reference_rds`, and `rctd_results_rds` auto-derive
+    # from the run-folder layout convention when not explicitly set:
+    # xenium-preprocess (rctd_prep) writes <run-dir>/rctd/<S>_test_object.rds,
+    # ref-build (rctd_reference_build) writes
+    # <run-dir>/rctd/<S>_reference.rds, and the rctd_run sub-stage in THIS
+    # pipeline writes <run-dir>/rctd/<S>_rctd_results.rds. Explicit config
+    # values win (backward compat + one-off experiments with a foreign
+    # test-object, reference, or RCTD result from another run folder).
     if cfg.get("test_object"):
         test_object = Path(cfg["test_object"]).resolve()
         test_object_source = "config"
@@ -156,32 +150,67 @@ def run(cfg: dict, stages: list[str], argv: list[str]) -> int:
     else:
         reference_rds = rctd_path(output_root, sample_id, run_id, "reference")
         reference_rds_source = "layout"
+    rctd_results_source = "layout"
+    if cfg.get("rctd_results_rds"):
+        rctd_results_rds = Path(cfg["rctd_results_rds"]).resolve()
+        rctd_results_source = "config"
+        # Explicit --rctd-results-rds implies the caller already has the
+        # RCTD result in hand — automatically drop rctd_run from stages
+        # (matches the "just use my file" spirit of --test-object /
+        # --reference-rds, mirrors the both-or-neither ergonomics
+        # settylab/TracyY123-nexus#26 asked for).
+        if "rctd_run" in stages:
+            stages = [s for s in stages if s != "rctd_run"]
+            log("[pipeline] --rctd-results-rds set → dropped 'rctd_run' from "
+                "stages (external RCTD result supplied; the run stage would "
+                "otherwise overwrite it at the layout path).")
+    else:
+        rctd_results_rds = rctd_path(
+            output_root, sample_id, run_id, "rctd_results",
+        )
 
     # Record the resolved paths back into cfg so the invocation banner
     # and merged resolved_config snapshot show what was actually used.
     cfg = dict(cfg)
     cfg["test_object"] = str(test_object)
     cfg["reference_rds"] = str(reference_rds)
+    cfg["rctd_results_rds"] = str(rctd_results_rds)
 
     log_invocation_banner(argv, stages, cfg)
-    log(f"[pipeline] test_object   source: {test_object_source}")
-    log(f"[pipeline] reference_rds source: {reference_rds_source}")
+    log(f"[pipeline] test_object      source: {test_object_source}")
+    log(f"[pipeline] reference_rds    source: {reference_rds_source}")
+    log(f"[pipeline] rctd_results_rds source: {rctd_results_source}")
 
     if not test_object.exists():
         _raise_missing_input(
             path=test_object,
             source=test_object_source,
             layout_hint="<output_root>/<sample>/<sample>_<run_id>/rctd/<sample>_test_object.rds",
-            producer="step 1's rctd_prep",
+            producer="xenium-preprocess's rctd_prep",
             override_flag="--test-object",
         )
-    if not reference_rds.exists():
+    # reference_rds is ONLY read by rctd_run. Skip the existence check
+    # when rctd_run isn't scheduled — a caller passing --rctd-results-rds
+    # (with rctd_run auto-dropped above) shouldn't need to also supply a
+    # reference file they don't use.
+    if "rctd_run" in stages and not reference_rds.exists():
         _raise_missing_input(
             path=reference_rds,
             source=reference_rds_source,
             layout_hint="<output_root>/<sample>/<sample>_<run_id>/rctd/<sample>_reference.rds",
-            producer="step 3's rctd_reference_build",
+            producer="ref-build's rctd_reference_build",
             override_flag="--reference-rds",
+        )
+    # rctd_results_rds is required only when split_purify runs but
+    # rctd_run does not (rctd_run would produce it in-tree).
+    if ("split_purify" in stages and "rctd_run" not in stages
+            and not rctd_results_rds.exists()):
+        _raise_missing_input(
+            path=rctd_results_rds,
+            source=rctd_results_source,
+            layout_hint="<output_root>/<sample>/<sample>_<run_id>/rctd/<sample>_rctd_results.rds",
+            producer="this pipeline's rctd_run stage",
+            override_flag="--rctd-results-rds",
         )
 
     # Materialise the run folder up front.
@@ -189,11 +218,12 @@ def run(cfg: dict, stages: list[str], argv: list[str]) -> int:
     the_run_dir.mkdir(parents=True, exist_ok=True)
     log(f"[pipeline] run folder: {the_run_dir}")
 
-    # Merged resolved_config: write ONLY the step4 key, preserve any
-    # step1/step3/driver sections a sibling pipeline already wrote.
+    # Merged resolved_config: write ONLY the rctd_split key, preserve any
+    # xenium_preprocess/ref_build/driver sections a sibling pipeline
+    # already wrote.
     snap = resolved_config_path(output_root, sample_id, run_id)
-    step4_cfg = dict(cfg)
-    merge_config(snap, step_key="step4", step_cfg=step4_cfg)
+    rs_cfg = dict(cfg)
+    merge_config(snap, step_key="rctd_split", step_cfg=rs_cfg)
     log(f"[pipeline] merged resolved_config -> {snap}")
 
     n_stages = len(stages)
@@ -206,7 +236,7 @@ def run(cfg: dict, stages: list[str], argv: list[str]) -> int:
     mh_cfg = cfg.get("mtx_to_h5ad", {}) or {}
     fs_cfg = cfg.get("filter_status", {}) or {}
     pp_cfg = cfg.get("postprocess", {}) or {}
-    wb_cfg = cfg.get("writeback_to_step1_raw", {}) or {}
+    wb_cfg = cfg.get("writeback_to_raw", {}) or {}
     ct_cfg = cfg.get("celltype_writeback", {}) or {}
     qc_cfg = cfg.get("qc_report", {}) or {}
 
@@ -237,7 +267,7 @@ def run(cfg: dict, stages: list[str], argv: list[str]) -> int:
         )
         banner(f"stage {idx}/{n_stages}: rctd_run — complete in {time.time()-t0:.1f}s")
 
-    rctd_results_rds = rctd_path(output_root, sample_id, run_id, "rctd_results")
+    # rctd_results_rds resolved above (layout path or explicit --rctd-results-rds).
 
     # --- Stage 2: split_purify --------------------------------------
     if "split_purify" in stages:
@@ -247,8 +277,10 @@ def run(cfg: dict, stages: list[str], argv: list[str]) -> int:
         from rctd_split.stages.split_purify import run_split_purify
         if not rctd_results_rds.exists():
             raise SystemExit(
-                f"split_purify stage requested but rctd_results.rds does not exist: "
-                f"{rctd_results_rds}. Run the rctd_run stage first."
+                f"split_purify stage requested but rctd_results.rds does not "
+                f"exist: {rctd_results_rds}. Run the rctd_run stage first, "
+                f"or pass --rctd-results-rds <path> to point at an existing "
+                f"RCTD result from another run folder."
             )
         unpurified_rds, purified_rds = run_split_purify(
             sample_id=sample_id,
@@ -383,16 +415,16 @@ def run(cfg: dict, stages: list[str], argv: list[str]) -> int:
         )
         banner(f"stage {idx}/{n_stages}: postprocess — complete in {time.time()-t0:.1f}s")
 
-    # --- Stage 7: writeback_to_step1_raw ---------------------------
-    if "writeback_to_step1_raw" in stages:
-        idx = stages.index("writeback_to_step1_raw") + 1
-        banner(f"stage {idx}/{n_stages}: writeback_to_step1_raw — starting")
+    # --- Stage 7: writeback_to_raw ---------------------------
+    if "writeback_to_raw" in stages:
+        idx = stages.index("writeback_to_raw") + 1
+        banner(f"stage {idx}/{n_stages}: writeback_to_raw — starting")
         t0 = time.time()
-        from rctd_split.stages.writeback_to_step1_raw import (
-            run_writeback_to_step1_raw,
+        from rctd_split.stages.writeback_to_raw import (
+            run_writeback_to_raw,
         )
         raw_h5ad_cfg = wb_cfg.get("raw_h5ad")
-        run_writeback_to_step1_raw(
+        run_writeback_to_raw(
             sample_id=sample_id,
             run_id=run_id,
             output_root=output_root,
@@ -404,7 +436,7 @@ def run(cfg: dict, stages: list[str], argv: list[str]) -> int:
             ),
             force_rerun=force_rerun,
         )
-        banner(f"stage {idx}/{n_stages}: writeback_to_step1_raw — "
+        banner(f"stage {idx}/{n_stages}: writeback_to_raw — "
                f"complete in {time.time()-t0:.1f}s")
 
     # --- Stage 8: celltype_writeback -------------------------------
@@ -453,6 +485,8 @@ def run(cfg: dict, stages: list[str], argv: list[str]) -> int:
             ),
             raw_layer=qc_cfg.get("raw_layer", "maxpost_counts"),
             force_rerun=force_rerun,
+            invoking_argv=argv,
+            extra_reports=qc_cfg.get("extra_reports", []) or [],
         )
         banner(f"stage {idx}/{n_stages}: qc_report — "
                f"complete in {time.time()-t0:.1f}s")

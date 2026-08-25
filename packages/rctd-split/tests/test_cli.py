@@ -72,7 +72,7 @@ def test_resolve_run_id_precedence(monkeypatch):
 def test_stages_flag_accepts_writeback_only_subset():
     """Tracy on `settylab/TracyY123-nexus#26` comment 5260916505: she
     wants to rerun ONLY the writeback stages after a completed SPLIT.
-    Prove the CLI parses `--stages writeback_to_step1_raw
+    Prove the CLI parses `--stages writeback_to_raw
     celltype_writeback` cleanly."""
     from rctd_split.cli import build_parser
 
@@ -83,9 +83,9 @@ def test_stages_flag_accepts_writeback_only_subset():
         "--test-object", "/tmp/test.rds",
         "--reference-rds", "/tmp/ref.rds",
         "--output-root", "/tmp/out",
-        "--stages", "writeback_to_step1_raw", "celltype_writeback",
+        "--stages", "writeback_to_raw", "celltype_writeback",
     ])
-    assert args.stages == ["writeback_to_step1_raw", "celltype_writeback"]
+    assert args.stages == ["writeback_to_raw", "celltype_writeback"]
 
 
 def test_stages_flag_rejects_unknown_stage():
@@ -119,3 +119,38 @@ def test_run_id_cli_flag_parses():
         "--run-id", "my-run-42",
     ])
     assert args.run_id == "my-run-42"
+
+
+def test_extra_report_flag_repeats_and_splits_on_first_comma():
+    """`--extra-report PATH,NAME` may repeat; the split is on the
+    first comma only so display names may contain commas."""
+    from rctd_split.cli import _parse_extra_reports, build_parser
+
+    parser = build_parser()
+    args = parser.parse_args([
+        "run",
+        "--sample-id", "MH10",
+        "--test-object", "/tmp/t.rds",
+        "--reference-rds", "/tmp/r.rds",
+        "--output-root", "/tmp/out",
+        "--extra-report", "/path/to/a.html,Report A",
+        "--extra-report", "/other.html,Report B, subtitle",
+    ])
+    parsed = _parse_extra_reports(args.extra_report)
+    assert parsed == [
+        {"path": "/path/to/a.html", "name": "Report A"},
+        {"path": "/other.html", "name": "Report B, subtitle"},
+    ]
+
+
+def test_extra_report_flag_missing_comma_rejects():
+    import pytest
+
+    from rctd_split.cli import _parse_extra_reports
+
+    with pytest.raises(SystemExit):
+        _parse_extra_reports(["no_comma_here"])
+    with pytest.raises(SystemExit):
+        _parse_extra_reports([",Missing path"])
+    with pytest.raises(SystemExit):
+        _parse_extra_reports(["/path.html,"])

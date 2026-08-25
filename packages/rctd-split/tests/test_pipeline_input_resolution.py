@@ -1,6 +1,7 @@
-"""Auto-derivation of `test_object` / `reference_rds` from the run-folder
-layout when the caller doesn't pass them explicitly
-(settylab/TracyY123-nexus#26 comment 5260778217).
+"""Auto-derivation of `test_object` / `reference_rds` / `rctd_results_rds`
+from the run-folder layout when the caller doesn't pass them explicitly
+(settylab/TracyY123-nexus#26 comment 5260778217 for test_object/reference,
+extended for rctd_results_rds).
 """
 from __future__ import annotations
 
@@ -24,31 +25,35 @@ def _expected_paths(tmp_path, sample_id="MH8_2", run_id="demo_v1"):
     return (
         rctd_dir / f"{sample_id}_test_object.rds",
         rctd_dir / f"{sample_id}_reference.rds",
+        rctd_dir / f"{sample_id}_rctd_results.rds",
     )
 
 
 def test_pipeline_run_auto_derives_from_layout_when_unset(tmp_path, capsys):
-    """When cfg has no test_object / reference_rds, `pipeline.run` MUST
-    resolve them to the run-folder-layout paths — matching the paths
-    step 1 and step 3 write to in the same run folder.
+    """When cfg has no test_object / reference_rds / rctd_results_rds,
+    `pipeline.run` MUST resolve them to the run-folder-layout paths —
+    matching the paths xenium-preprocess / ref-build / this pipeline's own rctd_run
+    stage write in the same run folder.
     """
     from rctd_split.pipeline import run
 
-    exp_test, exp_ref = _expected_paths(tmp_path)
+    exp_test, exp_ref, exp_rctd = _expected_paths(tmp_path)
     _touch(exp_test)
     _touch(exp_ref)
 
     cfg = _base_cfg(tmp_path)
-    # No test_object / reference_rds → auto-derive.
+    # No test_object / reference_rds / rctd_results_rds → auto-derive.
     # Empty stages list to avoid actually running any R/Python stage.
     exit_code = run(cfg, stages=[], argv=["rctd-split"])
     assert exit_code == 0
 
     stdout = capsys.readouterr().out
-    assert f"test_object:   {exp_test}" in stdout
-    assert f"reference_rds: {exp_ref}" in stdout
-    assert "test_object   source: layout" in stdout
-    assert "reference_rds source: layout" in stdout
+    assert f"test_object:      {exp_test}" in stdout
+    assert f"reference_rds:    {exp_ref}" in stdout
+    assert f"rctd_results_rds: {exp_rctd}" in stdout
+    assert "test_object      source: layout" in stdout
+    assert "reference_rds    source: layout" in stdout
+    assert "rctd_results_rds source: layout" in stdout
 
 
 def test_pipeline_run_honors_explicit_test_object_and_reference(tmp_path, capsys):
@@ -69,10 +74,39 @@ def test_pipeline_run_honors_explicit_test_object_and_reference(tmp_path, capsys
     assert exit_code == 0
 
     stdout = capsys.readouterr().out
-    assert f"test_object:   {foreign_test}" in stdout
-    assert f"reference_rds: {foreign_ref}" in stdout
-    assert "test_object   source: config" in stdout
-    assert "reference_rds source: config" in stdout
+    assert f"test_object:      {foreign_test}" in stdout
+    assert f"reference_rds:    {foreign_ref}" in stdout
+    assert "test_object      source: config" in stdout
+    assert "reference_rds    source: config" in stdout
+
+
+def test_pipeline_run_honors_explicit_rctd_results_rds(tmp_path, capsys):
+    """Explicit `--rctd-results-rds` path in cfg wins over auto-derive
+    AND drops the `rctd_run` stage automatically — the pipeline treats
+    an externally supplied RCTD result as ground-truth input to
+    split_purify, so re-running rctd_run would just overwrite it at the
+    layout path. Symmetric to --test-object / --reference-rds."""
+    from rctd_split.pipeline import run
+
+    exp_test, exp_ref, _ = _expected_paths(tmp_path)
+    _touch(exp_test)
+    _touch(exp_ref)
+
+    foreign_rctd = tmp_path / "foreign_run" / "MH2_rctd_results.rds"
+    _touch(foreign_rctd)
+
+    cfg = _base_cfg(tmp_path)
+    cfg["rctd_results_rds"] = str(foreign_rctd)
+
+    # Pass rctd_run in stages — pipeline MUST drop it because
+    # rctd_results_rds was supplied externally.
+    exit_code = run(cfg, stages=["rctd_run"], argv=["rctd-split"])
+    assert exit_code == 0
+
+    stdout = capsys.readouterr().out
+    assert f"rctd_results_rds: {foreign_rctd}" in stdout
+    assert "rctd_results_rds source: config" in stdout
+    assert "dropped 'rctd_run' from stages" in stdout
 
 
 def test_pipeline_run_fails_loud_when_layout_derived_test_object_missing(tmp_path):
@@ -81,7 +115,7 @@ def test_pipeline_run_fails_loud_when_layout_derived_test_object_missing(tmp_pat
     import pytest
     from rctd_split.pipeline import run
 
-    exp_test, exp_ref = _expected_paths(tmp_path)
+    exp_test, exp_ref, _ = _expected_paths(tmp_path)
     # reference exists but test_object does NOT.
     _touch(exp_ref)
 
@@ -95,20 +129,65 @@ def test_pipeline_run_fails_loud_when_layout_derived_test_object_missing(tmp_pat
 
 
 def test_pipeline_run_fails_loud_when_layout_derived_reference_missing(tmp_path):
-    """Symmetric to the test_object case for the reference RDS."""
+    """When rctd_run is in stages and reference_rds resolves via the
+    layout but the file is missing → SystemExit naming the derived path
+    and --reference-rds. reference_rds is ONLY checked when rctd_run
+    actually runs — the caller can skip the check by dropping rctd_run
+    (typically via --rctd-results-rds, which auto-drops it)."""
     import pytest
     from rctd_split.pipeline import run
 
-    exp_test, exp_ref = _expected_paths(tmp_path)
+    exp_test, exp_ref, _ = _expected_paths(tmp_path)
     _touch(exp_test)  # test_object exists; reference does NOT.
 
     cfg = _base_cfg(tmp_path)
     with pytest.raises(SystemExit) as exc:
-        run(cfg, stages=[], argv=["rctd-split"])
+        run(cfg, stages=["rctd_run"], argv=["rctd-split"])
     msg = str(exc.value)
     assert str(exp_ref) in msg
     assert "layout-derived" in msg
     assert "--reference-rds" in msg
+
+
+def test_pipeline_run_fails_loud_when_layout_derived_rctd_results_missing(tmp_path):
+    """split_purify without rctd_run + no external rctd_results_rds →
+    the layout-derived rctd_results.rds must exist; fail loud with a
+    message that names the derived path AND the override flag."""
+    import pytest
+    from rctd_split.pipeline import run
+
+    exp_test, exp_ref, exp_rctd = _expected_paths(tmp_path)
+    _touch(exp_test)
+    _touch(exp_ref)
+    # exp_rctd deliberately missing.
+
+    cfg = _base_cfg(tmp_path)
+    with pytest.raises(SystemExit) as exc:
+        run(cfg, stages=["split_purify"], argv=["rctd-split"])
+    msg = str(exc.value)
+    assert str(exp_rctd) in msg
+    assert "layout-derived" in msg
+    assert "--rctd-results-rds" in msg
+
+
+def test_pipeline_run_skips_reference_check_when_rctd_run_dropped(tmp_path):
+    """Passing --rctd-results-rds drops rctd_run, which means the
+    caller doesn't need reference_rds (rctd_run is the ONLY consumer).
+    The pipeline MUST NOT fail on a missing reference in this shape."""
+    from rctd_split.pipeline import run
+
+    exp_test, _, _ = _expected_paths(tmp_path)
+    _touch(exp_test)
+    # exp_ref deliberately missing.
+
+    foreign_rctd = tmp_path / "foreign_run" / "MH2_rctd_results.rds"
+    _touch(foreign_rctd)
+
+    cfg = _base_cfg(tmp_path)
+    cfg["rctd_results_rds"] = str(foreign_rctd)
+
+    exit_code = run(cfg, stages=["rctd_run"], argv=["rctd-split"])
+    assert exit_code == 0
 
 
 def test_pipeline_run_fails_loud_when_explicit_test_object_missing(tmp_path):
@@ -118,7 +197,7 @@ def test_pipeline_run_fails_loud_when_explicit_test_object_missing(tmp_path):
     import pytest
     from rctd_split.pipeline import run
 
-    _, exp_ref = _expected_paths(tmp_path)
+    _, exp_ref, _ = _expected_paths(tmp_path)
     _touch(exp_ref)  # layout-derived reference exists.
 
     cfg = _base_cfg(tmp_path)

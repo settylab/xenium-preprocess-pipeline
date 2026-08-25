@@ -9,7 +9,10 @@
 "${SHELL}" <(curl -L micro.mamba.pm/install.sh)
 
 # 2. Create the env
-micromamba env create -f environment.yml
+# (../../scripts/create-env.sh wraps `micromamba env create`; if
+# MAMBA_ROOT_PREFIX is set for an isolated install, it also keeps the
+# package cache isolated — see docs/installation.md § 2 at the repo root)
+../../scripts/create-env.sh -f environment.yml
 micromamba activate rctdSplit
 
 # 3. Editable install
@@ -30,6 +33,20 @@ The R environment must carry:
 - `Matrix`
 - `spacexr` (RCTD)
 - `SPLIT` (bdsc-tds/SPLIT)
+
+`spacexr` and `SPLIT` both install via `remotes::install_github()`
+below, not CRAN — that needs outbound network access to `github.com` /
+`api.github.com`. **No GitHub credentials are required** — both source
+repos ([`dmcable/spacexr`](https://github.com/dmcable/spacexr),
+[`bdsc-tds/SPLIT`](https://github.com/bdsc-tds/SPLIT)) are public — but
+GitHub's unauthenticated API is capped at 60 requests/hour per source
+IP, easy to exhaust on shared infrastructure. If you already have
+`GITHUB_PAT`/`GITHUB_TOKEN` set, or have ever run `gh auth login`,
+`remotes` silently uses those credentials (raising the ceiling to
+5,000/hour) with no indication the install would otherwise be running
+against the smaller anonymous quota. See
+[`../../../docs/installation.md`](../../../docs/installation.md) §
+GitHub access for the full explanation.
 
 ### Recommended: Lmod R module + user-local R lib
 
@@ -67,7 +84,7 @@ Each R script this pipeline ships (`r/rctd_run.R`, `r/split_purify.R`, `r/export
 
 ### Alternative: conda-native R
 
-If you don't have LMOD access, uncomment the R-side block in `environment.yml`, re-run `micromamba env create`, then finish the install manually because `spacexr` and `SPLIT` are not on conda:
+If you don't have LMOD access, uncomment the R-side block in `environment.yml`, re-run `../../scripts/create-env.sh`, then finish the install manually because `spacexr` and `SPLIT` are not on conda:
 
 ```r
 BiocManager::install("SpatialExperiment")   # optional; not required by any R script

@@ -72,7 +72,7 @@ xe_purified <- CreateSeuratObject(
 # saveRDS(xe_purified, "purified.rds")
 ```
 
-The `assay` swap (Xenium → Proseg) mirrors the step 1 pipeline's assay convention; the step-1 `rctd_prep` stage writes the spatial test object with `assay="Proseg"`. All three R scripts read this from `config.<stage>.assay_name`.
+The `assay` swap (Xenium → Proseg) mirrors the xenium-preprocess pipeline's assay convention; the xenium-preprocess `rctd_prep` stage writes the spatial test object with `assay="Proseg"`. All three R scripts read this from `config.<stage>.assay_name`.
 
 **Metadata carried into both variants** (from RCTD's `results_df` + SPLIT's `cell_meta`):
 - `first_type` — RCTD's top cell-type call.
@@ -88,7 +88,7 @@ The purified variant carries the same shape but only for cells SPLIT retained af
 
 ## Stage 3: `export_mtx` — Seurat RDS → 10X-style bundle
 
-**Convention:** matches step 1's `split_prep` and step 3's `export_mtx` filename shape:
+**Convention:** matches xenium-preprocess's `split_prep` and ref-build's `export_mtx` filename shape:
 - `<sample>_<variant>_counts.mtx.gz` — MatrixMarket, genes × cells, gzipped.
 - `<sample>_<variant>_features.tsv.gz` — one gene per line (single-column form; Seurat `ReadMtx(feature.column=1)`).
 - `<sample>_<variant>_barcodes.tsv.gz` — one cell id per line.

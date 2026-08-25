@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ref-build"
-version = "0.1.0"
+version = "0.2.5"
 description = "scRNA reference-dataset builder for RCTD (via spacexr / SPLIT): primary + donor pool → per-celltype adaptive migration → 10X-style mtx bundle → spacexr Reference .rds."
 readme = "README.md"
 license = { file = "LICENSE" }

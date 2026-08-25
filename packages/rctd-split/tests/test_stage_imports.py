@@ -17,7 +17,7 @@ STAGES = (
     "rctd_split.stages.mtx_to_h5ad",
     "rctd_split.stages.filter_status",
     "rctd_split.stages.postprocess",
-    "rctd_split.stages.writeback_to_step1_raw",
+    "rctd_split.stages.writeback_to_raw",
     "rctd_split.stages.celltype_writeback",
     "rctd_split.stages.qc_report",
 )
@@ -39,7 +39,7 @@ def test_stages_export_run_functions():
         "rctd_split.stages.mtx_to_h5ad": "run_mtx_to_h5ad",
         "rctd_split.stages.filter_status": "run_filter_status",
         "rctd_split.stages.postprocess": "run_postprocess",
-        "rctd_split.stages.writeback_to_step1_raw": "run_writeback_to_step1_raw",
+        "rctd_split.stages.writeback_to_raw": "run_writeback_to_raw",
         "rctd_split.stages.celltype_writeback": "run_celltype_writeback",
         "rctd_split.stages.qc_report": "run_qc_report",
     }

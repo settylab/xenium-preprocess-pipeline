@@ -46,7 +46,7 @@ Allow-list membership rationale:
       required inputs to ``celltype_writeback`` (Stage 8), which reads
       ``purified.obs[reference_x_col]`` / ``[reference_y_col]`` to map
       RCTD celltype labels onto ``xenium_ranger.h5ad`` via nearest
-      neighbor. These originate from step-1's xenium-preprocess
+      neighbor. These originate from xenium-preprocess's xenium-preprocess
       enrichments and travel to purified via
       ``preserve_meta_from_unpurified`` — strictly speaking they are
       NOT SPLIT output, but the Stage-D pipeline depends on them being

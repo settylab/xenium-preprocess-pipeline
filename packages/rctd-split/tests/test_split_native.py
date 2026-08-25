@@ -60,7 +60,7 @@ def test_is_split_native_rejects_raw_side_leaks():
 
 
 def test_is_split_native_keeps_centroid_cols_for_celltype_writeback():
-    """centroid_x / centroid_y are step-1-derived (not SPLIT-native
+    """centroid_x / centroid_y are xenium-preprocess-derived (not SPLIT-native
     proper), but the Stage-D pipeline's celltype_writeback reads them
     off purified.obs. Kept on the allow-list so a fresh pipeline run
     doesn't fail at Stage 8."""

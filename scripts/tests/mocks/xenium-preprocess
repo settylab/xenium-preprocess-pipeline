@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Mock xenium-preprocess CLI — creates the step-1 target artifacts and
-# writes step1 keys into resolved_config.yaml. Only understands the
-# subset of flags submit_step1.sbatch invokes.
+# Mock xenium-preprocess CLI — creates the xenium-preprocess target
+# artifacts and writes the xenium_preprocess key into config.yaml. Only
+# understands the subset of flags submit_xenium-preprocess.sbatch invokes.
 set -euo pipefail
 
 cmd="${1:-}"
@@ -21,7 +21,7 @@ gex_only=""
 force_rerun=0
 
 # Capture the raw argv so tests can assert on the flags xenium-preprocess
-# receives (in particular for per-step overrides threaded from the driver).
+# receives (in particular for per-stage overrides threaded from the driver).
 raw_argv=("$@")
 
 while [[ $# -gt 0 ]]; do
@@ -50,7 +50,7 @@ mkdir -p "$run_dir/spatial_adata" "$run_dir/rctd" "$run_dir/logs"
 : > "$run_dir/spatial_adata/${sample}_xenium_ranger.h5ad"
 : > "$run_dir/rctd/${sample}_test_object.rds"
 {
-    echo "step1 ok"
+    echo "xenium-preprocess ok"
     echo "x_source=$x_source"
     echo "qc_min_counts_cell=$qc_min_counts_cell"
     echo "gex_only=$gex_only"
@@ -62,10 +62,10 @@ mkdir -p "$run_dir/spatial_adata" "$run_dir/rctd" "$run_dir/logs"
         echo "--- end config ---"
     fi
     echo "raw_argv=${raw_argv[*]}"
-} > "$run_dir/logs/step1.log"
+} > "$run_dir/logs/xenium-preprocess.log"
 
-# Merge step1 key into resolved_config.yaml (crude but preserves siblings).
-cfg="$run_dir/resolved_config.yaml"
+# Merge xenium_preprocess key into config.yaml (crude but preserves siblings).
+cfg="$run_dir/config.yaml"
 python3 - "$cfg" "$sample" "$run_id" <<'PY'
 import sys, os
 cfg_path, sample, run_id = sys.argv[1], sys.argv[2], sys.argv[3]
@@ -74,7 +74,7 @@ if os.path.exists(cfg_path):
     with open(cfg_path) as f:
         lines = f.readlines()
 
-# Simple in-place "replace or append the step1: block".
+# Simple in-place "replace or append the xenium_preprocess: block".
 out = []
 skip = False
 for line in lines:
@@ -83,11 +83,11 @@ for line in lines:
             skip = False
         else:
             continue
-    if line.startswith("step1:"):
+    if line.startswith("xenium_preprocess:"):
         skip = True
         continue
     out.append(line)
-out.append(f"step1:\n  sample_id: {sample}\n  run_id: {run_id}\n")
+out.append(f"xenium_preprocess:\n  sample_id: {sample}\n  run_id: {run_id}\n")
 
 with open(cfg_path, "w") as f:
     f.writelines(out)

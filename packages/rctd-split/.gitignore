@@ -26,7 +26,7 @@ htmlcov/
 scratch/
 
 # Slurm logs
-slurm-*.out
+slurm-*.log
 logs/
 tests/.verify-logs/
 

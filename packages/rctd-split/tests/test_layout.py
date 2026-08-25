@@ -55,7 +55,7 @@ def test_intermediate_paths(tmp_path: Path):
         prefix / "split" / "MHTEST_purified.rds"
     )
     assert intermediate_path(root, "MHTEST", "42", "unpurified_h5ad") == (
-        prefix / "adata" / "MHTEST_step4_unpurified.h5ad"
+        prefix / "adata" / "MHTEST_unpurified.h5ad"
     )
     assert intermediate_path(root, "MHTEST", "42", "filter_status_csv") == (
         prefix / "adata" / "MHTEST_filter_status.csv"
@@ -64,7 +64,7 @@ def test_intermediate_paths(tmp_path: Path):
 
 # ---------------------------------------------------------------------------
 # atomic_write_h5ad sanitizer coverage (settylab/TracyY123-nexus#26 comment
-# 5260723528). Step 4 reads h5ads produced by step 1 / step 3 whose obs/var
+# 5260723528). rctd-split reads h5ads produced by xenium-preprocess / ref-build whose obs/var
 # are backed by pandas.arrays.ArrowStringArray under pandas 3.x
 # (`future.infer_string=True`); anndata 0.11's writer registry has no handler
 # for that class on either the index code path or the categorical-categories
@@ -125,10 +125,10 @@ def test_sanitize_categorical_with_arrow_string_categories():
 
 
 def test_atomic_write_h5ad_handles_strings_with_missing_values(tmp_path: Path):
-    """Regression for comment 5260723528 — step 4's ``atomic_write_h5ad``
+    """Regression for comment 5260723528 — rctd-split's ``atomic_write_h5ad``
     must succeed on obs with a plain ArrowString column that contains
-    missing values AND is NOT pre-categorized, mirroring what step 4 sees
-    after ``ad.read_h5ad(...)`` on step 1 / step 3 outputs."""
+    missing values AND is NOT pre-categorized, mirroring what rctd-split sees
+    after ``ad.read_h5ad(...)`` on xenium-preprocess / ref-build outputs."""
     _arrow_string_env_or_skip()
     anndata = pytest.importorskip("anndata")
     np = pytest.importorskip("numpy")
@@ -161,9 +161,9 @@ def test_atomic_write_h5ad_handles_strings_with_missing_values(tmp_path: Path):
 
 
 def test_atomic_write_h5ad_handles_arrow_string_index(tmp_path: Path):
-    """Regression for comment 5260631648 (step 3 crash) — arrow-string obs
-    index, the exact shape ``ad.read_h5ad(...)`` produces from a step 1 /
-    step 3 output under pandas 3.x."""
+    """Regression for comment 5260631648 (ref-build crash) — arrow-string obs
+    index, the exact shape ``ad.read_h5ad(...)`` produces from a xenium-preprocess /
+    ref-build output under pandas 3.x."""
     _arrow_string_env_or_skip()
     anndata = pytest.importorskip("anndata")
     np = pytest.importorskip("numpy")

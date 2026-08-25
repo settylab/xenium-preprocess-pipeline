@@ -44,9 +44,18 @@ htmlcov/
 .env
 .env.local
 
+# Machine-local resolved-environment config (scripts/write-env-config.sh
+# output) — absolute paths specific to one install; never portable,
+# never committed.
+scripts/env.local.conf
+
+# Machine-local env-prefix receipts (scripts/create-env.sh output) —
+# same rationale as env.local.conf above.
+scripts/.env-prefix-*
+
 # Slurm output logs (accumulate in checkout)
-slurm-*.out
-*.slurm.out
+slurm-*.log
+*.slurm.log
 
 # Local staging areas outside of source
 reports/

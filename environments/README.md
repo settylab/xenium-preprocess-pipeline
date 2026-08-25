@@ -8,7 +8,7 @@ A single micromamba (or conda) environment spec covering the Python
 runtime for all three packages:
 
 ```bash
-micromamba create -n xenium -f environments/xenium.yml
+../scripts/create-env.sh -n xenium -f xenium.yml
 micromamba activate xenium
 
 uv pip install -e ../packages/xenium-preprocess
@@ -35,14 +35,18 @@ and need a one-time user-library install:
 
 ```bash
 ml fhR/4.4.1-foss-2023b
-Rscript -e '
-  dir.create("~/R/x86_64-pc-linux-gnu-library/4.4", recursive = TRUE, showWarnings = FALSE)
-  .libPaths(c("~/R/x86_64-pc-linux-gnu-library/4.4", .libPaths()))
-  if (!requireNamespace("remotes", quietly = TRUE)) install.packages("remotes")
-  remotes::install_github("dmcable/spacexr")
-  remotes::install_github("bdsc-tds/SPLIT")
-'
+../scripts/install-r-packages.sh --r-lib-dir ~/R/x86_64-pc-linux-gnu-library/4.4
 ```
+
+(`remotes::install_github()` checks the installed SHA across *all*
+`.libPaths()` entries, not just the first — merely prepending a fresh
+library, as an earlier version of this doc did, doesn't stop a
+contaminated default library from silently absorbing the "install".
+See [`../docs/installation.md`](../docs/installation.md) § R side for
+why `scripts/install-r-packages.sh` exists — and § GitHub access for
+why this step needs `github.com`/`api.github.com` reachable, and no
+GitHub credentials strictly required but a rate-limit caveat if you
+don't have any.)
 
 ### Off-cluster
 

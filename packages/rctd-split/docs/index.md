@@ -1,8 +1,8 @@
 # rctd-split
 
-**Step 4 of the Xenium spatial-data preprocessing pipeline.**
+**rctd-split of the Xenium spatial-data preprocessing pipeline.**
 
-Given a spatial test object RDS (from step 1's `rctd_prep` stage) and a scRNA reference RDS (from step 3's `rctd_reference_build` stage), rctd-split:
+Given a spatial test object RDS (from xenium-preprocess's `rctd_prep` stage) and a scRNA reference RDS (from ref-build's `rctd_reference_build` stage), rctd-split:
 
 1. Runs **RCTD** (`create.RCTD` + `run.RCTD(doublet_mode="doublet")`) — saves `rctd_results.rds`.
 2. Applies **SPLIT::run_post_process_RCTD** to produce the "unpurified" Seurat spatial object with per-cell RCTD calls attached (`first_type`, `second_type`, `spot_class`, `purification_status`, `w1_larger_w2`, `same_class`, `nCount_Proseg`, `x`, `y`) — saves `unpurified.rds`.
@@ -41,7 +41,7 @@ split/unpurified/<sample>_unpurified_{counts.mtx.gz, features.tsv.gz, barcodes.t
 split/purified/<sample>_purified_{...same shape...}
 h5ad/<sample>_unpurified.h5ad
 h5ad/<sample>_purified.h5ad
-resolved_config.yaml
+config.yaml
 ```
 
 Downstream analysis (Stage E of `ref-build-summary-v3.md`) consumes the purified `.h5ad`.

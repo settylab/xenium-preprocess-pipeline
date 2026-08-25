@@ -1,6 +1,6 @@
 #!/bin/bash -l
 # ---------------------------------------------------------------------
-# Slurm submission wrapper for the `rctd-split` pipeline (step 4 of the
+# Slurm submission wrapper for the `rctd-split` pipeline (the last stage of the
 # Xenium spatial-data preprocessing pipeline).
 #
 # `bash -l` makes this a LOGIN shell so ~/.bash_profile (and indirectly
@@ -77,7 +77,7 @@ fi
 
 # Redirect EVERYTHING from this point on to $LOG_FILE.
 #
-# TWO PATHS, chosen by execution context (ported verbatim from step 1's
+# TWO PATHS, chosen by execution context (ported verbatim from xenium-preprocess's
 # xenium-preprocess submit.slurm.sh — see comment there for the deadlock
 # root cause that motivates the split):
 #

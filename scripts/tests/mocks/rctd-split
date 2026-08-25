@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Mock rctd-split CLI — creates step-4 target artifacts and merges step4
-# key into resolved_config.yaml (preserving step1: + step3: siblings).
+# Mock rctd-split CLI — creates rctd-split target artifacts and merges the
+# rctd_split key into config.yaml (preserving the xenium_preprocess +
+# ref_build siblings).
 set -euo pipefail
 
 cmd="${1:-}"
@@ -20,6 +21,7 @@ cell_min_instance=""
 doublet_mode=""
 postprocess_min_counts=""
 keep_intermediate=0
+force_rerun=0
 max_cores=""
 
 raw_argv=("$@")
@@ -36,6 +38,7 @@ while [[ $# -gt 0 ]]; do
         --doublet-mode)              doublet_mode="$2"; shift 2 ;;
         --postprocess-min-counts)    postprocess_min_counts="$2"; shift 2 ;;
         --keep-intermediate)         keep_intermediate=1; shift ;;
+        --force-rerun)               force_rerun=1; shift ;;
         --max-cores)                 max_cores="$2"; shift 2 ;;
         *) shift ;;
     esac
@@ -47,9 +50,9 @@ done
 
 run_dir="$output_root/$sample/${sample}_${run_id}"
 
-# Step 4 depends on step 3's reference.rds landing.
+# rctd-split depends on ref-build's reference.rds landing.
 if [[ ! -f "$run_dir/rctd/${sample}_reference.rds" ]]; then
-    echo "mock rctd-split: reference.rds missing — step 3 missed? $run_dir" >&2
+    echo "mock rctd-split: reference.rds missing — ref-build missed? $run_dir" >&2
     exit 3
 fi
 
@@ -57,19 +60,20 @@ mkdir -p "$run_dir/rctd" "$run_dir/spatial_adata" "$run_dir/logs"
 
 : > "$run_dir/rctd/${sample}_rctd_results.rds"
 : > "$run_dir/spatial_adata/${sample}_proseg_purified.h5ad"
-# celltype_writeback + writeback_to_step1_raw simulated: augment (touch)
-# the two step-1 outputs in place.
+# celltype_writeback + writeback_to_raw simulated: augment (touch)
+# the two xenium-preprocess outputs in place.
 touch "$run_dir/spatial_adata/${sample}_proseg_raw.h5ad"
 touch "$run_dir/spatial_adata/${sample}_xenium_ranger.h5ad"
 
 {
-    echo "step4 ok"
+    echo "rctd-split ok"
     echo "umi_min=$umi_min"
     echo "counts_min=$counts_min"
     echo "cell_min_instance=$cell_min_instance"
     echo "doublet_mode=$doublet_mode"
     echo "postprocess_min_counts=$postprocess_min_counts"
     echo "keep_intermediate=$keep_intermediate"
+    echo "force_rerun=$force_rerun"
     echo "max_cores=$max_cores"
     echo "config_path=$config_path"
     if [[ -n "$config_path" && -f "$config_path" ]]; then
@@ -78,9 +82,9 @@ touch "$run_dir/spatial_adata/${sample}_xenium_ranger.h5ad"
         echo "--- end config ---"
     fi
     echo "raw_argv=${raw_argv[*]}"
-} > "$run_dir/logs/step4.log"
+} > "$run_dir/logs/rctd-split.log"
 
-cfg="$run_dir/resolved_config.yaml"
+cfg="$run_dir/config.yaml"
 python3 - "$cfg" "$sample" "$run_id" <<'PY'
 import sys, os
 cfg_path, sample, run_id = sys.argv[1], sys.argv[2], sys.argv[3]
@@ -97,11 +101,11 @@ for line in lines:
             skip = False
         else:
             continue
-    if line.startswith("step4:"):
+    if line.startswith("rctd_split:"):
         skip = True
         continue
     out.append(line)
-out.append(f"step4:\n  sample_id: {sample}\n  run_id: {run_id}\n")
+out.append(f"rctd_split:\n  sample_id: {sample}\n  run_id: {run_id}\n")
 
 with open(cfg_path, "w") as f:
     f.writelines(out)

@@ -3,10 +3,19 @@
 All notable changes to ref-build will be documented here. Follows
 [Keep a Changelog](https://keepachangelog.com/) shape.
 
+## [Unreleased]
+
+### Changed (2026-08-18)
+- Top-level driver-side rename: `scripts/submit_step3.sbatch` →
+  `scripts/submit_ref-build.sbatch`. The Python package surface is
+  unaffected; only affects direct-sbatch callers (the documented
+  flow is `submit_workflow.sh`). See top-level `CHANGELOG.md` §0.2.0
+  for the sibling renames.
+
 ## [0.1.0] — 2026-07-09
 
 ### Added
-- Initial package scaffold (step 3 of the internal SPLIT/Proseg workflow spatial-data
+- Initial package scaffold (ref-build of the internal SPLIT/Proseg workflow spatial-data
   preprocessing pipeline).
 - Five stage modules under `ref_build.stages`
   (`load_primary_and_donors`, `census`, `assemble`, `export_mtx`,

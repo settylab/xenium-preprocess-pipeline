@@ -42,7 +42,7 @@ Two additional guards:
     ref-build-summary Caveat §1 (union-not-intersection recombine
     leak).
   - Expected-celltype set is the marker JSON's keys with a trailing
-    `_marker` / `_markers` stripped (matches step 1's
+    `_marker` / `_markers` stripped (matches xenium-preprocess's
     `--global-non-tumor-json` shape).
 
 Writes `<output_root>/<sample_id>/census/census.csv` — one row per

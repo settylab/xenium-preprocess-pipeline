@@ -1,9 +1,9 @@
-"""Tests for the writeback_to_step1_raw stage.
+"""Tests for the writeback_to_raw stage.
 
 Fabricate:
-  * a 5-cell step-1 raw h5ad with .obs['qc_filtered'] (3 True, 2 False)
+  * a 5-cell xenium-preprocess raw h5ad with .obs['qc_filtered'] (3 True, 2 False)
   * a filter_status.csv with rows for exactly the 3 qc_filtered=True cells
-  * a step-4 unpurified.h5ad also carrying those 3 cells with rich obs
+  * a rctd-split unpurified.h5ad also carrying those 3 cells with rich obs
 
 Verify:
   1. filter-status cols land on all 5 raw cells (False on the 2 missing).
@@ -130,10 +130,10 @@ def _setup(tmp_path: Path):
 
 
 def test_writeback_folds_filter_status_and_obs(tmp_path):
-    from rctd_split.stages.writeback_to_step1_raw import run_writeback_to_step1_raw
+    from rctd_split.stages.writeback_to_raw import run_writeback_to_raw
 
     output_root, sample_id, run_id, raw_p, _, _, _ = _setup(tmp_path)
-    run_writeback_to_step1_raw(
+    run_writeback_to_raw(
         sample_id=sample_id,
         run_id=run_id,
         output_root=output_root,
@@ -179,10 +179,10 @@ def test_writeback_folds_filter_status_and_obs(tmp_path):
 
 
 def test_writeback_respects_exclude_obs_cols(tmp_path):
-    from rctd_split.stages.writeback_to_step1_raw import run_writeback_to_step1_raw
+    from rctd_split.stages.writeback_to_raw import run_writeback_to_raw
 
     output_root, sample_id, run_id, raw_p, _, _, _ = _setup(tmp_path)
-    run_writeback_to_step1_raw(
+    run_writeback_to_raw(
         sample_id=sample_id,
         run_id=run_id,
         output_root=output_root,
@@ -203,7 +203,7 @@ def test_writeback_respects_exclude_obs_cols(tmp_path):
 def test_writeback_is_idempotent(tmp_path):
     """Running the stage twice must not grow raw.obs schema or dims,
     and must produce byte-identical column values."""
-    from rctd_split.stages.writeback_to_step1_raw import run_writeback_to_step1_raw
+    from rctd_split.stages.writeback_to_raw import run_writeback_to_raw
 
     output_root, sample_id, run_id, raw_p, _, _, _ = _setup(tmp_path)
     kwargs = dict(
@@ -211,7 +211,7 @@ def test_writeback_is_idempotent(tmp_path):
         raw_h5ad=None, qc_filtered_col="qc_filtered",
         exclude_obs_cols=[], h5ad_compression="gzip",
     )
-    run_writeback_to_step1_raw(force_rerun=False, **kwargs)
+    run_writeback_to_raw(force_rerun=False, **kwargs)
     import anndata as ad
     r1 = ad.read_h5ad(raw_p)
     n_obs = r1.n_obs
@@ -219,7 +219,7 @@ def test_writeback_is_idempotent(tmp_path):
     ft_1 = list(r1.obs["first_type"])
     pr_1 = [bool(x) for x in r1.obs["passed_rctd"]]
 
-    run_writeback_to_step1_raw(force_rerun=True, **kwargs)
+    run_writeback_to_raw(force_rerun=True, **kwargs)
     r2 = ad.read_h5ad(raw_p)
     assert r2.n_obs == n_obs
     assert list(r2.obs.columns) == cols_1
@@ -235,7 +235,7 @@ def test_writeback_preserves_source_h5ad_shape_and_x(tmp_path):
     """
     import anndata as ad
     import numpy as np
-    from rctd_split.stages.writeback_to_step1_raw import run_writeback_to_step1_raw
+    from rctd_split.stages.writeback_to_raw import run_writeback_to_raw
 
     output_root, sample_id, run_id, raw_p, _, _, _ = _setup(tmp_path)
 
@@ -247,7 +247,7 @@ def test_writeback_preserves_source_h5ad_shape_and_x(tmp_path):
     qc_before = [bool(v) for v in before.obs["qc_filtered"]]
     pre_existing_cols = set(before.obs.columns)
 
-    run_writeback_to_step1_raw(
+    run_writeback_to_raw(
         sample_id=sample_id, run_id=run_id, output_root=output_root,
         raw_h5ad=None, qc_filtered_col="qc_filtered",
         exclude_obs_cols=[], h5ad_compression="gzip",
@@ -270,7 +270,7 @@ def test_writeback_fails_loud_on_unaccounted_cells(tmp_path):
     """A raw cell that is qc_filtered=True but absent from
     filter_status.csv MUST fail loud + emit a summary CSV."""
     from rctd_split._internal.layout import intermediate_path
-    from rctd_split.stages.writeback_to_step1_raw import run_writeback_to_step1_raw
+    from rctd_split.stages.writeback_to_raw import run_writeback_to_raw
 
     output_root, sample_id, run_id, raw_p, fs_p, _, _ = _setup(tmp_path)
     # Mark C3 as qc_filtered=True — but it's NOT in filter_status.csv.
@@ -281,7 +281,7 @@ def test_writeback_fails_loud_on_unaccounted_cells(tmp_path):
     atomic_write_h5ad(raw, raw_p, compression="gzip")
 
     with pytest.raises(SystemExit) as exc:
-        run_writeback_to_step1_raw(
+        run_writeback_to_raw(
             sample_id=sample_id,
             run_id=run_id,
             output_root=output_root,
@@ -303,7 +303,7 @@ def test_writeback_fails_loud_on_unaccounted_cells(tmp_path):
 
 
 def test_writeback_fails_loud_when_qc_col_missing(tmp_path):
-    from rctd_split.stages.writeback_to_step1_raw import run_writeback_to_step1_raw
+    from rctd_split.stages.writeback_to_raw import run_writeback_to_raw
 
     output_root, sample_id, run_id, raw_p, _, _, _ = _setup(tmp_path)
     import anndata as ad
@@ -313,7 +313,7 @@ def test_writeback_fails_loud_when_qc_col_missing(tmp_path):
     atomic_write_h5ad(raw, raw_p, compression="gzip")
 
     with pytest.raises(SystemExit) as exc:
-        run_writeback_to_step1_raw(
+        run_writeback_to_raw(
             sample_id=sample_id,
             run_id=run_id,
             output_root=output_root,
@@ -334,7 +334,7 @@ def test_writeback_bool_col_with_missing_cells_is_writeable(tmp_path):
     fails with "Can't implicitly convert non-string objects to strings"
     (settylab/TracyY123-nexus#26 comment 5271431123)."""
     import anndata as ad
-    from rctd_split.stages.writeback_to_step1_raw import run_writeback_to_step1_raw
+    from rctd_split.stages.writeback_to_raw import run_writeback_to_raw
 
     output_root, sample_id, run_id, raw_p, _, unp_p, _ = _setup(tmp_path)
 
@@ -347,7 +347,7 @@ def test_writeback_bool_col_with_missing_cells_is_writeable(tmp_path):
 
     # Must not raise. Prior to the fix this raised
     # "TypeError: Can't implicitly convert non-string objects to strings".
-    run_writeback_to_step1_raw(
+    run_writeback_to_raw(
         sample_id=sample_id,
         run_id=run_id,
         output_root=output_root,
@@ -380,10 +380,10 @@ def test_passed_purification_sum_equals_purified_n_obs(tmp_path):
     (impossible: purified is a filtered subset of raw's ids) or the
     membership test is broken."""
     import anndata as ad
-    from rctd_split.stages.writeback_to_step1_raw import run_writeback_to_step1_raw
+    from rctd_split.stages.writeback_to_raw import run_writeback_to_raw
 
     output_root, sample_id, run_id, raw_p, _, _, pur_p = _setup(tmp_path)
-    run_writeback_to_step1_raw(
+    run_writeback_to_raw(
         sample_id=sample_id,
         run_id=run_id,
         output_root=output_root,

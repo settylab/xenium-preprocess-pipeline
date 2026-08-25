@@ -12,12 +12,16 @@ recipe.
 
 `spacexr` module availability: the default Slurm submit wrapper does
 `ml fhR/4.4.1-foss-2023b` which carries Seurat + Matrix + readr, but
-NOT spacexr. See `docs/install.md` for the one-time
-`~/.claude/r_libs/4.4.1` install. The R script sets .libPaths()
-accordingly.
+NOT spacexr — verified against a live `.libPaths()`, `fhR` provides
+neither `spacexr` nor `SPLIT`. Pass `--r-lib-paths` (config key
+`r_lib_paths`) pointing at a renv/user library that has it; this
+stage prepends those paths to the child Rscript's `R_LIBS_USER`
+(mirrors rctd-split's `r_lib_paths` mechanism — see
+`rctd_split/stages/export_mtx.py`).
 """
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -43,6 +47,7 @@ def run_rctd_reference_build(
     label_slash_replacement: str,
     force_rerun: bool,
     run_id: str,
+    r_lib_paths: list[str] | list[Path] | None = None,
 ) -> Path:
     """Invoke `Rscript rctd_reference_build.R` on the 10X mtx bundle.
     Writes the .rds DIRECTLY to the final locked-layout path
@@ -88,11 +93,29 @@ def run_rctd_reference_build(
         f"--celltype-col={celltype_col}",
         f"--label-slash-replacement={label_slash_replacement}",
     ]
+    # R silently SKIPS an R_LIBS_USER entry that doesn't exist instead
+    # of erroring — validate up front so a typo'd/stale --r-lib-paths
+    # fails loud here rather than surfacing as a confusing
+    # "there is no package called 'spacexr'" deep inside the R script.
+    env = os.environ.copy()
+    if r_lib_paths:
+        missing = [str(p) for p in r_lib_paths if not Path(p).is_dir()]
+        if missing:
+            raise SystemExit(
+                f"[rctd_reference_build] --r-lib-paths / r_lib_paths entry "
+                f"does not exist: {missing}. R silently ignores a missing "
+                "R_LIBS_USER directory, so this fails loud instead."
+            )
+        prepend = ":".join(str(p) for p in r_lib_paths)
+        existing = env.get("R_LIBS_USER", "")
+        env["R_LIBS_USER"] = f"{prepend}:{existing}" if existing else prepend
+        log(f"[rctd_reference_build] R_LIBS_USER prepended with: {prepend}")
+
     log(f"[rctd_reference_build] launching: {' '.join(args)}")
     # Stream both stdout + stderr into the pipeline log (subprocess
     # inherits our stdout/stderr fds by default). check=True raises on
     # non-zero exit; the resulting CalledProcessError carries the code.
-    subprocess.run(args, check=True)
+    subprocess.run(args, check=True, env=env)
 
     if not out_rds.exists():
         raise SystemExit(

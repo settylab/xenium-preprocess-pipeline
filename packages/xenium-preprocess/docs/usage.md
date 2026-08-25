@@ -36,6 +36,7 @@ By default the pipeline globs the proseg directory for the count matrix + cell m
 - `--maxpost-matrix /path/to/maxpost_counts.parquet` — explicit path to the maxpost integer matrix (skips the glob). Feeds `adata.layers['maxpost_counts']`.
 - `--cell-metadata /path/to/cell_metadata.parquet` — same.
 - `--x-source {maxpost_counts,expected_counts}` — which layer `.X` mirrors. Default `maxpost_counts` (integer MAP counts — the 2026-07-23 default flip; QC and single-pass preprocess then read integer counts). Pass `expected_counts` to opt back into the pre-2026-07-23 fractional layout. Both matrices are stored as `.layers[...]` regardless.
+- `--proseg-run-script /path/to/proseg_run_<sample>.sh` — optional audit trail. When set, the `proseg_to_anndata` stage copies the referenced shell script verbatim into `<run-dir>/spatial_adata/provenance/<script-name>` so a reader of the run folder can trace the raw h5ad back to the exact proseg invocation (CLI flags, model params, seed) that produced its counts. Not the same as `summary/<sample>_summary_report.html`'s "Provenance" section, which captures rctd-split's own invocation + config + package versions. Omitted when the flag is unset — no empty `provenance/` directory is created.
 
 Set `proseg_to_anndata.maxpost_matrix_glob: null` in your user YAML to disable maxpost loading entirely (reverts to the pre-2026-07-10 single-matrix behaviour). With the default `x_source: maxpost_counts` in that setup, `.X` silently falls back to `expected_counts` with a WARN log — no need to also flip `x_source`.
 
@@ -113,4 +114,4 @@ CLI flags always win over the user YAML.
 
 ## Output layout
 
-See the [Outputs](../README.md#outputs) section of the README. Every run also writes a `resolved_config.yaml` at the run root, capturing the exact merged config that the run used — useful when reproducing a specific result months later.
+See the [Outputs](../README.md#outputs) section of the README. Every run also writes a `config.yaml` at the run root, capturing the exact merged config that the run used — useful when reproducing a specific result months later.

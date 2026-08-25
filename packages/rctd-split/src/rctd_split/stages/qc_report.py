@@ -3,13 +3,13 @@
 Reads (never writes to) the three persisted h5ads under
 ``spatial_adata/``:
 
-  * ``<S>_xenium_ranger.h5ad`` (step 1; augmented by celltype_writeback)
-  * ``<S>_proseg_raw.h5ad``    (step 1; augmented by writeback_to_step1_raw)
+  * ``<S>_xenium_ranger.h5ad`` (xenium-preprocess; augmented by celltype_writeback)
+  * ``<S>_proseg_raw.h5ad``    (xenium-preprocess; augmented by writeback_to_raw)
   * ``<S>_proseg_purified.h5ad`` (this pipeline; augmented by postprocess)
 
-Emits under ``<run_dir>/qc/``:
+Emits under ``<run_dir>/summary/``:
 
-  * ``<S>_qc_report.html`` — QC metrics tables + embedded plots + versions.
+  * ``<S>_summary_report.html`` — QC metrics tables + embedded plots + versions.
   * ``<S>_qc_metrics.csv`` — machine-parseable version of the metrics.
   * ``<S>_rctd_summary.csv`` — RCTD spot_class + rejected-first_type table.
   * ``plots/<S>_umap_purification_status.png``
@@ -41,20 +41,30 @@ Reproducibility:
   * The three count histograms plot the distribution for ALL cells in
     the source h5ad (no positive-only slice) and overlay a dashed
     vertical line at the upstream filter threshold, read from the
-    merged ``resolved_config.yaml`` (settylab/TracyY123-nexus#26
+    merged ``config.yaml`` (settylab/TracyY123-nexus#26
     comment 5275064492). Thresholds:
-      - proseg_raw histogram: ``step1.qc_filter.min_counts_cell``
+      - proseg_raw histogram: ``xenium_preprocess.qc_filter.min_counts_cell``
       - xenium_ranger histogram: no upstream min-counts gate, no line
-      - proseg_purified histogram: ``step4.postprocess.qc.min_counts``
+      - proseg_purified histogram: ``rctd_split.postprocess.qc.min_counts``
     If the config file or a threshold key is absent, the line is
     omitted — never hard-coded.
+  * The proseg_purified histogram sources its `nCount_Proseg` values
+    from the pre-filter intermediate
+    ``intermediate/adata/<S>_unpurified.h5ad`` when available, so
+    cells that ``postprocess.filter_cells(min_counts=...)`` removed are
+    still visible in the distribution on the left of the dashed
+    threshold line (Tracy's ask on settylab/TracyY123-nexus#26
+    comment 5322401335, item 2). Falls back to the post-filter
+    ``proseg_purified.h5ad`` when the intermediate has already been
+    cleaned up (e.g. a ``--force-rerun qc_report`` on an
+    already-completed + cleaned run).
   * RCTD spot_class summary + first_type-in-rejected tabulation are
     computed from ``proseg_raw.obs`` (``spot_class`` + ``first_type``
-    are folded from ``intermediate/adata/step4_unpurified.h5ad`` onto
-    raw by ``writeback_to_step1_raw`` Part 2; ``unpurified.obs`` in
+    are folded from ``intermediate/adata/unpurified.h5ad`` onto
+    raw by ``writeback_to_raw`` Part 2; ``unpurified.obs`` in
     turn got them from RCTD's ``results_df`` via
     ``SPLIT::run_post_process_RCTD``). Fail-loud when either column is
-    absent. Cells with empty ``spot_class`` were dropped by step-1
+    absent. Cells with empty ``spot_class`` were dropped by xenium-preprocess
     QC before RCTD ever saw them and are excluded from the RCTD
     denominator.
 
@@ -64,6 +74,7 @@ convention). Idempotent — re-runs are guarded by the sentinel unless
 """
 from __future__ import annotations
 
+import html
 import os
 import sys
 from pathlib import Path
@@ -71,12 +82,17 @@ from pathlib import Path
 from rctd_split._internal.compat import sentinel_exists
 from rctd_split._internal.layout import (
     intermediate_path,
-    qc_path,
-    qc_plots_dir,
+    summary_dir,
+    summary_path,
+    summary_plots_dir,
     resolved_config_path,
     spatial_adata_path,
 )
 from rctd_split._internal.logging import log
+from rctd_split._internal.palette import (
+    celltype_color_map,
+    purification_status_color_map,
+)
 
 
 # Canonical RCTD spot_class values (spacexr, post
@@ -107,7 +123,7 @@ _REJECT_VALUES: frozenset[str] = frozenset({"reject", "rejected"})
 
 _PLOT_DPI = 150
 _PLOT_FIGSIZE = (6.0, 5.5)
-_PLOT_POINT_SIZE = 4.0
+_PLOT_POINT_SIZE = 1.5
 _PLOT_ALPHA = 0.7
 _PALETTE = "tab20"
 
@@ -132,7 +148,7 @@ def _resolve_matrix(adata, layer: str | None, label: str):
             f"[qc_report] {label}.h5ad has no layers[{layer!r}]. "
             f"Available layers: {available}. "
             "The canonical proseg argmax-posterior integer count "
-            "layer is 'maxpost_counts' (as emitted by step-1 proseg "
+            "layer is 'maxpost_counts' (as emitted by xenium-preprocess proseg "
             "export). If your h5ad uses that name, drop --qc-raw-layer "
             "or set qc_report.raw_layer: maxpost_counts in your config."
         )
@@ -205,9 +221,9 @@ def _rctd_summary_metrics(raw_adata) -> dict:
     """Compute RCTD summary metrics from ``proseg_raw.obs``.
 
     Reads ``raw.obs['spot_class']`` and ``raw.obs['first_type']`` —
-    both folded onto raw by ``writeback_to_step1_raw`` Part 2 from
-    ``step4_unpurified.obs``. Cells with empty ``spot_class`` were
-    dropped by step-1 QC before RCTD saw them and are excluded from
+    both folded onto raw by ``writeback_to_raw`` Part 2 from
+    ``unpurified.obs``. Cells with empty ``spot_class`` were
+    dropped by xenium-preprocess QC before RCTD saw them and are excluded from
     the RCTD denominator (they are counted separately as
     ``n_pre_rctd_dropped``).
 
@@ -215,7 +231,7 @@ def _rctd_summary_metrics(raw_adata) -> dict:
 
     - ``n_raw`` — total raw cells.
     - ``n_pre_rctd_dropped`` — cells with empty spot_class
-      (step-1 qc-filtered, never reached RCTD).
+      (xenium-preprocess qc-filtered, never reached RCTD).
     - ``n_rctd`` — cells RCTD categorized.
     - ``spot_class_rows`` — list of dicts with keys
       ``class``, ``display_name``, ``count``, ``pct``. Ordered by
@@ -231,9 +247,9 @@ def _rctd_summary_metrics(raw_adata) -> dict:
         if col not in raw_adata.obs.columns:
             raise SystemExit(
                 f"[qc_report] proseg_raw.h5ad missing obs[{col!r}] — "
-                "expected after writeback_to_step1_raw Part 2 folds "
-                "step4_unpurified.obs onto raw. Re-run the "
-                "writeback_to_step1_raw stage (with all prerequisites)."
+                "expected after writeback_to_raw Part 2 folds "
+                "unpurified.obs onto raw. Re-run the "
+                "writeback_to_raw stage (with all prerequisites)."
             )
 
     spot = _normalize_spot_series(raw_adata.obs["spot_class"])
@@ -298,7 +314,7 @@ def _rctd_summary_metrics(raw_adata) -> dict:
 
 def _read_hist_thresholds(resolved_yaml: Path) -> dict:
     """Read the three per-histogram filter thresholds from the merged
-    ``resolved_config.yaml`` so the dashed vertical line on each
+    ``config.yaml`` so the dashed vertical line on each
     histogram is data-driven (settylab/TracyY123-nexus#26 comment
     5275064492).
 
@@ -307,14 +323,14 @@ def _read_hist_thresholds(resolved_yaml: Path) -> dict:
     non-numeric config values → None.
 
     Returns:
-      raw:      step1.qc_filter.min_counts_cell (float | None)
+      raw:      xenium_preprocess.qc_filter.min_counts_cell (float | None)
       xenium:   None — xenium_ranger.h5ad has no min-counts gate in
-                step-1 (xenium_ranger_to_anndata is pass-through).
-      purified: step4.postprocess.qc.min_counts (float | None)
+                xenium-preprocess (xenium_ranger_to_anndata is pass-through).
+      purified: rctd_split.postprocess.qc.min_counts (float | None)
     """
     result = {"raw": None, "xenium": None, "purified": None}
     if not resolved_yaml.exists():
-        log(f"[qc_report] resolved_config.yaml not found at {resolved_yaml} "
+        log(f"[qc_report] config.yaml not found at {resolved_yaml} "
             "— histogram threshold lines will be omitted.")
         return result
 
@@ -339,8 +355,8 @@ def _read_hist_thresholds(resolved_yaml: Path) -> dict:
         except (TypeError, ValueError):
             return None
 
-    result["raw"] = _get(merged, ("step1", "qc_filter", "min_counts_cell"))
-    result["purified"] = _get(merged, ("step4", "postprocess", "qc", "min_counts"))
+    result["raw"] = _get(merged, ("xenium_preprocess", "qc_filter", "min_counts_cell"))
+    result["purified"] = _get(merged, ("rctd_split", "postprocess", "qc", "min_counts"))
     return result
 
 
@@ -405,7 +421,7 @@ def _resolve_purification_status(purified_adata, column_name: str):
 
     Fail-loud when the column is missing — do NOT try to reindex from
     raw.obs (raw carries the boolean ``passed_purification`` from
-    ``writeback_to_step1_raw``, not the SPLIT categorical).
+    ``writeback_to_raw``, not the SPLIT categorical).
     """
     import numpy as np
 
@@ -415,7 +431,7 @@ def _resolve_purification_status(purified_adata, column_name: str):
             "This is a SPLIT-native column produced by SPLIT::purify; "
             "check that the split_purify → mtx_to_h5ad chain ran "
             "successfully. (Do not confuse with raw.obs['passed_purification'], "
-            "which is the boolean written by writeback_to_step1_raw.)"
+            "which is the boolean written by writeback_to_raw.)"
         )
     log(f"[qc_report]   using purified.obs[{column_name!r}] "
         "for UMAP #1 coloring")
@@ -562,9 +578,18 @@ def _scatter_umap(
     title: str,
     out_path: Path,
     categorical: bool,
+    color_map: dict[str, str] | None = None,
 ):
     """Draw a single 2D-scatter UMAP colored by `values` and save to
-    `out_path`. `categorical` picks discrete legend rendering."""
+    `out_path`. `categorical` picks discrete legend rendering.
+
+    ``color_map`` (optional): dict mapping normalized string level
+    → hex color. When provided, each level draws with its mapped
+    color instead of the auto-assigned tab20 slot; unmapped
+    levels fall back to gray. Used for cross-sample color
+    consistency on categorical fields — see
+    ``rctd_split._internal.palette``.
+    """
     import numpy as np
     import pandas as pd
 
@@ -576,10 +601,14 @@ def _scatter_umap(
         cmap = plt.get_cmap(_PALETTE, max(len(uniq), 1))
         for i, level in enumerate(uniq):
             mask = (vals == level).to_numpy()
+            if color_map is not None:
+                color = color_map.get(level, "#BBBBBB")
+            else:
+                color = cmap(i)
             ax.scatter(
                 umap_xy[mask, 0], umap_xy[mask, 1],
                 s=_PLOT_POINT_SIZE, alpha=_PLOT_ALPHA,
-                color=cmap(i),
+                color=color,
                 label=str(level) if level else "(empty)",
                 linewidths=0,
             )
@@ -626,7 +655,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>QC report — {sample_id}</title>
+<title>Summary report — {sample_id}</title>
 <style>
   body {{ font-family: -apple-system, "Segoe UI", "Helvetica Neue",
          Arial, sans-serif; max-width: 1100px; margin: 2em auto;
@@ -646,7 +675,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 </style>
 </head>
 <body>
-<h1>QC report — {sample_id}</h1>
+<h1>Summary report — {sample_id}</h1>
 <p class="meta">
   Run ID: <code>{run_id}</code><br>
   Generated: {generated_ts}<br>
@@ -678,10 +707,10 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 <h2>RCTD summary</h2>
 <p class="meta">
   RCTD categorized <b>{n_rctd}</b> cells (of {n_raw_total} raw;
-  {n_pre_rctd_dropped} dropped by step-1 QC before RCTD saw them).
+  {n_pre_rctd_dropped} dropped by xenium-preprocess QC before RCTD saw them).
   Source: <code>proseg_raw.obs['spot_class']</code> (folded from
-  <code>step4_unpurified.obs</code> by
-  <code>writeback_to_step1_raw</code>; originally emitted by
+  <code>unpurified.obs</code> by
+  <code>writeback_to_raw</code>; originally emitted by
   <code>SPLIT::run_post_process_RCTD</code> from RCTD's
   <code>results_df</code>).
 </p>
@@ -695,7 +724,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   </tbody>
 </table>
 
-<h3>Broad_cell_type in rejected cells</h3>
+<h3>SPLIT-inferred celltype in rejected cells</h3>
 <p class="meta">
   Of the <b>{n_rejected}</b> cells RCTD rejected
   (<code>spot_class == 'reject'</code>), the primary cell-type call
@@ -703,7 +732,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 </p>
 <table>
   <thead><tr>
-    <th>Broad_cell_type</th>
+    <th>SPLIT-inferred celltype</th>
     <th>Cells</th><th>% of rejected</th>
   </tr></thead>
   <tbody>
@@ -745,6 +774,9 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
     From <code>proseg_purified.h5ad</code>, obs column
     <code>{purification_status_column}</code> (SPLIT-native categorical
     from <code>SPLIT::purify</code>). Distinct labels: {n_purification_status_levels}.
+    Colors are fixed per level (high-contrast Wong palette); the
+    full mapping is dumped to
+    <code>{color_map_json_name}</code> for downstream reuse.
   </div>
 </div>
 
@@ -757,27 +789,112 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   </div>
 </div>
 
-<h2>UMAP: Broad_cell_type</h2>
+<h2>UMAP: SPLIT-inferred celltype</h2>
 <div class="plot">
-  <img src="{img_first_type}" alt="UMAP by Broad_cell_type">
+  <img src="{img_first_type}" alt="UMAP by SPLIT-inferred celltype">
   <div class="caption">
     From <code>proseg_purified.h5ad</code>, obs column
     <code>first_type</code> (RCTD celltype label). Distinct labels:
-    {n_first_type_levels}.
+    {n_first_type_levels}. Colors: common celltypes (Liver,
+    Tumor, Myeloid, Hepatocyte, T/B/NK cell, Macrophage,
+    Endothelial, Fibroblast, Stroma) receive fixed
+    maximally-distinct hues; other names get a deterministic
+    per-name hash into a 16-hue high-contrast palette, so the
+    same celltype receives the same color across every sample
+    this pipeline runs; the full mapping is dumped to
+    <code>{color_map_json_name}</code>.
   </div>
 </div>
 
+{extra_reports_section}
 <h2>Provenance</h2>
 <table>
   <tbody>
     <tr><th>Python</th><td><code>{python_version}</code></td></tr>
     <tr><th>Package versions</th><td><code>{pkg_versions}</code></td></tr>
     <tr><th>Inputs</th><td><code>{input_paths}</code></td></tr>
+    <tr><th>Invocation</th><td><code>{invoking_command}</code></td></tr>
+    <tr><th>Resolved config</th><td><code>{resolved_config_path_str}</code></td></tr>
   </tbody>
 </table>
+<details>
+  <summary>Full resolved config (<code>{resolved_config_path_str}</code>)</summary>
+  <pre>{resolved_config_text}</pre>
+</details>
 </body>
 </html>
 """
+
+
+def _render_extra_reports_section(
+    extra_reports: list[dict], summary_dir_path: Path,
+) -> str:
+    """Render the "Extra reports" HTML section from a list of
+    ``{"path": str, "name": str}`` dicts.
+
+    For each entry:
+      * If the file exists AND lives under ``summary_dir_path``, use
+        the relative path so the section works after moving the
+        summary/ folder.
+      * Otherwise, keep the absolute path (still opens locally in a
+        browser). A small ``(missing at path)`` note is appended
+        when the file cannot be resolved at render time.
+      * A sandboxed iframe embeds the report inline; a plain <a>
+        link falls under it so the reader always has a click-through
+        even if the iframe is blocked (some browsers reject
+        ``file://`` iframes).
+
+    An empty ``extra_reports`` list renders as an empty string —
+    the enclosing section vanishes entirely.
+    """
+    if not extra_reports:
+        return ""
+
+    lines = ["<h2>Additional reports</h2>"]
+    lines.append(
+        "<p class=\"meta\">External HTML reports linked from this "
+        "run (via <code>qc_report.extra_reports</code> in the config "
+        "or repeated <code>--extra-report PATH,NAME</code> CLI flags).</p>"
+    )
+    for entry in extra_reports:
+        raw_path = str(entry["path"])
+        raw_name = str(entry["name"])
+        resolved = Path(raw_path)
+        href_target = raw_path
+        missing_note = ""
+        if resolved.exists():
+            try:
+                rel = resolved.resolve().relative_to(
+                    summary_dir_path.resolve()
+                )
+                href_target = str(rel)
+            except ValueError:
+                href_target = str(resolved.resolve())
+        else:
+            missing_note = (
+                f" <span style=\"color:#a33\">"
+                f"(missing at render time: {html.escape(raw_path)})</span>"
+            )
+        safe_name = html.escape(raw_name)
+        safe_href = html.escape(href_target, quote=True)
+        lines.append(
+            f"<h3>{safe_name}{missing_note}</h3>"
+        )
+        lines.append(
+            f"<p class=\"meta\">Source: <code>{html.escape(raw_path)}</code> "
+            f"— <a href=\"{safe_href}\" target=\"_blank\" "
+            "rel=\"noopener\">open in new tab</a>.</p>"
+        )
+        lines.append(
+            "<div class=\"plot\">"
+            f"<iframe src=\"{safe_href}\" "
+            "width=\"1000\" height=\"700\" "
+            "sandbox=\"allow-same-origin allow-popups\" "
+            "style=\"border: 1px solid #ddd;\">"
+            "</iframe>"
+            "</div>"
+        )
+    return "\n".join(lines)
 
 
 def _render_rctd_spot_class_rows(rctd: dict) -> str:
@@ -824,7 +941,7 @@ def _threshold_caption(source: str, threshold: float | None) -> str:
     if threshold is None:
         return (
             "<i>No upstream min-counts filter recorded in "
-            "<code>resolved_config.yaml</code>; no dashed threshold "
+            "<code>config.yaml</code>; no dashed threshold "
             "line drawn.</i>"
         )
     return (
@@ -860,6 +977,11 @@ def _render_html(
     raw_layer: str,
     pkg_versions: str,
     input_paths: str,
+    invoking_command: str,
+    resolved_config_path_str: str,
+    resolved_config_text: str,
+    color_map_json_name: str,
+    extra_reports_section: str,
 ) -> None:
     rows_html = "\n    ".join(
         (
@@ -893,13 +1015,13 @@ def _render_html(
             _render_rctd_rejected_first_type_rows(rctd_summary)
         ),
         threshold_caption_raw=_threshold_caption(
-            "step1.qc_filter.min_counts_cell", thresholds["raw"],
+            "xenium_preprocess.qc_filter.min_counts_cell", thresholds["raw"],
         ),
         threshold_caption_xenium=_threshold_caption(
-            "step1 (xenium_ranger min-counts)", thresholds["xenium"],
+            "xenium-preprocess (xenium_ranger min-counts)", thresholds["xenium"],
         ),
         threshold_caption_purified=_threshold_caption(
-            "step4.postprocess.qc.min_counts", thresholds["purified"],
+            "rctd_split.postprocess.qc.min_counts", thresholds["purified"],
         ),
         img_hist_raw=img_paths["hist_raw"],
         img_hist_xenium=img_paths["hist_xenium"],
@@ -917,11 +1039,24 @@ def _render_html(
         python_version=sys.version.splitlines()[0],
         pkg_versions=pkg_versions,
         input_paths=input_paths,
+        invoking_command=_html_escape(invoking_command),
+        resolved_config_path_str=_html_escape(resolved_config_path_str),
+        resolved_config_text=_html_escape(resolved_config_text),
+        color_map_json_name=color_map_json_name,
+        extra_reports_section=extra_reports_section,
     )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     tmp = out_path.with_suffix(out_path.suffix + ".tmp")
     tmp.write_text(body)
     os.replace(tmp, out_path)
+
+
+def _html_escape(s: str) -> str:
+    """HTML-escape user-provided values before templating them into the
+    report — the invocation command, resolved config path, and full
+    config text all originate from the operator's shell / disk and can
+    contain `<`, `>`, `&` etc. that would otherwise render as tags."""
+    return html.escape(s, quote=False)
 
 
 def _pkg_versions() -> str:
@@ -933,6 +1068,27 @@ def _pkg_versions() -> str:
         except Exception:
             parts.append(f"{name}=missing")
     return ", ".join(parts)
+
+
+def _write_color_map_json(
+    out_path: Path,
+    *,
+    purification_status: dict[str, str],
+    first_type: dict[str, str],
+) -> None:
+    """Persist the qc_report color maps to a JSON sidecar so
+    downstream plots (or a rerun) can reproduce the same
+    per-level colors."""
+    import json
+
+    payload = {
+        "purification_status": dict(purification_status),
+        "first_type": dict(first_type),
+    }
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = out_path.with_suffix(out_path.suffix + ".tmp")
+    tmp.write_text(json.dumps(payload, indent=2, sort_keys=True))
+    os.replace(tmp, out_path)
 
 
 def _write_metrics_csv(
@@ -1038,11 +1194,25 @@ def run_qc_report(
     purification_status_column: str,
     raw_layer: str,
     force_rerun: bool,
+    invoking_argv: list[str] | None = None,
+    extra_reports: list[dict] | None = None,
 ) -> Path:
     """Generate QC HTML report + plots. Returns the sentinel path.
 
     Reads-only w.r.t. the three source h5ads. Writes to
-    ``<run_dir>/qc/`` + a sentinel under ``intermediate/adata/``.
+    ``<run_dir>/summary/`` + a sentinel under ``intermediate/adata/``.
+
+    ``invoking_argv`` is captured at run start by the pipeline
+    entrypoint (`sys.argv`) and rendered verbatim into the HTML
+    report's Provenance section along with the merged config.yaml
+    contents (settylab/TracyY123-nexus#26 comment 5320970944, item 5).
+
+    ``extra_reports`` is an optional list of
+    ``{"path": str, "name": str}`` dicts. For each entry the report
+    appends a labeled iframe + a click-through link to the external
+    HTML at the bottom of the summary_report.html (Tracy's ask on
+    settylab/TracyY123-nexus#26 comment 5322126093, item 4). None or
+    empty list = no extra section rendered.
     """
     import time
 
@@ -1060,12 +1230,12 @@ def run_qc_report(
     sentinel = intermediate_path(
         output_root, sample_id, run_id, "qc_report_sentinel",
     )
-    metrics_csv = qc_path(output_root, sample_id, run_id, "metrics_csv")
-    rctd_summary_csv = qc_path(
+    metrics_csv = summary_path(output_root, sample_id, run_id, "metrics_csv")
+    rctd_summary_csv = summary_path(
         output_root, sample_id, run_id, "rctd_summary_csv",
     )
-    html_out = qc_path(output_root, sample_id, run_id, "html_report")
-    plots_dir = qc_plots_dir(output_root, sample_id, run_id)
+    html_out = summary_path(output_root, sample_id, run_id, "html_report")
+    plots_dir = summary_plots_dir(output_root, sample_id, run_id)
     resolved_yaml = resolved_config_path(output_root, sample_id, run_id)
 
     if sentinel_exists(sentinel, force_rerun):
@@ -1109,7 +1279,7 @@ def run_qc_report(
         "first_type-in-rejected tabulation from raw.obs")
     rctd_summary = _rctd_summary_metrics(raw)
     log(f"[qc_report] RCTD summary: {rctd_summary['n_rctd']} categorized "
-        f"({rctd_summary['n_pre_rctd_dropped']} step-1-dropped), "
+        f"({rctd_summary['n_pre_rctd_dropped']} xenium-preprocess-dropped), "
         f"{rctd_summary['n_rejected']} rejected")
 
     log(f"[qc_report] reading histogram thresholds from {resolved_yaml}")
@@ -1142,9 +1312,42 @@ def run_qc_report(
     hist_xenium_vals = _hist_values_from_obs(
         xenium, "total_counts", "xenium_ranger",
     )
-    hist_purified_vals = _hist_values_from_obs(
-        purified, "nCount_Proseg", "proseg_purified",
+    # Prefer the pre-min_counts population from
+    # `intermediate/adata/<S>_unpurified.h5ad` so cells that
+    # `postprocess.filter_cells(min_counts=...)` removed still appear in
+    # the histogram on the left of the dashed threshold line
+    # (settylab/TracyY123-nexus#26 comment 5322401335, item 2). Fall
+    # back to the post-filter purified.h5ad when the intermediate is
+    # unavailable — e.g. `--force-rerun qc_report` against an
+    # already-cleaned run.
+    unpurified_h5ad_p = intermediate_path(
+        output_root, sample_id, run_id, "unpurified_h5ad",
     )
+    hist_purified_source = "proseg_purified (post-min_counts)"
+    if unpurified_h5ad_p.exists():
+        log(f"[qc_report] reading pre-filter purified population from "
+            f"{unpurified_h5ad_p}")
+        unpurified = ad.read_h5ad(unpurified_h5ad_p)
+        if "nCount_Proseg" in unpurified.obs.columns:
+            hist_purified_vals = _hist_values_from_obs(
+                unpurified, "nCount_Proseg", "unpurified",
+            )
+            hist_purified_source = "unpurified (pre-min_counts)"
+        else:
+            log("[qc_report]   unpurified.h5ad missing "
+                "obs['nCount_Proseg'] — falling back to post-filter "
+                "purified.h5ad for the histogram.")
+            hist_purified_vals = _hist_values_from_obs(
+                purified, "nCount_Proseg", "proseg_purified",
+            )
+    else:
+        log(f"[qc_report] {unpurified_h5ad_p} not found — purified "
+            "histogram will show only cells that survived the "
+            "min_counts filter. Pass --keep-intermediate on the "
+            "original run to preserve the pre-filter source.")
+        hist_purified_vals = _hist_values_from_obs(
+            purified, "nCount_Proseg", "proseg_purified",
+        )
 
     # Also touch layers[raw_layer] to enforce the fail-loud invariant
     # for the histogram source; the layer is guaranteed to exist here
@@ -1169,12 +1372,21 @@ def run_qc_report(
         plots_dir / f"{sample_id}_hist_nCount_Proseg_proseg_purified.png"
     )
 
+    purification_cmap = purification_status_color_map(
+        purification_status_values
+    )
+    first_type_cmap = celltype_color_map(first_type_values)
+    log(f"[qc_report] purification_status color map: "
+        f"{len(purification_cmap)} levels")
+    log(f"[qc_report] celltype color map: {len(first_type_cmap)} levels")
+
     log(f"[qc_report] writing plot {img_purification}")
     _scatter_umap(
         plt, umap_xy, purification_status_values,
         title=f"{sample_id}: purification_status",
         out_path=img_purification,
         categorical=True,
+        color_map=purification_cmap,
     )
     log(f"[qc_report] writing plot {img_leiden}")
     _scatter_umap(
@@ -1186,10 +1398,23 @@ def run_qc_report(
     log(f"[qc_report] writing plot {img_first_type}")
     _scatter_umap(
         plt, umap_xy, first_type_values,
-        title=f"{sample_id}: Broad_cell_type",
+        title=f"{sample_id}: SPLIT-inferred celltype",
         out_path=img_first_type,
         categorical=True,
+        color_map=first_type_cmap,
     )
+
+    # Persist the color maps alongside the HTML so downstream
+    # consumers can reproduce the same coloring.
+    color_map_path = summary_dir(output_root, sample_id, run_id) / (
+        f"{sample_id}_color_map.json"
+    )
+    _write_color_map_json(
+        color_map_path,
+        purification_status=purification_cmap,
+        first_type=first_type_cmap,
+    )
+    log(f"[qc_report] wrote color map {color_map_path}")
     log(f"[qc_report] writing histogram {img_hist_raw}")
     _hist_log10_counts(
         plt, hist_raw_vals,
@@ -1206,10 +1431,14 @@ def run_qc_report(
         out_path=img_hist_xenium,
         threshold=thresholds["xenium"],
     )
-    log(f"[qc_report] writing histogram {img_hist_purified}")
+    log(f"[qc_report] writing histogram {img_hist_purified} "
+        f"(source: {hist_purified_source})")
     _hist_log10_counts(
         plt, hist_purified_vals,
-        title=f"{sample_id}: proseg_purified log10(nCount_Proseg)",
+        title=(
+            f"{sample_id}: proseg_purified log10(nCount_Proseg)\n"
+            f"source: {hist_purified_source}"
+        ),
         xlabel="log10(nCount_Proseg)",
         out_path=img_hist_purified,
         threshold=thresholds["purified"],
@@ -1221,8 +1450,44 @@ def run_qc_report(
     _write_rctd_summary_csv(rctd_summary_csv, rctd_summary)
     log(f"[qc_report] wrote RCTD summary {rctd_summary_csv}")
 
+    # Validate + normalize the optional extra_reports list once here
+    # so a malformed config fails fast BEFORE the HTML render.
+    normalized_extra: list[dict] = []
+    for entry in (extra_reports or []):
+        if not isinstance(entry, dict) or "path" not in entry or "name" not in entry:
+            raise SystemExit(
+                f"[qc_report] extra_reports entry must be a dict with "
+                f"'path' and 'name' keys; got {entry!r}"
+            )
+        normalized_extra.append(
+            {"path": str(entry["path"]), "name": str(entry["name"])}
+        )
+    if normalized_extra:
+        log(f"[qc_report] extra_reports: {len(normalized_extra)} entry/entries "
+            f"({[e['name'] for e in normalized_extra]})")
+
+    extra_reports_section = _render_extra_reports_section(
+        normalized_extra,
+        summary_dir(output_root, sample_id, run_id),
+    )
+
+    # Provenance: capture the invoking command line + full merged
+    # config content so the HTML report can render both. Missing
+    # config file (never written) or missing argv (called from a
+    # library import) both degrade gracefully to an inline note.
+    invoking_command = (
+        " ".join(invoking_argv) if invoking_argv else "(not captured)"
+    )
+    if resolved_yaml.exists():
+        try:
+            resolved_config_text = resolved_yaml.read_text()
+        except OSError as exc:
+            resolved_config_text = f"(unreadable: {exc})"
+    else:
+        resolved_config_text = "(config.yaml not found at expected path)"
+
     # HTML report with relative image paths (so the directory is
-    # portable — you can rsync `qc/` anywhere and it renders).
+    # portable — you can rsync `summary/` anywhere and it renders).
     _render_html(
         out_path=html_out,
         sample_id=sample_id,
@@ -1253,6 +1518,11 @@ def run_qc_report(
         input_paths=(
             f"xenium={xenium_p}, raw={raw_p}, purified={purified_p}"
         ),
+        invoking_command=invoking_command,
+        resolved_config_path_str=str(resolved_yaml),
+        resolved_config_text=resolved_config_text,
+        color_map_json_name=color_map_path.name,
+        extra_reports_section=extra_reports_section,
     )
     log(f"[qc_report] wrote HTML {html_out}")
 

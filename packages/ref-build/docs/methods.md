@@ -22,8 +22,8 @@ The `noGeneFilter` invariant (the pipeline directive; summary lines 30, 80, 237)
 
 Two additional guards:
 
-- **`primary_only_celltypes`** (default `[tumor, liver]`) — always `primary_only` regardless of the count. Guards summary Caveat §1 (lines 358-369): the summary's Stage B step 10 recombine is union-not-intersection on `celltype.isin({"tumor","liver"})`; if a donor tumor cell survived the earlier subset, it would silently sweep in. `primary_only_celltypes` makes the guard explicit rather than relying on an earlier subset having removed the donor-tumor cells.
-- **Expected-celltype set** — the marker JSON's keys with `_marker` stripped (same shape as step 1's `--global-non-tumor-json`; the expected set is fixed by the JSON, per the user's clarification).
+- **`primary_only_celltypes`** (default `[tumor, liver]`) — always `primary_only` regardless of the count. Guards summary Caveat §1 (lines 358-369): the summary's Stage B xenium-preprocess0 recombine is union-not-intersection on `celltype.isin({"tumor","liver"})`; if a donor tumor cell survived the earlier subset, it would silently sweep in. `primary_only_celltypes` makes the guard explicit rather than relying on an earlier subset having removed the donor-tumor cells.
+- **Expected-celltype set** — the marker JSON's keys with `_marker` stripped (same shape as xenium-preprocess's `--global-non-tumor-json`; the expected set is fixed by the JSON, per the user's clarification).
 
 ### Fuzzy celltype-label matching
 
@@ -31,7 +31,7 @@ From user request 2026-07-10 (internal issue review) — the census stage no lon
 
 1. **Exact** — `L == X`. Always active.
 2. **Unknown-maybe** — `L == f"unknown_maybe_{X}"`. Active when `census.include_unknown_maybe: true` (default). Rationale: cells labelled `unknown_maybe_Fibroblast` are Fibroblast candidates whose annotation carries some uncertainty; including them lets downstream spatial deconvolution reduce that uncertainty against a larger spatial panel.
-3. **Composite delimited** — `X` appears in `L` as a token surrounded by `_` / `/` / string boundary. Regex: ``(?:^|[_/])re.escape(X)(?:$|[_/])``. Active when `census.fuzzy_matching: true` (default). Rationale: preprocessing (step 3 of the summary) produces composite labels like `B/Plasma_T/NK_rbc` for cells whose marker signal maps to multiple lineages; these should count toward every constituent celltype, not be silently dropped.
+3. **Composite delimited** — `X` appears in `L` as a token surrounded by `_` / `/` / string boundary. Regex: ``(?:^|[_/])re.escape(X)(?:$|[_/])``. Active when `census.fuzzy_matching: true` (default). Rationale: preprocessing (ref-build of the summary) produces composite labels like `B/Plasma_T/NK_rbc` for cells whose marker signal maps to multiple lineages; these should count toward every constituent celltype, not be silently dropped.
 
 The `re.escape(X)` is essential because expected celltypes may themselves contain `/` (e.g. `T/NK`).
 
@@ -64,7 +64,7 @@ The `noGeneFilter` invariant continues — no gene filter here.
 
 ## Stage 4: `export_mtx`
 
-**Source:** `the internal reference summary` Stage B, step 11 (line 87), and the file naming convention from step 1's `split_prep` module.
+**Source:** `the internal reference summary` Stage B, xenium-preprocess1 (line 87), and the file naming convention from xenium-preprocess's `split_prep` module.
 
 Writes:
 
@@ -84,7 +84,7 @@ Python (`ref_build.stages.rctd_reference_build`) shells out to `Rscript src/ref_
 1. Prepends `~/.claude/r_libs/4.4.1` to `.libPaths()` so the user-local `spacexr` install is found (idempotent — the prepend is skipped if the dir doesn't exist).
 2. Loads `Seurat`, `Matrix`, `spacexr`.
 3. `Seurat::ReadMtx(mtx=…, features=…, cells=…, feature.column=1, cell.column=1)` on the mtx bundle.
-4. Reads the metadata CSV, joins by cell id, extracts the celltype column (default `Final_level1_celltype_annotation`).
+4. Reads the metadata CSV, joins by cell id, extracts the celltype column (default `celltypes`).
 5. Replaces `/` in celltype labels with `_` (default; configurable) — `spacexr::Reference` factor levels reject slashes (e.g. `B/Plasma_T/NK_rbc` → `B_Plasma_T_NK_rbc`, per summary line 262).
 6. Calls
    ```r
@@ -101,7 +101,7 @@ The resulting `.rds` is the RCTD "reference object" — downstream `spacexr::cre
 
 ## Reproducibility
 
-- Every run writes a `resolved_config.yaml` at the run root, capturing the exact merged config (default YAML + user YAML + CLI overrides).
+- Every run writes a `config.yaml` at the run root, capturing the exact merged config (default YAML + user YAML + CLI overrides).
 - The one RNG path — `donor_balanced_sample_by_reference` in the balanced case, and the round-robin cap in the borrowed case — is seeded from `census.random_state` (default 1, matching the notebook family). With the same seed + same inputs, the build is deterministic.
 - The `assemble` stage's O(cells) allocation and O(celltypes) census loop mean the runtime scales linearly in both. No per-cell branching costs; the census does the heavy per-celltype decision work once.
 - The `.rds` filename `<sample_id>_scRNA_ref.rds` matches the shipped-reference naming in summary Table 1 (lines 340-352) so downstream Stage-D driver code can pick up the reference without a rename.

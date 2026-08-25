@@ -5,6 +5,13 @@ All notable changes to xenium-preprocess will be documented here. Follows
 
 ## [Unreleased]
 
+### Changed (2026-08-18)
+- Top-level driver-side rename: `scripts/submit_step1.sbatch` →
+  `scripts/submit_xenium-preprocess.sbatch`. The Python package
+  surface is unaffected; only affects direct-sbatch callers (the
+  documented flow is `submit_workflow.sh`). See top-level
+  `CHANGELOG.md` §0.2.0 for the sibling renames.
+
 ### Changed (2026-08-12, the user clarification (internal issue review)
 - `rctd_prep` RESTORED to `DEFAULT_STAGES`. The 2026-08-11 change
   above dropped `split_prep` + `rctd_prep` together, reading the caller's
@@ -112,7 +119,7 @@ All notable changes to xenium-preprocess will be documented here. Follows
 ## [0.1.0] — 2026-07-09
 
 ### Added
-- Initial package scaffold (step 1 of the internal SPLIT/Proseg workflow spatial-data
+- Initial package scaffold (xenium-preprocess of the internal SPLIT/Proseg workflow spatial-data
   preprocessing pipeline).
 - Four stage modules under `xenium_preprocess.stages`
   (`proseg_to_anndata`, `preprocess`, `split_prep`, `rctd_prep`),

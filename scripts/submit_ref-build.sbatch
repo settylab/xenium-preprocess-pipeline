@@ -1,23 +1,23 @@
 #!/usr/bin/env bash
-#SBATCH --job-name=rb_step3
+#SBATCH --job-name=ref-build
 #SBATCH --partition=campus-new
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=64G
 #SBATCH --time=6:00:00
 # NOTE: --output is set by submit_workflow.sh at submission time so the log
 #       lands under <output_root>/<sample>/<sample>_<run_id>/logs/, not the
-#       driver's CWD. A direct `sbatch submit_step3.sbatch` invocation will
-#       fall through to slurm's default (slurm-<jobid>.out in the caller's
+#       driver's CWD. A direct `sbatch submit_ref-build.sbatch` invocation will
+#       fall through to slurm's default (slurm-<jobid>.log in the caller's
 #       CWD) — invoke via submit_workflow.sh instead.
-# submit_step3.sbatch — RCTD reference build (ref-build).
+# submit_ref-build.sbatch — RCTD reference build (ref-build).
 #
 # Reads env vars set by submit_workflow.sh --export:
 #     SAMPLE               (required)  Sample id.
 #     OUTPUT_ROOT          (required)  Root output directory.
 #     FLEX_H5AD            (required)  Absolute path to the flex scRNA h5ad;
 #                                      recorded verbatim under
-#                                      step3.flex_h5ad_path in
-#                                      resolved_config.yaml. NO copy, NO
+#                                      ref_build.flex_h5ad_path in
+#                                      config.yaml. NO copy, NO
 #                                      symlink (reference-in-place per
 #                                      comment 5251080220 §1).
 #     CELLTYPE_MARKER_JSON (required)  Marker-gene JSON declaring the
@@ -38,16 +38,21 @@
 #                                      for the per-cell celltype label.
 #                                      Passed as --celltype-col to
 #                                      `ref-build run`. Unset ⇒ ref-build's
-#                                      config default
-#                                      (Final_level1_celltype_annotation).
+#                                      config default (celltypes).
 #     STEP3_DONOR_BORROW_CAP     (optional) Passed as --donor-borrow-cap.
 #     STEP3_CELL_MIN_INSTANCE    (optional) Passed as --cell-min-instance.
 #     STEP3_MIN_UMI              (optional) Passed as --min-umi.
 #     STEP3_RANDOM_SEED          (optional) Passed as --random-seed.
 #     STEP3_CELLTYPE_TARGET_LIST (optional) Passed as --celltype-target-list.
+#     STEP3_FORCE_RERUN          (optional) If '1', passes --force-rerun.
+#     STEP3_STAGE_COUNT          (optional) Number of --stages entries
+#                                      (default 0 ⇒ ref-build's DEFAULT_STAGES).
+#     STEP3_STAGE_N              (optional) Nth stage name (N in 1..COUNT).
+#                                      Each is passed as one positional
+#                                      value to `ref-build run --stages …`.
 #     STEP3_OVERRIDES_B64        (optional) base64-encoded YAML from the
-#                                      driver's --step3-config +
-#                                      --override step3.<key>=<val>. When
+#                                      driver's --ref-build-config +
+#                                      --override ref_build.<key>=<val>. When
 #                                      set, decoded to a tmpfile and
 #                                      passed to `ref-build run --config
 #                                      <tmp>` before the named flags (so
@@ -56,31 +61,43 @@
 # Writes:
 #     <OUTPUT_ROOT>/<SAMPLE>/<SAMPLE>_<RUN_ID>/rctd/<SAMPLE>_reference_post_rules.h5ad
 #     <OUTPUT_ROOT>/<SAMPLE>/<SAMPLE>_<RUN_ID>/rctd/<SAMPLE>_reference.rds
-#     <OUTPUT_ROOT>/<SAMPLE>/<SAMPLE>_<RUN_ID>/resolved_config.yaml (step3: key)
-#     <OUTPUT_ROOT>/<SAMPLE>/<SAMPLE>_<RUN_ID>/logs/step3.log
+#     <OUTPUT_ROOT>/<SAMPLE>/<SAMPLE>_<RUN_ID>/config.yaml (ref_build: key)
+#     <OUTPUT_ROOT>/<SAMPLE>/<SAMPLE>_<RUN_ID>/logs/slurm-<jobid>-ref-build.log
+#       (slurm-captured stdout+stderr; the stub does not write a separate app log)
 
 set -euo pipefail
 
 # --- Python + R environments -------------------------------------------------
-# Tracy's env is named `xenium` (issue #26 comment 5258774668). Override
-# REF_BUILD_ENV in your calling shell (or here) if you use a different env
-# for ref-build. Tries micromamba first, falls back to conda, so the same
-# block works for either. `ml fhR/4.4.1-foss-2023b` provides Seurat + spacexr
-# for the rctd_reference_build R stage (see scratch/ref-build/README.md).
-export PATH="$HOME/.local/bin:$PATH"        # so `micromamba`/`conda` resolves
-_env_name="${REF_BUILD_ENV:-xenium}"
-if command -v micromamba >/dev/null 2>&1; then
-    eval "$(micromamba shell hook --shell bash)"
-    micromamba activate "$_env_name"
-elif command -v conda >/dev/null 2>&1; then
-    eval "$(conda shell.bash hook)"
-    conda activate "$_env_name"
-else
-    echo "error: neither micromamba nor conda found on PATH." >&2
-    echo "       See scratch/ref-build/README.md § Installation." >&2
-    exit 4
-fi
-ml fhR/4.4.1-foss-2023b
+# Resolved from scripts/env.local.conf (scripts/write-env-config.sh),
+# NEVER re-derived from `$HOME` here: the two failures this pipeline
+# has actually hit (missing spacexr's R library; micromamba's own
+# root-prefix resolving to the wrong place) were both cases of a
+# `$HOME`-relative path resolving differently INSIDE the job than in
+# the submitting shell. A file on shared storage, holding already-
+# resolved absolute values, is immune to that; `--export=ALL` is not
+# (it forwards env VAR values faithfully, but does nothing to stop
+# `$HOME` itself from resolving to a different instance once the job's
+# own shell starts). See scripts/lib/env_config.sh for the full
+# rationale. Activation is by absolute PREFIX, never by name, for the
+# same reason.
+# PIPELINE_SCRIPT_DIR is set by submit_workflow.sh (the only place
+# BASH_SOURCE resolution is reliable — this job's own BASH_SOURCE
+# array can be empty under some sbatch launchers, which would make
+# `${BASH_SOURCE[0]}` an unbound array element under `set -u`).
+# Fall back to self-resolution for a manual/direct `sbatch` invocation.
+SCRIPT_DIR="${PIPELINE_SCRIPT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)}"
+# shellcheck source=lib/env_config.sh
+source "$SCRIPT_DIR/lib/env_config.sh"
+
+eval "$("$MICROMAMBA_BIN" shell hook --shell bash)"
+micromamba activate "$XENIUM_ENV_PREFIX"
+
+ml "$R_MODULE"
+# `fhR` provides Seurat + Matrix, but NOT spacexr (verified against a
+# live `.libPaths()` — fhR has neither spacexr nor SPLIT). spacexr is
+# supplied via `--r-lib-paths "$R_LIB_DIR"` below (config key
+# r_lib_paths — see ref_build/stages/rctd_reference_build.py), not by
+# this module.
 # fhR pulls in Python/3.11 + SciPy-bundle/2023.11 as deps and sets
 # PYTHONPATH to their python3.11/site-packages. The micromamba env's
 # python (3.13) then imports numpy from that path and crashes on the
@@ -89,8 +106,8 @@ ml fhR/4.4.1-foss-2023b
 unset PYTHONPATH
 
 # Diagnostic breadcrumb — makes any downstream failure log self-explaining.
-echo "[step3] env=$_env_name  python=$(command -v python || echo '<none>')"
-echo "[step3] ref-build -> $(command -v ref-build || echo '<none>')"
+echo "[ref-build] env=$XENIUM_ENV_PREFIX  python=$(command -v python || echo '<none>')"
+echo "[ref-build] ref-build -> $(command -v ref-build || echo '<none>')"
 
 # Preflight: the step's CLI must actually be installed in the activated env.
 # Without this check a missing install surfaces only as an opaque
@@ -99,9 +116,9 @@ _cli="ref-build"
 _pkg_src="/fh/fast/setty_m/user/ryang/nexus/nexus-code/scratch/ref-build"
 if ! command -v "$_cli" >/dev/null 2>&1; then
     cat >&2 <<EOF
-error: '$_cli' is not installed in env '$_env_name'.
+error: '$_cli' is not installed in env '$XENIUM_ENV_PREFIX'.
        Install it once, from a login node:
-           micromamba activate $_env_name
+           micromamba activate $XENIUM_ENV_PREFIX
            pip install -e $_pkg_src
        Then re-submit the workflow.
 EOF
@@ -132,18 +149,18 @@ done
 
 # Optional celltype-col override — only appended when the driver was
 # invoked with --celltype-col-for-ref-build; otherwise ref-build falls
-# through to its own config default (Final_level1_celltype_annotation).
+# through to its own config default (celltypes).
 CELLTYPE_COL_ARGS=()
 if [[ -n "${CELLTYPE_COL_FOR_REF_BUILD:-}" ]]; then
     CELLTYPE_COL_ARGS=(--celltype-col "$CELLTYPE_COL_FOR_REF_BUILD")
 fi
 
-# --config passthrough from driver's --step3-config + --override
-# step3.<key>=<val>. When neither was set the driver leaves
+# --config passthrough from driver's --ref-build-config + --override
+# ref_build.<key>=<val>. When neither was set the driver leaves
 # STEP3_OVERRIDES_B64 unset, and CONFIG_ARGS stays empty.
 CONFIG_ARGS=()
 if [[ -n "${STEP3_OVERRIDES_B64:-}" ]]; then
-    STEP3_TMP_CFG=$(mktemp -t step3_cfg.XXXXXX.yaml)
+    STEP3_TMP_CFG=$(mktemp -t ref-build_cfg.XXXXXX.yaml)
     trap 'rm -f "$STEP3_TMP_CFG"' EXIT
     printf '%s' "$STEP3_OVERRIDES_B64" | base64 -d > "$STEP3_TMP_CFG"
     CONFIG_ARGS=(--config "$STEP3_TMP_CFG")
@@ -168,6 +185,22 @@ fi
 if [[ -n "${STEP3_CELLTYPE_TARGET_LIST:-}" ]]; then
     NAMED_ARGS+=(--celltype-target-list "$STEP3_CELLTYPE_TARGET_LIST")
 fi
+if [[ "${STEP3_FORCE_RERUN:-0}" == "1" ]]; then
+    NAMED_ARGS+=(--force-rerun)
+fi
+
+# Expand the numbered STEP3_STAGE_* env vars set by submit_workflow.sh
+# --ref-build-stages into a single `--stages s1 s2 ...` block. COUNT=0
+# (or unset) yields zero extra args — ref-build falls through to its
+# DEFAULT_STAGES (the full stage list).
+STAGES_ARGS=()
+if (( ${STEP3_STAGE_COUNT:-0} > 0 )); then
+    STAGES_ARGS=(--stages)
+    for i in $(seq 1 "${STEP3_STAGE_COUNT}"); do
+        var="STEP3_STAGE_$i"
+        STAGES_ARGS+=("${!var}")
+    done
+fi
 
 ref-build run \
     --sample-id            "$SAMPLE" \
@@ -175,8 +208,10 @@ ref-build run \
     --run-id               "$RUN_ID" \
     --flex-h5ad            "$FLEX_H5AD" \
     --celltype-marker-json "$CELLTYPE_MARKER_JSON" \
+    --r-lib-paths          "$R_LIB_DIR" \
     "${CONFIG_ARGS[@]}" \
     "${CELLTYPE_COL_ARGS[@]}" \
     "${NAMED_ARGS[@]}" \
+    "${STAGES_ARGS[@]}" \
     "${DONOR_ARGS[@]}" \
     "${FALLBACK_ARGS[@]}"

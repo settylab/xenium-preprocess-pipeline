@@ -5,14 +5,14 @@ Layout (locked in (internal issue review):
     <output_root>/
     └── <sample_id>/
         └── <sample_id>_<run_id>/
-            ├── spatial_adata/                        (step 1)
+            ├── spatial_adata/                        (xenium-preprocess)
             ├── rctd/
-            │   ├── <sample_id>_test_object.rds       (step 1)
+            │   ├── <sample_id>_test_object.rds       (xenium-preprocess)
             │   ├── <sample_id>_reference_post_rules.h5ad   (THIS step)
             │   ├── <sample_id>_reference.rds               (THIS step)
-            │   └── <sample_id>_rctd_results.rds      (step 4)
-            ├── resolved_config.yaml                  (merged across steps)
-            └── logs/step{1,3,4}.log
+            │   └── <sample_id>_rctd_results.rds      (rctd-split)
+            ├── config.yaml                  (merged across steps)
+            └── logs/{xenium-preprocess,ref-build,rctd-split}.log
 
 Intermediate outputs (`loaded/`, `census/`, `mtx_bundle/`) also land
 under `<run_dir>/` while the pipeline runs, and are DROPPED by
@@ -53,7 +53,7 @@ def logs_dir(output_root: Path, sample_id: str, run_id: str) -> Path:
 
 
 def resolved_config_path(output_root: Path, sample_id: str, run_id: str) -> Path:
-    return run_dir(output_root, sample_id, run_id) / "resolved_config.yaml"
+    return run_dir(output_root, sample_id, run_id) / "config.yaml"
 
 
 def rctd_path(
@@ -87,7 +87,7 @@ def _sanitize_frame_for_h5ad(df):
     This is a verbatim replica of `xenium_preprocess._internal.layout.
     _sanitize_frame_for_h5ad` (internal issue review). Kept in
     sync manually — if either implementation changes, update both. See
-    the report on step 3's arrow-string fix for the rationale on
+    the report on ref-build's arrow-string fix for the rationale on
     replication vs. cross-package import.
     """
     import numpy as np

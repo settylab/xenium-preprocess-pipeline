@@ -18,7 +18,7 @@ celltype is missing from primary + regular donors.
 
 The `noGeneFilter` invariant (per the pipeline directive) is preserved:
 NO sc.pp.filter_genes(min_cells=20) is called here or anywhere else
-in the pipeline. See ref-build-summary-v3.md line 30 and Stage B step 4.
+in the pipeline. See ref-build-summary-v3.md line 30 and Stage B rctd-split.
 """
 from __future__ import annotations
 
@@ -38,6 +38,7 @@ from ref_build._internal.logging import log
 # (see internal audit: the fallback h5ad only had `refined_celltype`, so
 # the run silently skipped every Rule-5 borrow).
 FALLBACK_CELLTYPE_COL_CANDIDATES = (
+    "celltypes",
     "Final_level1_celltype_annotation",
     "refined_celltype",
     # Yes, "lymphocyes" — the typo is real, kept verbatim to match the

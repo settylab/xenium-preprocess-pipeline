@@ -1,7 +1,7 @@
 #!/bin/bash -l
 # ---------------------------------------------------------------------
-# Slurm submission wrapper for the `xenium-preprocess` pipeline (step 1
-# of the Xenium spatial-data preprocessing pipeline).
+# Slurm submission wrapper for the `xenium-preprocess` pipeline (the first
+# stage of the Xenium spatial-data preprocessing pipeline).
 #
 # `bash -l` makes this a LOGIN shell so ~/.bash_profile (and indirectly
 # ~/.bashrc on most setups) gets sourced — that's what initialises

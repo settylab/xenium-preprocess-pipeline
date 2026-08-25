@@ -1,4 +1,4 @@
-"""xenium-preprocess — step 1 of the Xenium spatial-data preprocessing pipeline.
+"""xenium-preprocess — xenium-preprocess of the Xenium spatial-data preprocessing pipeline.
 
 Default sub-stages executed in order:
     proseg_to_anndata → qc_filter → xenium_ranger_to_anndata → enrich_xenium_id

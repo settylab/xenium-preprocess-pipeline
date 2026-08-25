@@ -98,7 +98,7 @@ Optionally re-runs the QC filter (`sc.pp.filter_cells(min_counts=10)`) before ex
 
 ## Stage 4: `rctd_prep`
 
-**Source:** the internal spatial-RCTD preparation reference (first half; the second half — building a `spacexr::Reference` from a scRNA mtx triple — is out of scope for step 1).
+**Source:** the internal spatial-RCTD preparation reference (first half; the second half — building a `spacexr::Reference` from a scRNA mtx triple — is out of scope for xenium-preprocess).
 
 Python (`xenium_preprocess.stages.rctd_prep`) shells out to `Rscript src/xenium_preprocess/r/rctd_prep.R`. The R script:
 
@@ -113,4 +113,4 @@ The resulting RDS is the RCTD "test object" — downstream `spacexr::create.RCTD
 
 ## Reproducibility
 
-Every run writes a `resolved_config.yaml` at the run root, capturing the exact merged config (default YAML + user YAML + CLI overrides) that the run used. The pipeline's random seeds — `random_state` in stage 2 for KNN + UMAP + Leiden — live in the config, so a re-run with the same seed + same input reproduces the same clustering.
+Every run writes a `config.yaml` at the run root, capturing the exact merged config (default YAML + user YAML + CLI overrides) that the run used. The pipeline's random seeds — `random_state` in stage 2 for KNN + UMAP + Leiden — live in the config, so a re-run with the same seed + same input reproduces the same clustering.

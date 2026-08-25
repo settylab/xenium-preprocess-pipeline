@@ -1,6 +1,6 @@
 #!/bin/bash -l
 # ---------------------------------------------------------------------
-# Slurm submission wrapper for the `ref-build` pipeline (step 3 of the
+# Slurm submission wrapper for the `ref-build` pipeline (the middle stage of the
 # Xenium spatial-data preprocessing pipeline).
 #
 # `bash -l` makes this a LOGIN shell so ~/.bash_profile (and indirectly

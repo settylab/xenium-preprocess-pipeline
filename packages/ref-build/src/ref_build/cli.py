@@ -65,8 +65,8 @@ def _add_run_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--flex-h5ad", type=Path, default=None,
                    help="Path to the flex-preprocessed scRNA h5ad (reference-"
                         "in-place). The pipeline records this path verbatim "
-                        "under `step3.flex_h5ad_path` in the merged "
-                        "resolved_config.yaml — no copy, no symlink. When "
+                        "under `ref_build.flex_h5ad_path` in the merged "
+                        "config.yaml — no copy, no symlink. When "
                         "--primary-h5ad is not passed the flex path is used "
                         "as the primary input.")
 
@@ -99,7 +99,7 @@ def _add_run_args(p: argparse.ArgumentParser) -> None:
                         "fallback h5ad is auto-detected.")
     p.add_argument("--celltype-marker-json", type=Path,
                    help="Path to the marker-gene JSON declaring the expected celltype set. "
-                        "Same shape as step 1's --global-non-tumor-json.")
+                        "Same shape as xenium-preprocess's --global-non-tumor-json.")
     p.add_argument("--celltype-target-list", type=Path, default=None,
                    help="Path to a JSON that declares the CANONICAL celltype "
                         "list to enforce completeness over (Rule 5). Keys are "
@@ -120,10 +120,16 @@ def _add_run_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--force-rerun", action="store_true",
                    help="Re-run all stages even if sentinel outputs exist.")
 
+    # Cross-stage R config
+    p.add_argument("--r-lib-paths", nargs="+", default=None,
+                   help="R library paths prepended to R_LIBS_USER for the "
+                        "rctd_reference_build R stage. Typically the renv "
+                        "library dir(s) that hold spacexr + Seurat.")
+
     # load_primary_and_donors
     p.add_argument("--celltype-col", default=None,
                    help="Per-cell celltype-annotation column in .obs "
-                        "(default: Final_level1_celltype_annotation).")
+                        "(default: celltypes).")
 
     # census
     p.add_argument("--donor-borrow-cap", type=int, default=None,
@@ -218,6 +224,8 @@ def _resolve_config(args: argparse.Namespace) -> dict:
         overrides["output_root"] = str(args.output_root)
     if args.force_rerun:
         overrides["force_rerun"] = True
+    if args.r_lib_paths is not None:
+        overrides["r_lib_paths"] = [str(p) for p in args.r_lib_paths]
 
     lpd_over = {}
     if args.celltype_col is not None:

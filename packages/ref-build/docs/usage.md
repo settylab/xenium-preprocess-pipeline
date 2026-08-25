@@ -12,7 +12,7 @@ The four required-at-runtime flags:
 |---|---|
 | `--sample-id`            | Primary sample identifier (e.g. `SAMPLE1`). Names the output subdirectory + the `.rds`. |
 | `--primary-h5ad`         | Path to the primary's `_preprocessed_scRNA.h5ad` (from step 2 `flex-preprocess`). |
-| `--celltype-marker-json` | Marker-gene JSON declaring the expected celltype set. Same shape as step 1's `--global-non-tumor-json`. |
+| `--celltype-marker-json` | Marker-gene JSON declaring the expected celltype set. Same shape as xenium-preprocess's `--global-non-tumor-json`. |
 | `--output-root`          | Root output directory. Per-sample results land at `<output_root>/<sample_id>/`. |
 
 Every other flag has a default in `config/default.yaml`. Override precedence: CLI flag > user YAML (`--config user.yaml`) > default YAML.
@@ -52,7 +52,7 @@ the rules (internal issue review) are configurable:
 - `--donor-borrow-cap 100` — max donor cells to borrow per missing celltype (rule 2).
 - `--primary-only-celltype tumor --primary-only-celltype liver` — celltypes always sourced exclusively from the primary. Pass repeatedly. Guards summary Caveat §1.
 - `--random-state 1` — seed for `donor_balanced_sample_by_reference` in the balanced (intermediate) case.
-- `--celltype-col Final_level1_celltype_annotation` — per-cell celltype column in `.obs`. Same column across primary + all donors.
+- `--celltype-col celltypes` — per-cell celltype column in `.obs`. Same column across primary + all donors.
 
 ### Stage-C (R side) flags
 
@@ -105,4 +105,4 @@ If a celltype ends up as `missing_no_donor`, the pipeline logs a WARN line to st
 
 ## Output layout
 
-See the [Outputs](../README.md#outputs) section of the README. Every run also writes a `resolved_config.yaml` at the run root, capturing the exact merged config that the run used — useful when reproducing a specific result months later.
+See the [Outputs](../README.md#outputs) section of the README. Every run also writes a `config.yaml` at the run root, capturing the exact merged config that the run used — useful when reproducing a specific result months later.

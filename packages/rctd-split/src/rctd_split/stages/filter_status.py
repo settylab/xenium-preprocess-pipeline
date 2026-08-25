@@ -9,7 +9,7 @@ Two outputs from one computation:
        <run_dir>/intermediate/adata/<sample_id>_filter_status.csv
      with columns: cell_id, passed_rctd, passed_split_purify,
      filtered_by_purification.
-  2. In-place augmentation of the intermediate ``<sample_id>_step4_unpurified.h5ad``
+  2. In-place augmentation of the intermediate ``<sample_id>_unpurified.h5ad``
      — adds the same three columns to .obs. Only runs when ``write_inplace=True``.
 
 Column semantics (indexed by unpurified.obs_names):

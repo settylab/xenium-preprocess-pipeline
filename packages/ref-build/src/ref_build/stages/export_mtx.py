@@ -11,7 +11,7 @@ RCTD workflow can read:
     <sample>_barcodes.tsv.gz   — one cell id per line.
     <sample>_metadata.csv      — adata.obs, cell-indexed, plain CSV.
 
-File naming convention mirrors step 1's `split_prep` output shape so
+File naming convention mirrors xenium-preprocess's `split_prep` output shape so
 downstream R code sees a consistent layout across pipelines.
 """
 from __future__ import annotations

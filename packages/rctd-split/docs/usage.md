@@ -5,15 +5,15 @@
 ```bash
 rctd-split run \
     --sample-id       SAMPLE1 \
-    --test-object     /path/to/step1/rctd_prep/test_object.rds \
+    --test-object     /path/to/xenium-preprocess/rctd_prep/test_object.rds \
     --reference-rds   /data/SAMPLE1/ref_build/rctd_reference/SAMPLE1_scRNA_ref.rds \
     --output-root     /path/to/output/root
 ```
 
 The three required inputs are:
 - `--sample-id` — used as the per-sample sub-directory under `--output-root`.
-- `--test-object` — the spatial test object RDS, output of step 1's `rctd_prep` stage. A Seurat object with `assay="Proseg"`, a spatial `DimReduc` keyed `ST_`, and `x`/`y` metadata columns.
-- `--reference-rds` — the scRNA reference RDS, output of step 3's `rctd_reference_build` stage. A `spacexr::Reference` object.
+- `--test-object` — the spatial test object RDS, output of xenium-preprocess's `rctd_prep` stage. A Seurat object with `assay="Proseg"`, a spatial `DimReduc` keyed `ST_`, and `x`/`y` metadata columns.
+- `--reference-rds` — the scRNA reference RDS, output of ref-build's `rctd_reference_build` stage. A `spacexr::Reference` object.
 
 ## Stages
 
@@ -39,7 +39,7 @@ Every knob lives in `config/default.yaml`. Override precedence: CLI flag > user 
 - `--umi-min`, `--counts-min`, `--umi-min-sigma`, `--cell-min-instance` — the `create.RCTD` gating parameters. Defaults are `10 / 10 / 100 / 20`. The first three match the Rmd (lines 347-350); `--cell-min-instance` was lowered from the Rmd's `25` (line 351) to `20` on 2026-07-28 (`(internal issue review)`) so detailed-annotation references with smaller per-type counts retain rare celltypes at RCTD time.
 - `--doublet-mode` — `"doublet"` (Rmd line 362) is the only mode validated by this pipeline; `"full"` and `"multi"` would need a config-file override.
 - `--do-purify-singlets` — `SPLIT::purify(DO_purify_singlets=…)`. Defaults `true` (Rmd line 512).
-- `--assay-name` — the Seurat assay carrying spatial counts on the test object. Default `Proseg` (matches step 1's `rctd_prep`).
+- `--assay-name` — the Seurat assay carrying spatial counts on the test object. Default `Proseg` (matches xenium-preprocess's `rctd_prep`).
 
 ### Full config surface
 
@@ -108,7 +108,7 @@ sbatch scripts/submit.slurm.sh SAMPLE1 \
 Defaults: `--cpus-per-task=8`, `--mem=128G`, `--time=1-00:00:00`, `--partition=YOUR_PARTITION`. Override in place if the sample needs more.
 
 The wrapper:
-- Redirects logs to `<output_root>/<sample_id>/logs/<job_tag>.log` after validating inputs (splits the sbatch-vs-interactive tee/pipefail deadlock the same way as step 1).
+- Redirects logs to `<output_root>/<sample_id>/logs/<job_tag>.log` after validating inputs (splits the sbatch-vs-interactive tee/pipefail deadlock the same way as xenium-preprocess).
 - Activates `rctdSplit` micromamba env (override with `ENV_NAME=your_env`).
 - `ml fhR/4.4.1-foss-2023b` before invoking the pipeline (override with `R_MODULE=…`).
 
@@ -132,7 +132,7 @@ split/purified/<sample>_purified_metadata.csv
 split/purified/<sample>_purified_spatial_coords.csv.gz
 h5ad/<sample>_unpurified.h5ad                        — stage 4
 h5ad/<sample>_purified.h5ad                          — stage 4
-resolved_config.yaml                                 — provenance snapshot
+config.yaml                                 — provenance snapshot
 logs/<job_tag>.log                                   — from Slurm submit wrapper
 ```
 

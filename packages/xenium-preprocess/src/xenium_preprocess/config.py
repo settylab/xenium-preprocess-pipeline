@@ -26,7 +26,7 @@ REQUIRED_KEYS = ("sample_id", "proseg_dir", "output_root")
 # Every stage this pipeline knows how to dispatch. `preprocess` is
 # retained here for reversibility (2026-08-11) but is NOT in the
 # default list — re-enable by explicit `--stages ... preprocess ...`.
-# `celltype_writeback` is on the roadmap but NOT part of the step-1
+# `celltype_writeback` is on the roadmap but NOT part of the xenium-preprocess
 # implementation worker's scope; it lands in a follow-up worker so
 # `VALID_STAGES` here does NOT list it yet — adding it would falsely
 # advertise a stage that has no dispatch block in pipeline.run().
@@ -42,7 +42,7 @@ VALID_STAGES = (
 
 # Stages that run when `--stages` is not passed on the CLI (the new,
 # post-refactor default). No `preprocess` — no PCA/UMAP/Leiden/celltype
-# in step 1 per the roadmap. Order matters: it's the on-disk dispatch
+# in xenium-preprocess per the roadmap. Order matters: it's the on-disk dispatch
 # order in `pipeline.run()`.
 #
 # History of the split_prep / rctd_prep defaults:
