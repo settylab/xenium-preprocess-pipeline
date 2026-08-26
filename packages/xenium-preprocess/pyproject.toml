@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "xenium-preprocess"
-version = "0.2.5"
+version = "0.2.6"
 description = "Proseg → adata → preprocessed adata + UMAP → SPLIT mtx/features/barcodes → RCTD test object pipeline."
 readme = "README.md"
 license = { file = "LICENSE" }
