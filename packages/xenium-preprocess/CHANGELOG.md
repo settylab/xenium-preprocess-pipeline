@@ -5,6 +5,18 @@ All notable changes to xenium-preprocess will be documented here. Follows
 
 ## [Unreleased]
 
+### Added (2026-10-01, Tracy `#31`)
+- `xenium_preprocess.annotate.annotate_regions_and_tumor_distance` — new
+  reusable primitive: takes a preprocessed AnnData + a region CSV and
+  returns a NEW AnnData with three additive `.obs` columns
+  (`selected_region`, `tumor_distance_bin`, `tumor_boundary_distance_um`).
+  Hepatocyte-only for the two distance columns (`first_type == "liver"`).
+  F1-patched tumor-selection classifier (ported verbatim from the audited
+  `scratch/tracy-i31-mh-all-metx-workflow/run_sample.py`). Refuses to
+  overwrite pre-existing columns; input adata never mutated. Exported at
+  package root. See `tests/test_annotate.py` (10 tests). `shapely>=2`
+  added to `environment.yml` + `pyproject.toml`.
+
 ### Changed (2026-08-18)
 - Top-level driver-side rename: `scripts/submit_step1.sbatch` →
   `scripts/submit_xenium-preprocess.sbatch`. The Python package

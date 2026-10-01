@@ -20,6 +20,7 @@ dependencies:
   - umap-learn
   - leidenalg
   - python-igraph
+  - shapely           # annotate: polygon construction + signed distance (Tracy #31)
   # ----- R side (rctd_prep stage) -----------------------------------
   # By default the Slurm submit wrapper `module load`s
   # fhR/4.4.1-foss-2023b instead of using conda-side R — that module

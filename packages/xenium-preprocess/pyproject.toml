@@ -39,6 +39,7 @@ dependencies = [
     "umap-learn",
     "leidenalg",
     "igraph",
+    "shapely>=2",
 ]
 
 [project.optional-dependencies]

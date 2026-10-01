@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] — in progress
+
+### Added
+
+- `xenium_preprocess.annotate.annotate_regions_and_tumor_distance` — new
+  reusable primitive (Tracy `#31`). Takes a preprocessed AnnData (SPLIT
+  output with `obs['first_type']` + `obsm['spatial']` in µm) and a
+  user-authored region CSV (`Selection`, `X`, `Y`, optional `Class`), and
+  returns a NEW AnnData with three strictly additive `.obs` columns:
+  `selected_region` (all cells), `tumor_distance_bin` (hepatocytes only;
+  `intratumoral` / `0-100um` / `100-300um` / `>300um`), and
+  `tumor_boundary_distance_um` (hepatocytes only; signed Euclidean
+  distance in µm, negative inside the tumor union, positive outside).
+  Tumor-selection resolution uses the F1-patched gate (name-based tumor
+  + Class-majority for ambiguous selections; `non-fibrotic tumor`
+  correctly stays tumor, `non-tumor` is excluded). Refuses to overwrite
+  any of the three target columns if already present. The input adata
+  is never mutated. Also exported at package root as
+  `xenium_preprocess.annotate_regions_and_tumor_distance`.
+- `packages/xenium-preprocess/tests/test_annotate.py` — 10 unit tests
+  pinning the overlap rule, bin edges, hep-only distances, F1
+  classifier, preservation invariants, and parity against the AUDITED
+  reference algorithm in `scratch/tracy-i31-mh-all-metx-workflow/
+  run_sample.py:load_distance_bins`.
+- `shapely>=2` added to `xenium-preprocess` dependencies
+  (`environment.yml` + `pyproject.toml`).
+
+### Validation (MH6_BR_2328 full sample)
+
+See `validation_mh6.log` under the branch worktree for the full output.
+
 ## [0.2.6] — 2026-08-26
 
 Patch release: defensive env-config resolution + longer default runtime

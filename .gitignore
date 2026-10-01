@@ -66,3 +66,7 @@ logs/
 # the repo, but guard against accidental in-tree runs.
 workflow_runs/
 run_outputs/
+
+# Validation artifacts (Tracy #31)
+validation_mh6.log
+validation_mh6.h5ad
