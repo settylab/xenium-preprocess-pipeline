@@ -1,0 +1,26 @@
+cff-version: 1.2.0
+title: "exploration: downstream exploratory analyses for Xenium / Proseg preprocessed data"
+message: "If you use this software, please cite it using the metadata from this file."
+type: software
+authors:
+  - name: "xenium-preprocess-pipeline contributors"
+version: 0.1.0
+date-released: "2026-10-01"
+# doi: "10.5281/zenodo.PLACEHOLDER"                    # TODO after Zenodo mint
+url: "https://example.org/xenium-preprocess"
+repository-code: "https://example.org/xenium-preprocess"
+license: MIT
+keywords:
+  - xenium
+  - spatial-transcriptomics
+  - exploration
+  - region-annotation
+  - tumor-distance
+abstract: >-
+  exploration is the downstream / optional analyses companion to the
+  canonical xenium-preprocess output. It provides reusable primitives
+  that augment a preprocessed AnnData without mutating it. First
+  function: region-polygon + signed tumor-distance annotation (Tracy
+  #31). Designed to be extended with additional exploratory analyses
+  (QC, scoring, visualization, cross-sample comparisons,
+  hypothesis-driven analyses) over time.

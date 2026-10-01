@@ -11,6 +11,4 @@ from __future__ import annotations
 
 __version__ = "0.1.0"
 
-from xenium_preprocess.annotate import annotate_regions_and_tumor_distance
-
-__all__ = ["__version__", "annotate_regions_and_tumor_distance"]
+__all__ = ["__version__"]

@@ -9,8 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `xenium_preprocess.annotate.annotate_regions_and_tumor_distance` — new
-  reusable primitive (Tracy `#31`). Takes a preprocessed AnnData (SPLIT
+- **New sibling package `packages/exploration/`** (Tracy `#31`) — a home
+  for downstream / optional analyses that run AFTER the canonical
+  `xenium-preprocess` output. Peer of `xenium-preprocess`, `rctd-split`,
+  and `ref-build` under `packages/`, same conventions (own
+  `pyproject.toml`, `src/` layout, `tests/`, `environment.yml`,
+  `README.md`, `CHANGELOG.md`, `LICENSE`, `CITATION.cff`). See
+  `packages/exploration/README.md` for the full conceptual boundary
+  (preprocess = stable canonical producer; exploration = downstream
+  question-specific analyses). Initial version `0.1.0`.
+- `exploration.annotate.annotate_regions_and_tumor_distance` — region +
+  signed tumor-distance annotator. Takes a preprocessed AnnData (`SPLIT`
   output with `obs['first_type']` + `obsm['spatial']` in µm) and a
   user-authored region CSV (`Selection`, `X`, `Y`, optional `Class`), and
   returns a NEW AnnData with three strictly additive `.obs` columns:
@@ -23,18 +32,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   correctly stays tumor, `non-tumor` is excluded). Refuses to overwrite
   any of the three target columns if already present. The input adata
   is never mutated. Also exported at package root as
-  `xenium_preprocess.annotate_regions_and_tumor_distance`.
-- `packages/xenium-preprocess/tests/test_annotate.py` — 10 unit tests
-  pinning the overlap rule, bin edges, hep-only distances, F1
-  classifier, preservation invariants, and parity against the AUDITED
-  reference algorithm in `scratch/tracy-i31-mh-all-metx-workflow/
+  `exploration.annotate_regions_and_tumor_distance`.
+- `packages/exploration/tests/test_annotate.py` — 10 unit tests pinning
+  the overlap rule, bin edges, hep-only distances, F1 classifier,
+  preservation invariants, and parity against the AUDITED reference
+  algorithm in `scratch/tracy-i31-mh-all-metx-workflow/
   run_sample.py:load_distance_bins`.
-- `shapely>=2` added to `xenium-preprocess` dependencies
-  (`environment.yml` + `pyproject.toml`).
+- `shapely>=2` added to the NEW `exploration` package's `environment.yml`
+  + `pyproject.toml` (NOT to `xenium-preprocess` — see "Removed" below).
+
+### Removed
+
+- `xenium_preprocess.annotate.annotate_regions_and_tumor_distance` — the
+  function previously added to `xenium-preprocess` in the earlier
+  v0.2.7-draft commit `9a8530c` has been **moved out** of
+  `xenium-preprocess` into the new `exploration` package. Rationale:
+  region/distance annotation is downstream, question-specific, and
+  should not block the canonical preprocessing pipeline when no region
+  CSV is provided. `xenium-preprocess` now has **zero** dependency on
+  the region CSV; the canonical processed `.h5ad` is produced
+  identically to v0.2.6. `shapely>=2` is removed from
+  `xenium-preprocess`'s deps.
+- **Import break (no shims)**: callers that previously used
+  `from xenium_preprocess import annotate_regions_and_tumor_distance`
+  must switch to
+  `from exploration import annotate_regions_and_tumor_distance`.
 
 ### Validation (MH6_BR_2328 full sample)
 
 See `validation_mh6.log` under the branch worktree for the full output.
+The MH6 validation was run against the pre-move implementation (same
+code, same algorithm, same byte-for-byte parity vs the AUDITED
+reference); after the move the unit tests (10, now under
+`packages/exploration/tests/`) re-pass unchanged.
 
 ## [0.2.6] — 2026-08-26
 

@@ -1,4 +1,4 @@
-"""Tests for ``xenium_preprocess.annotate.annotate_regions_and_tumor_distance``.
+"""Tests for ``exploration.annotate.annotate_regions_and_tumor_distance``.
 
 Covers:
   - All cells get a ``selected_region`` label; ``not_selected`` fallback.
@@ -79,7 +79,7 @@ def _square(sel, cls, x0, y0, side):
 
 def test_selected_region_assigns_all_cells(tmp_path):
     _skip_if_missing("anndata", "pandas", "numpy", "scipy", "shapely")
-    from xenium_preprocess.annotate import annotate_regions_and_tumor_distance
+    from exploration.annotate import annotate_regions_and_tumor_distance
 
     # Two non-overlapping squares (tumor + non-tumor) plus three cells:
     #   cell_0 inside Tumor_1
@@ -102,7 +102,7 @@ def test_selected_region_assigns_all_cells(tmp_path):
 def test_non_hep_cells_have_na_distance_columns(tmp_path):
     _skip_if_missing("anndata", "pandas", "numpy", "scipy", "shapely")
     import numpy as np
-    from xenium_preprocess.annotate import annotate_regions_and_tumor_distance
+    from exploration.annotate import annotate_regions_and_tumor_distance
 
     rows = _square("Tumor_1", "Unclassified", 0, 0, 100)
     csv = tmp_path / "regions.csv"
@@ -126,7 +126,7 @@ def test_zero_non_hep_cells_have_non_na_distance(tmp_path):
     """Invariant from Tracy's validation checklist — must be exactly 0."""
     _skip_if_missing("anndata", "pandas", "numpy", "scipy", "shapely")
     import numpy as np
-    from xenium_preprocess.annotate import annotate_regions_and_tumor_distance
+    from exploration.annotate import annotate_regions_and_tumor_distance
 
     rows = _square("Tumor_1", "Unclassified", 0, 0, 100)
     csv = tmp_path / "regions.csv"
@@ -150,7 +150,7 @@ def test_zero_non_hep_cells_have_non_na_distance(tmp_path):
 def test_signed_distance_sign_and_bins(tmp_path):
     _skip_if_missing("anndata", "pandas", "numpy", "scipy", "shapely")
     import numpy as np
-    from xenium_preprocess.annotate import annotate_regions_and_tumor_distance
+    from exploration.annotate import annotate_regions_and_tumor_distance
 
     # Tumor square (0,0)..(1000,1000). Place cells at known distances:
     #   cell_0 at (500,500)   — inside, distance to boundary = 500 (signed -500 → intratumoral)
@@ -196,7 +196,7 @@ def test_signed_distance_sign_and_bins(tmp_path):
 
 def test_f1_classifier_name_based(tmp_path):
     _skip_if_missing("anndata", "pandas", "numpy", "scipy", "shapely")
-    from xenium_preprocess.annotate import _build_polygons, _classify_tumor_selections, _read_region_csv
+    from exploration.annotate import _build_polygons, _classify_tumor_selections, _read_region_csv
 
     rows = (_square("Tumor_1",      "Unclassified", 0,   0,   100)
           + _square("Non-tumor_1",  "Unclassified", 200, 0,   100)
@@ -214,7 +214,7 @@ def test_f1_classifier_class_majority_includes_non_fibrotic_tumor(tmp_path):
     """The pre-F1 ``"non" not in top`` gate wrongly dropped
     ``non-fibrotic tumor``. The F1 gate keeps it."""
     _skip_if_missing("anndata", "pandas", "numpy", "scipy", "shapely")
-    from xenium_preprocess.annotate import _build_polygons, _classify_tumor_selections, _read_region_csv
+    from exploration.annotate import _build_polygons, _classify_tumor_selections, _read_region_csv
 
     # Ambiguous name — classified via Class majority.
     rows = (_square("Region_A", "non-fibrotic tumor", 0,   0,   100)
@@ -235,7 +235,7 @@ def test_f1_classifier_class_majority_includes_non_fibrotic_tumor(tmp_path):
 
 def test_overlap_assigns_alphabetically_first_selection(tmp_path):
     _skip_if_missing("anndata", "pandas", "numpy", "scipy", "shapely")
-    from xenium_preprocess.annotate import annotate_regions_and_tumor_distance
+    from exploration.annotate import annotate_regions_and_tumor_distance
 
     # Three squares overlapping at (50,50):
     #   A, B, Tumor_1 all contain cell_0 → "A" wins (alphabetically first)
@@ -261,7 +261,7 @@ def test_overlap_assigns_alphabetically_first_selection(tmp_path):
 
 def test_refuses_to_overwrite_existing_columns(tmp_path):
     _skip_if_missing("anndata", "pandas", "numpy", "scipy", "shapely")
-    from xenium_preprocess.annotate import annotate_regions_and_tumor_distance
+    from exploration.annotate import annotate_regions_and_tumor_distance
 
     rows = _square("Tumor_1", "Unclassified", 0, 0, 100)
     csv = tmp_path / "regions.csv"
@@ -276,7 +276,7 @@ def test_refuses_to_overwrite_existing_columns(tmp_path):
 def test_does_not_mutate_input_adata(tmp_path):
     _skip_if_missing("anndata", "pandas", "numpy", "scipy", "shapely")
     import numpy as np
-    from xenium_preprocess.annotate import annotate_regions_and_tumor_distance
+    from exploration.annotate import annotate_regions_and_tumor_distance
 
     rows = _square("Tumor_1", "Unclassified", 0, 0, 100)
     csv = tmp_path / "regions.csv"
@@ -364,7 +364,7 @@ def test_parity_with_reference_algorithm_on_synthetic_multiselection(tmp_path):
     signed distance + bin as the audited reference algorithm."""
     _skip_if_missing("anndata", "pandas", "numpy", "scipy", "shapely")
     import numpy as np
-    from xenium_preprocess.annotate import annotate_regions_and_tumor_distance, _read_region_csv
+    from exploration.annotate import annotate_regions_and_tumor_distance, _read_region_csv
 
     rows = (
         _square("Tumor_1",              "Unclassified", 0,    0,    1000)

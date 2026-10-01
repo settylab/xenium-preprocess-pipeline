@@ -61,7 +61,7 @@ from typing import Sequence
 import numpy as np
 import pandas as pd
 
-from xenium_preprocess._internal.logging import log
+from exploration._internal.logging import log
 
 
 # Signed-distance bin edges — kept in sync with the AUDITED algorithm in

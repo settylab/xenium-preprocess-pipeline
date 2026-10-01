@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "exploration"
+version = "0.1.0"
+description = "Downstream / optional exploratory analyses that run AFTER the canonical xenium-preprocess output (Tracy #31 — region/distance annotation + future reusable primitives for QC, scoring, visualization, comparisons, hypothesis-driven analyses)."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+authors = [
+    { name = "xenium-preprocess-pipeline contributors" },
+]
+keywords = ["xenium", "spatial-transcriptomics", "exploration", "region-annotation", "tumor-distance"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+
+# Deliberately standalone: zero import-side dependency on `xenium-preprocess`
+# or any other sibling package. Users can install `exploration` on top of a
+# canonical preprocessed .h5ad produced anywhere.
+dependencies = [
+    "numpy",
+    "scipy",
+    "pandas",
+    "anndata==0.11.*",
+    "shapely>=2",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[project.urls]
+Homepage = "https://example.org/xenium-preprocess"
+Issues = "https://example.org/xenium-preprocess/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
