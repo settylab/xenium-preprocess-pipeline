@@ -79,7 +79,9 @@ for (p in c(meta_path, coords_path, mtx_path, feats_path, barcodes_path)) {
 
 # ----- Load the SPLIT triple + sidecars (mirrors the Rmd) ------------
 meta   <- read.csv(meta_path, row.names = 1, check.names = FALSE)
-coords <- as.matrix(readr::read_csv(coords_path, show_col_types = FALSE))
+coords <- as.matrix(
+  readr::read_csv(coords_path, col_select = c("x", "y"), show_col_types = FALSE)
+)
 
 mtx <- ReadMtx(
   mtx           = mtx_path,
