@@ -37,6 +37,24 @@ _SPATIAL_ADATA_BASENAMES = {
     "xenium_ranger": "{sample_id}_xenium_ranger.h5ad",
     "proseg_purified": "{sample_id}_proseg_purified.h5ad",
 }
+
+# Stem used in the purified h5ad basename (`{sample_id}_<stem>.h5ad`).
+# Overridable via `set_purified_h5ad_stem` so operators can opt out of the
+# proseg-centric name on xenium_ranger-source runs (e.g. "xenium_ranger_purified").
+# Defaults to "proseg_purified" for back-compat with proseg pipelines.
+_PURIFIED_H5AD_STEM = "proseg_purified"
+
+
+def set_purified_h5ad_stem(stem: str) -> None:
+    """Override the purified h5ad basename stem (default "proseg_purified").
+
+    Called once by `pipeline.run()` from `cfg["purified_h5ad_stem"]` before
+    any stage runs. The internal key "proseg_purified" in
+    `_SPATIAL_ADATA_BASENAMES` is unchanged (it is the stable lookup key);
+    only the on-disk basename resolves against this variable.
+    """
+    global _PURIFIED_H5AD_STEM
+    _PURIFIED_H5AD_STEM = stem
 _RCTD_BASENAMES = {
     "test_object": "{sample_id}_test_object.rds",
     "reference": "{sample_id}_reference.rds",
@@ -96,8 +114,16 @@ def spatial_adata_path(
     output_root: Path, sample_id: str, run_id: str, key: str
 ) -> Path:
     """Return the path to a h5ad under `spatial_adata/`. `key` is one
-    of `_SPATIAL_ADATA_BASENAMES`."""
-    basename = _SPATIAL_ADATA_BASENAMES[key].format(sample_id=sample_id)
+    of `_SPATIAL_ADATA_BASENAMES`.
+
+    The `"proseg_purified"` key resolves against `_PURIFIED_H5AD_STEM`
+    (overridable via `set_purified_h5ad_stem`) so xenium_ranger-source
+    runs can emit e.g. `{sample_id}_xenium_ranger_purified.h5ad`.
+    """
+    if key == "proseg_purified":
+        basename = f"{sample_id}_{_PURIFIED_H5AD_STEM}.h5ad"
+    else:
+        basename = _SPATIAL_ADATA_BASENAMES[key].format(sample_id=sample_id)
     return spatial_adata_dir(output_root, sample_id, run_id) / basename
 
 

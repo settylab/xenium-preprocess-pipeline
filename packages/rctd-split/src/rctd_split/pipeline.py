@@ -32,6 +32,7 @@ from rctd_split._internal.layout import (
     resolved_config_path,
     rctd_path,
     run_dir,
+    set_purified_h5ad_stem,
 )
 from rctd_split._internal.logging import banner, log
 from rctd_split._internal.merge_config import merge_config
@@ -129,6 +130,14 @@ def run(cfg: dict, stages: list[str], argv: list[str]) -> int:
     output_root = Path(cfg["output_root"]).resolve()
     force_rerun = bool(cfg.get("force_rerun", False))
     keep_intermediate = bool(cfg.get("keep_intermediate", False))
+
+    # Override the purified h5ad basename stem before any stage resolves a
+    # spatial_adata_path. Operators pass `--purified-h5ad-stem
+    # xenium_ranger_purified` (or set `purified_h5ad_stem:` in YAML) to make
+    # the output filename reflect the input segmentation on xr-source runs.
+    purified_stem = cfg.get("purified_h5ad_stem")
+    if purified_stem:
+        set_purified_h5ad_stem(purified_stem)
 
     # `test_object`, `reference_rds`, and `rctd_results_rds` auto-derive
     # from the run-folder layout convention when not explicitly set:

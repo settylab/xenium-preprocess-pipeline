@@ -129,6 +129,12 @@ def _add_run_args(p: argparse.ArgumentParser) -> None:
                         "it (matches ref-build's post-pipeline cleanup). "
                         "Pass this to retain the intermediate R RDS + mtx "
                         "bundles + unpurified h5ad for debugging / QC.")
+    p.add_argument("--purified-h5ad-stem", default=None,
+                   help="Stem used in the purified h5ad basename "
+                        "(`{sample_id}_<stem>.h5ad`). Default: "
+                        "`proseg_purified` (back-compat). Override to e.g. "
+                        "`xenium_ranger_purified` on xenium_ranger-source runs "
+                        "so the output filename reflects the input segmentation.")
 
     # Cross-stage R config
     p.add_argument("--r-lib-paths", nargs="+", default=None,
@@ -284,6 +290,8 @@ def _resolve_config(args: argparse.Namespace) -> dict:
         overrides["force_rerun"] = True
     if args.keep_intermediate:
         overrides["keep_intermediate"] = True
+    if args.purified_h5ad_stem is not None:
+        overrides["purified_h5ad_stem"] = args.purified_h5ad_stem
     if args.r_lib_paths is not None:
         overrides["r_lib_paths"] = [str(p) for p in args.r_lib_paths]
 

@@ -669,6 +669,11 @@ def _main(argv: list[str] | None = None) -> None:
     p.add_argument("--run-dir", required=True, type=Path,
                     help="Run directory, e.g. .../<S>_env_config_v1")
     p.add_argument("--out", required=True, type=Path)
+    p.add_argument("--purified-h5ad-stem", default="proseg_purified",
+                    help="Stem in the purified h5ad basename "
+                         "(`{sample_id}_<stem>.h5ad`). Default "
+                         "`proseg_purified`; set to e.g. "
+                         "`xenium_ranger_purified` on xr-source runs.")
     args = p.parse_args(argv)
 
     sample_id = args.sample_id
@@ -682,7 +687,7 @@ def _main(argv: list[str] | None = None) -> None:
         run_id=run_dir.name,
         xenium_h5ad=spatial_dir / f"{sample_id}_xenium_ranger.h5ad",
         raw_h5ad=spatial_dir / f"{sample_id}_proseg_raw.h5ad",
-        purified_h5ad=spatial_dir / f"{sample_id}_proseg_purified.h5ad",
+        purified_h5ad=spatial_dir / f"{sample_id}_{args.purified_h5ad_stem}.h5ad",
         plots_dir=plots_dir,
         existing_html_path=summary_dir / f"{sample_id}_summary_report.html",
         out_path=args.out,
