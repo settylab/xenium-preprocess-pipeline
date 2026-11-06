@@ -1243,9 +1243,31 @@ def run_qc_report(
             "(pass --force-rerun to re-run).")
         return sentinel
 
+    # xenium_ranger-source runs do not produce <S>_proseg_raw.h5ad. Fall
+    # back to intermediate/adata/<S>_unpurified.h5ad, which SPLIT::purify's
+    # pre-strip predecessor carries into the pipeline: it holds the same
+    # obs cols qc_report reads from raw (`total_counts`, `spot_class`,
+    # `first_type`). Row count differs by the xenium-preprocess QC filter
+    # (min_counts=10) applied upstream, but on an xr-only run there is
+    # no proseg-preprocess qc_filter stage, so unpurified IS the pre-SPLIT
+    # universe. Falling back here lets stage 8 produce the HTML + trigger
+    # the intermediate/ auto-prune on xr-only runs instead of hard-failing.
+    raw_label = "proseg_raw"
+    if not raw_p.exists():
+        unp_fallback = intermediate_path(
+            output_root, sample_id, run_id, "unpurified_h5ad",
+        )
+        if unp_fallback.exists():
+            log(f"[qc_report] proseg_raw.h5ad absent at {raw_p}; falling "
+                f"back to {unp_fallback} as the pre-SPLIT raw source "
+                f"(xenium_ranger-source run).")
+            raw_p = unp_fallback
+            raw_label = "unpurified"
+        # else: the loop below hard-fails with the actionable error.
+
     for name, p in (
         ("proseg_purified", purified_p),
-        ("proseg_raw", raw_p),
+        (raw_label, raw_p),
         ("xenium_ranger", xenium_p),
     ):
         if not p.exists():
@@ -1262,11 +1284,14 @@ def run_qc_report(
     log(f"[qc_report] reading {purified_p}")
     purified = ad.read_h5ad(purified_p)
 
+    # On an xr-only run the fallback raw (unpurified.h5ad) carries no
+    # custom layer; `.X` IS the counts. Use layer=None in that case.
+    raw_metric_layer = raw_layer if raw_label == "proseg_raw" else None
     log(f"[qc_report] computing per-h5ad metrics "
-        f"(raw uses layers[{raw_layer!r}])")
+        f"(raw={raw_label!r} uses layer={raw_metric_layer!r})")
     h5ad_metrics_rows = [
         _h5ad_metrics(xenium, "xenium_ranger"),
-        _h5ad_metrics(raw, "proseg_raw", layer=raw_layer),
+        _h5ad_metrics(raw, raw_label, layer=raw_metric_layer),
         _h5ad_metrics(purified, "proseg_purified"),
     ]
     purification = _purification_metrics(raw, purified)
@@ -1307,7 +1332,7 @@ def run_qc_report(
 
     # Count-histogram inputs (fail-loud on missing obs columns).
     hist_raw_vals = _hist_values_from_obs(
-        raw, "total_counts", "proseg_raw",
+        raw, "total_counts", raw_label,
     )
     hist_xenium_vals = _hist_values_from_obs(
         xenium, "total_counts", "xenium_ranger",
@@ -1349,10 +1374,12 @@ def run_qc_report(
             purified, "nCount_Proseg", "proseg_purified",
         )
 
-    # Also touch layers[raw_layer] to enforce the fail-loud invariant
-    # for the histogram source; the layer is guaranteed to exist here
-    # (metrics-row assembly above already resolved it).
-    _resolve_matrix(raw, raw_layer, "proseg_raw")
+    # Also touch raw's matrix to enforce the fail-loud invariant for the
+    # histogram source; the matrix is guaranteed to exist here (metrics-row
+    # assembly above already resolved it). Match the layer we used for
+    # metrics — proseg_raw uses the configured raw_layer, unpurified
+    # fallback uses .X (layer=None).
+    _resolve_matrix(raw, raw_metric_layer, raw_label)
 
     # Emit plots.
     plt = _configure_matplotlib()
@@ -1363,7 +1390,7 @@ def run_qc_report(
     img_leiden = plots_dir / f"{sample_id}_umap_leiden_res{leiden_resolution}.png"
     img_first_type = plots_dir / f"{sample_id}_umap_first_type.png"
     img_hist_raw = (
-        plots_dir / f"{sample_id}_hist_total_counts_proseg_raw.png"
+        plots_dir / f"{sample_id}_hist_total_counts_{raw_label}.png"
     )
     img_hist_xenium = (
         plots_dir / f"{sample_id}_hist_total_counts_xenium_ranger.png"
@@ -1418,7 +1445,7 @@ def run_qc_report(
     log(f"[qc_report] writing histogram {img_hist_raw}")
     _hist_log10_counts(
         plt, hist_raw_vals,
-        title=f"{sample_id}: proseg_raw log10(total_counts)",
+        title=f"{sample_id}: {raw_label} log10(total_counts)",
         xlabel="log10(total_counts)",
         out_path=img_hist_raw,
         threshold=thresholds["raw"],
