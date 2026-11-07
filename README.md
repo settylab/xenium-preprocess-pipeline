@@ -457,6 +457,73 @@ pytest packages/rctd-split/tests
 pytest scripts/tests
 ```
 
+## Release notes
+
+### v0.2.7 — 2026-11-06
+
+End-to-end support for xenium_ranger-source runs through all 8 rctd-split
+stages. Previously the pipeline was proseg-first; xenium_ranger-source
+runs had latent gaps that only surfaced after the 11-hour `rctd_run`
+stage. This release closes four of them and documents how to tune the
+purified-side QC threshold.
+
+**Fixes**
+
+- `xenium-preprocess.rctd_prep.R`: restrict the spatial-coords read to
+  the numeric `x`/`y` columns so `spatialCoords<-` no longer trips the
+  `is.numeric(value) is not TRUE` guard on xenium_ranger-source runs.
+- `xenium-preprocess.xenium_ranger_to_anndata`: also mirror cell
+  centroids onto `obs['centroid_x']` / `obs['centroid_y']`. Previously
+  centroids only lived in `obsm['spatial']`, so rctd-split's
+  SPLIT::purify Seurat rebuild (which preserves `meta.data` cols but
+  not `obsm`) dropped them — `celltype_writeback` then failed looking
+  for `obs['centroid_x']` on the purified reference h5ad. Brings parity
+  with proseg's `proseg_to_anndata` writer.
+- `rctd-split.qc_report`: when `proseg_raw.h5ad` is absent (every
+  xenium_ranger-source run), fall back to
+  `intermediate/adata/<S>_unpurified.h5ad` as the pre-SPLIT raw source.
+  Enables the terminal stage to emit `summary/<S>_summary_report.html`
+  AND trigger the `intermediate/` auto-prune on xenium_ranger runs.
+  The raw-side histogram PNG is named
+  `<S>_hist_total_counts_unpurified.png` on the fallback path.
+
+**Features**
+
+- `rctd-split`: new `--purified-h5ad-stem` CLI flag (default:
+  `proseg_purified`). Override to e.g. `xenium_ranger_purified` on
+  xenium_ranger-source runs so the output h5ad filename reflects the
+  input segmentation: `<S>_xenium_ranger_purified.h5ad` instead of
+  `<S>_proseg_purified.h5ad`. Also settable via
+  `rctd_split.purified_h5ad_stem` in the YAML config. Default
+  preserves back-compat with proseg pipelines.
+
+**How to tune the purified-side QC threshold** (`sc.pp.filter_cells`
+`min_counts`, default 50, applied by `postprocess` on the purified
+h5ad):
+
+- CLI: `rctd-split run ... --postprocess-min-counts 30`
+- YAML: `rctd_split.postprocess.qc.min_counts: 30`
+- Driver passthrough: `--rctd-split-postprocess-min-counts 30` on
+  `scripts/submit_workflow.sh`.
+
+The `postprocess_summary.csv` sidecar under
+`intermediate/adata/<S>_postprocess_summary.csv` records the applied
+value plus `n_cells_in` / `n_cells_kept` so each run is
+self-documenting.
+
+**Upgrade notes**
+
+- Fully back-compat for proseg-source pipelines: all defaults
+  preserved; output filenames and stage behavior unchanged.
+- For xenium_ranger-source runs, pass `--purified-h5ad-stem
+  xenium_ranger_purified` to adopt the renamed output. Omit it to
+  keep the legacy `_proseg_purified.h5ad` name.
+- On xenium_ranger-source runs the `qc_report` purification funnel's
+  "n_raw" denominator is now the unpurified cell count (pre-SPLIT
+  universe), not a proseg-raw cell count. Semantically equivalent
+  on xenium_ranger-only runs (no proseg_raw exists); for proseg-source
+  runs `n_raw` continues to be the proseg_raw cell count.
+
 ## Contributing
 
 Contributions welcome:
