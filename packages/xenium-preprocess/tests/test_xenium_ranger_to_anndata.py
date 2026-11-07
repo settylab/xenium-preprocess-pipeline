@@ -129,6 +129,55 @@ def test_xenium_ranger_to_anndata_missing_bundle_fails_loud(tmp_path: Path):
         )
 
 
+def test_xenium_ranger_to_anndata_mirrors_centroids_onto_obs(tmp_path: Path):
+    """v0.2.7 regression: ``run_xenium_ranger_to_anndata`` must set
+    ``obs['centroid_x']`` / ``obs['centroid_y']`` from ``obsm['spatial']``
+    so rctd-split's SPLIT::purify Seurat rebuild can carry them through
+    on xenium_ranger-source runs. Without these obs cols,
+    celltype_writeback fails looking for ``obs['centroid_x']`` on the
+    purified reference h5ad. Matches proseg's design
+    (``proseg_to_anndata`` already writes centroid_x/_y on obs).
+    """
+    try:
+        import anndata  # noqa: F401
+        import scanpy  # noqa: F401
+    except ImportError as e:
+        pytest.skip(f"missing dep: {e.name}")
+
+    from xenium_preprocess.stages.xenium_ranger_to_anndata import (
+        run_xenium_ranger_to_anndata,
+    )
+    import anndata
+
+    bundle = _synth_bundle(tmp_path, n_cells=4, n_genes=3)
+    out = tmp_path / "out" / "MH1_xenium_ranger.h5ad"
+
+    run_xenium_ranger_to_anndata(
+        sample_id="MH1",
+        run_id="centroid_mirror_test",
+        xenium_ranger_dir=bundle,
+        out_h5ad=out,
+        gex_only=True,
+        force_rerun=False,
+    )
+    a = anndata.read_h5ad(out)
+
+    # Both obs cols present.
+    assert "centroid_x" in a.obs.columns, (
+        f"obs['centroid_x'] missing; present cols: {list(a.obs.columns)}"
+    )
+    assert "centroid_y" in a.obs.columns, (
+        f"obs['centroid_y'] missing; present cols: {list(a.obs.columns)}"
+    )
+    # Values match obsm['spatial'] element-for-element (x_centroid was
+    # 100, 101, 102, 103; y_centroid was 200, 201, 202, 203 per
+    # _synth_bundle's deterministic layout).
+    assert a.obs["centroid_x"].tolist() == a.obsm["spatial"][:, 0].tolist()
+    assert a.obs["centroid_y"].tolist() == a.obsm["spatial"][:, 1].tolist()
+    assert a.obs["centroid_x"].tolist() == [100.0, 101.0, 102.0, 103.0]
+    assert a.obs["centroid_y"].tolist() == [200.0, 201.0, 202.0, 203.0]
+
+
 def test_xenium_ranger_to_anndata_writes_uns_identity(tmp_path: Path):
     """`.uns['sample_id']` + `.uns['run_id']` are load-bearing for H&E
     integration downstream (identity-discovery mechanism per

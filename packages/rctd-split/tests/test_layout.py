@@ -33,6 +33,74 @@ def test_spatial_adata_paths(tmp_path: Path):
     )
 
 
+@pytest.fixture
+def _restore_purified_stem():
+    """Reset the module-level _PURIFIED_H5AD_STEM after a test mutates it.
+
+    Required because `set_purified_h5ad_stem` writes to a module global
+    (v0.2.7 design) — without this fixture, a mutating test would leak
+    state into subsequent tests via `spatial_adata_path("proseg_purified")`.
+    """
+    from rctd_split._internal import layout
+    saved = layout._PURIFIED_H5AD_STEM
+    yield
+    layout._PURIFIED_H5AD_STEM = saved
+
+
+def test_set_purified_h5ad_stem_overrides_proseg_purified_basename(
+    tmp_path: Path, _restore_purified_stem
+):
+    """v0.2.7 rename-by-input-name: `--purified-h5ad-stem xenium_ranger_purified`
+    (threaded via `pipeline.run` → `set_purified_h5ad_stem`) must change the
+    on-disk basename of the `"proseg_purified"` key WITHOUT touching the
+    other keys or the internal lookup table."""
+    from rctd_split._internal.layout import (
+        set_purified_h5ad_stem,
+        spatial_adata_path,
+    )
+
+    root = tmp_path / "runs"
+
+    # Default: proseg_purified basename (back-compat).
+    assert spatial_adata_path(root, "MHTEST", "42", "proseg_purified").name == (
+        "MHTEST_proseg_purified.h5ad"
+    )
+
+    # Override: switch to xenium_ranger_purified.
+    set_purified_h5ad_stem("xenium_ranger_purified")
+    assert spatial_adata_path(root, "MHTEST", "42", "proseg_purified").name == (
+        "MHTEST_xenium_ranger_purified.h5ad"
+    )
+
+    # Other keys stay fixed — the stem only affects the `proseg_purified` key.
+    assert spatial_adata_path(root, "MHTEST", "42", "proseg_raw").name == (
+        "MHTEST_proseg_raw.h5ad"
+    )
+    assert spatial_adata_path(root, "MHTEST", "42", "xenium_ranger").name == (
+        "MHTEST_xenium_ranger.h5ad"
+    )
+
+
+def test_set_purified_h5ad_stem_is_reversible(_restore_purified_stem):
+    """A subsequent call reverting the stem to its default restores the
+    original behavior — ensures the setter is not one-way."""
+    from rctd_split._internal.layout import (
+        set_purified_h5ad_stem,
+        spatial_adata_path,
+    )
+    from pathlib import Path as _P
+
+    set_purified_h5ad_stem("other_stem")
+    assert spatial_adata_path(_P("/t"), "S", "r", "proseg_purified").name == (
+        "S_other_stem.h5ad"
+    )
+
+    set_purified_h5ad_stem("proseg_purified")
+    assert spatial_adata_path(_P("/t"), "S", "r", "proseg_purified").name == (
+        "S_proseg_purified.h5ad"
+    )
+
+
 def test_rctd_paths(tmp_path: Path):
     from rctd_split._internal.layout import rctd_path
 
