@@ -165,6 +165,13 @@ def run_xenium_ranger_to_anndata(
             f"with NaN centroid — refusing to write. Inspect cells.csv."
         )
     adata.obsm["spatial"] = xy
+    # Mirror centroids onto obs so rctd-split can carry them through the
+    # SPLIT::purify Seurat rebuild (which preserves only meta.data cols,
+    # not obsm). centroid_x/_y are on rctd-split's SPLIT-native allow-list
+    # (split_native.py). Without this, celltype_writeback fails looking for
+    # obs['centroid_x'] on the purified reference h5ad.
+    adata.obs["centroid_x"] = xy[:, 0]
+    adata.obs["centroid_y"] = xy[:, 1]
 
     # QC obs columns.
     for col in _OBS_COLS:

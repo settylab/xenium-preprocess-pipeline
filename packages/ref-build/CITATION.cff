@@ -4,8 +4,8 @@ message: "If you use this software, please cite it using the metadata from this 
 type: software
 authors:
   - name: "xenium-preprocess-pipeline contributors"
-version: 0.1.0
-date-released: "2026-07-09"
+version: 0.2.8
+date-released: "2026-11-09"
 # doi: "10.5281/zenodo.PLACEHOLDER"                    # TODO after Zenodo mint
 url: "https://example.org/ref-build"
 repository-code: "https://example.org/ref-build"

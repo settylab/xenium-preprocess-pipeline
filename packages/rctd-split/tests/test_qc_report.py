@@ -88,6 +88,10 @@ def _write_purified(
         xs = np.linspace(-1.0, 1.0, _N_PURIFIED, dtype=float)
         ys = np.linspace(-1.0, 1.0, _N_PURIFIED, dtype=float)[::-1]
         adata.obsm["X_umap_clipped_norm"] = np.column_stack([xs, ys])
+    # obsm['spatial'] powers the spatial-panel step wired into qc_report
+    # at the end of the terminal stage (v0.2.8). Independent from the
+    # UMAP layout above.
+    adata.obsm["spatial"] = rng.uniform(0, 100, size=(_N_PURIFIED, 2))
 
     out = spatial_adata_path(output_root, SAMPLE, RUN_ID, "proseg_purified")
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -164,6 +168,7 @@ def _write_raw(
     adata = ad.AnnData(X=X, obs=obs, var=var)
     if with_maxpost_layer:
         adata.layers["maxpost_counts"] = csr_matrix(maxpost_arr)
+    adata.obsm["spatial"] = rng.uniform(0, 100, size=(_N_RAW, 2))
 
     out = spatial_adata_path(output_root, SAMPLE, RUN_ID, "proseg_raw")
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -876,3 +881,246 @@ def test_qc_report_extra_reports_rejects_malformed(tmp_path: Path):
             extra_reports=[{"path": "/tmp/foo.html"}],  # missing name
             **_DEFAULT_CALL,
         )
+
+
+# ---------------------------------------------------------------------------
+# v0.2.7 xr-only fallback: when `proseg_raw.h5ad` is absent (xenium_ranger-
+# source runs do not emit it), qc_report falls back to
+# `intermediate/adata/<S>_unpurified.h5ad` as the pre-SPLIT raw source.
+# ---------------------------------------------------------------------------
+
+
+def _write_unpurified(
+    output_root: Path,
+    *,
+    with_total_counts_obs: bool = True,
+    with_spot_class: bool = True,
+    with_first_type: bool = True,
+    with_ncount_proseg: bool = True,
+):
+    """Emit `intermediate/adata/<S>_unpurified.h5ad` with the raw-equivalent
+    obs columns qc_report needs on the fallback path. Shape matches
+    `_write_raw` (same `_N_RAW` cells, same cell_ids, same spot_class /
+    first_type assignments) so the metrics/summary assertions can mirror
+    the proseg_raw path exactly.
+    """
+    import anndata as ad
+    import numpy as np
+    import pandas as pd
+    from scipy.sparse import csr_matrix
+
+    from rctd_split._internal.layout import (
+        atomic_write_h5ad,
+        intermediate_path,
+    )
+
+    rng = np.random.default_rng(3)
+    x_arr = rng.poisson(2.0, size=(_N_RAW, _N_GENES)).astype("float32")
+    X = csr_matrix(x_arr)
+
+    cell_ids = [f"C{i:03d}" for i in range(_N_RAW)]
+    obs = pd.DataFrame(index=pd.Index(cell_ids, name="cell_id"))
+    totals = x_arr.sum(axis=1).astype(float) + 1.0
+    if with_total_counts_obs:
+        obs["total_counts"] = totals
+    if with_ncount_proseg:
+        obs["nCount_Proseg"] = totals
+    if with_spot_class:
+        obs["spot_class"] = (
+            (["singlet"] * 3)
+            + (["doublet_certain"] * 3)
+            + (["doublet_uncertain"] * 2)
+            + (["reject"] * 2)
+            + ([""] * 2)
+        )
+    if with_first_type:
+        obs["first_type"] = (
+            (["tumor"] * 5)
+            + (["stroma"] * 3)
+            + ["tumor", "stroma"]
+            + ([""] * 2)
+        )
+
+    var = pd.DataFrame(index=[f"gene{i}" for i in range(_N_GENES)])
+    adata = ad.AnnData(X=X, obs=obs, var=var)
+    adata.obsm["spatial"] = rng.uniform(0, 100, size=(_N_RAW, 2))
+
+    out = intermediate_path(output_root, SAMPLE, RUN_ID, "unpurified_h5ad")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_h5ad(adata, out, compression="gzip")
+    return out
+
+
+def test_qc_report_falls_back_to_unpurified_when_proseg_raw_absent(tmp_path: Path):
+    """v0.2.7: on xenium_ranger-source runs `proseg_raw.h5ad` is never
+    produced. `run_qc_report` must detect that, fall back to
+    `intermediate/adata/<S>_unpurified.h5ad`, and complete end-to-end:
+    HTML + metrics CSV + sentinel + the raw-side histogram plot named
+    with the `unpurified` label (not `proseg_raw`).
+    """
+    from rctd_split._internal.layout import (
+        intermediate_path,
+        spatial_adata_path,
+        summary_path,
+        summary_plots_dir,
+    )
+    from rctd_split.stages.qc_report import run_qc_report
+
+    output_root = tmp_path / "runs"
+    _write_purified(output_root)
+    _write_xenium(output_root)
+    _write_unpurified(output_root)      # NO _write_raw — proseg_raw absent
+    _write_resolved_config(output_root)
+
+    # Precondition: proseg_raw really absent; unpurified really present.
+    raw_p = spatial_adata_path(output_root, SAMPLE, RUN_ID, "proseg_raw")
+    unp_p = intermediate_path(output_root, SAMPLE, RUN_ID, "unpurified_h5ad")
+    assert not raw_p.exists()
+    assert unp_p.exists()
+
+    sentinel = run_qc_report(
+        sample_id=SAMPLE,
+        run_id=RUN_ID,
+        output_root=output_root,
+        force_rerun=False,
+        **_DEFAULT_CALL,
+    )
+    assert sentinel.exists()
+
+    html_out = summary_path(output_root, SAMPLE, RUN_ID, "html_report")
+    metrics_out = summary_path(output_root, SAMPLE, RUN_ID, "metrics_csv")
+    assert html_out.exists()
+    assert metrics_out.exists()
+
+    # Raw-side histogram PNG is named after the fallback label, not proseg_raw.
+    plots = summary_plots_dir(output_root, SAMPLE, RUN_ID)
+    assert (plots / f"{SAMPLE}_hist_total_counts_unpurified.png").exists()
+    assert not (plots / f"{SAMPLE}_hist_total_counts_proseg_raw.png").exists()
+    # Purified + xenium histograms unchanged.
+    assert (plots / f"{SAMPLE}_hist_total_counts_xenium_ranger.png").exists()
+    assert (
+        plots / f"{SAMPLE}_hist_nCount_Proseg_proseg_purified.png"
+    ).exists()
+
+    # HTML carries the `unpurified` label in the metrics row (reflects the
+    # fallback source — so the operator sees which h5ad the "raw" numbers
+    # were computed from).
+    body = html_out.read_text()
+    assert "unpurified" in body
+    # And still has the standard QC content.
+    assert "RCTD summary" in body
+    assert "SPLIT-inferred celltype" in body
+
+
+def test_qc_report_still_requires_purified_and_xenium(tmp_path: Path):
+    """The fallback covers ONLY proseg_raw. Purified and xenium h5ads are
+    still hard-required — a missing purified should fail loud with the
+    original actionable error message.
+    """
+    from rctd_split.stages.qc_report import run_qc_report
+
+    output_root = tmp_path / "runs"
+    # Write only unpurified + xenium; purified absent.
+    _write_xenium(output_root)
+    _write_unpurified(output_root)
+    _write_resolved_config(output_root)
+
+    with pytest.raises(SystemExit, match="proseg_purified"):
+        run_qc_report(
+            sample_id=SAMPLE,
+            run_id=RUN_ID,
+            output_root=output_root,
+            force_rerun=False,
+            **_DEFAULT_CALL,
+        )
+
+
+def test_qc_report_fails_when_both_proseg_raw_and_unpurified_missing(tmp_path: Path):
+    """When neither proseg_raw.h5ad nor unpurified.h5ad is on disk, the
+    stage should still fail loud (fallback must not mask the "no raw-side
+    data at all" scenario)."""
+    from rctd_split.stages.qc_report import run_qc_report
+
+    output_root = tmp_path / "runs"
+    _write_purified(output_root)
+    _write_xenium(output_root)
+    _write_resolved_config(output_root)
+    # NOTE: no _write_raw and no _write_unpurified calls.
+
+    with pytest.raises(SystemExit, match="proseg_raw"):
+        run_qc_report(
+            sample_id=SAMPLE,
+            run_id=RUN_ID,
+            output_root=output_root,
+            force_rerun=False,
+            **_DEFAULT_CALL,
+        )
+
+
+# ---------------------------------------------------------------------------
+# v0.2.8 spatial-plot integration (qc_report_spatial_v2 wired into
+# the terminal stage; the HTML we write at the end of run_qc_report
+# must carry the two new spatial sections).
+# ---------------------------------------------------------------------------
+
+def test_qc_report_html_includes_spatial_panels(tmp_path: Path):
+    """After qc_report runs, the HTML must be the SUPERSET with the two
+    spatial sections appended (broad-overview + QC-in-space), not the
+    bare base template. Proves the qc_report_spatial_v2.build_report
+    call wired in at the end of run_qc_report actually fires and
+    overwrites html_out in place.
+    """
+    from rctd_split._internal.layout import summary_path
+    from rctd_split.stages.qc_report import run_qc_report
+
+    output_root, _, _, _ = _setup_run(tmp_path)
+
+    run_qc_report(
+        sample_id=SAMPLE,
+        run_id=RUN_ID,
+        output_root=output_root,
+        force_rerun=False,
+        **_DEFAULT_CALL,
+    )
+
+    html_out = summary_path(output_root, SAMPLE, RUN_ID, "html_report")
+    body = html_out.read_text()
+
+    # Banner swapped from "Draft layout for review" → the integrated wording.
+    assert "Summary HTML with spatial panels" in body
+    assert "Draft layout for review" not in body
+    # The two new sections (broad overview + QC in space) must be present.
+    assert "Spatial overview — leiden clusters" in body
+    assert "QC metrics in space" in body
+    # proseg_raw label is the default — on this proseg-source fixture
+    # the small raw-side spatial panel's caption carries it.
+    assert "proseg_raw: total_counts" in body
+
+
+def test_qc_report_spatial_panels_use_unpurified_label_on_fallback(tmp_path: Path):
+    """On the xenium_ranger-only fallback path (proseg_raw.h5ad absent,
+    unpurified.h5ad present), the small raw-side spatial panel's caption
+    must say `unpurified: total_counts`, not `proseg_raw: total_counts`,
+    so the operator sees which h5ad the panel was computed from.
+    """
+    from rctd_split._internal.layout import summary_path
+    from rctd_split.stages.qc_report import run_qc_report
+
+    output_root = tmp_path / "runs"
+    _write_purified(output_root)
+    _write_xenium(output_root)
+    _write_unpurified(output_root)          # NO _write_raw
+    _write_resolved_config(output_root)
+
+    run_qc_report(
+        sample_id=SAMPLE,
+        run_id=RUN_ID,
+        output_root=output_root,
+        force_rerun=False,
+        **_DEFAULT_CALL,
+    )
+
+    body = summary_path(output_root, SAMPLE, RUN_ID, "html_report").read_text()
+    assert "unpurified: total_counts" in body
+    assert "proseg_raw: total_counts" not in body
+    assert "QC metrics in space" in body
