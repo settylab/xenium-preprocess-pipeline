@@ -1553,6 +1553,30 @@ def run_qc_report(
     )
     log(f"[qc_report] wrote HTML {html_out}")
 
+    # Append spatial-plot panels: read-only superset of the HTML we
+    # just wrote. Overwrites html_out in place — the base template's
+    # fragments are lifted verbatim, then broad leiden/cell-type and
+    # the three small per-metric panels are appended at the bottom.
+    # Uses the already-resolved raw_p, so the unpurified-fallback path
+    # for xenium_ranger-only runs carries through; raw_label makes
+    # the panel caption say "unpurified: total_counts" instead of
+    # "proseg_raw: total_counts" on that path.
+    from rctd_split.stages.qc_report_spatial_v2 import (
+        build_report as _build_spatial_report,
+    )
+    _build_spatial_report(
+        sample_id=sample_id,
+        run_id=run_id,
+        xenium_h5ad=xenium_p,
+        raw_h5ad=raw_p,
+        raw_label=raw_label,
+        purified_h5ad=purified_p,
+        plots_dir=plots_dir,
+        existing_html_path=html_out,
+        out_path=html_out,
+    )
+    log(f"[qc_report] appended spatial panels to {html_out}")
+
     sentinel.parent.mkdir(parents=True, exist_ok=True)
     sentinel.write_text(
         f"qc_report complete: {sample_id}\n"

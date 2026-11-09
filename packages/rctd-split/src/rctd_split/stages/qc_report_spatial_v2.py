@@ -1,17 +1,29 @@
-"""Standalone, iteration-only QC summary — NOT wired into the pipeline
-and NOT imported by ``pipeline.py`` or ``qc_report.py``.
+"""Pipeline-integrated QC summary with spatial panels.
 
-This module exists purely so the operator can react to a candidate
-layout before any of it is folded into the real ``qc_report`` stage
-(settylab/msetty-nexus#41). It never writes to a run directory — it
-takes an explicit ``--out`` path — and it only *reads*: the three
-existing ``spatial_adata/*.h5ad`` files, the PNGs
-``qc_report.run_qc_report`` already produced under ``summary/plots/``,
-and the existing ``summary_report.html`` text (to lift its tables /
-captions verbatim — see "Superset strategy" below). It does not touch
-``qc_report.py``, does not recompute anything ``qc_report`` already
-computed, and does not regenerate or modify the existing
-``summary_report.html``.
+Called from ``qc_report.run_qc_report`` at the end of the terminal
+stage: ``qc_report`` first writes the base ``summary_report.html`` and
+all the per-panel PNGs under ``summary/plots/``, then invokes
+``build_report`` here with the baseline HTML as ``existing_html_path``
+and ``out_path`` pointing at the same file (overwrite). The resulting
+HTML is a **superset** of the baseline — all four tabular sections,
+the three histograms, the three UMAPs and the Provenance block are
+lifted verbatim, then two spatial sections are appended at the bottom
+(broad overview: leiden + cell type; QC in space: raw/xenium/purified
+counts).
+
+Can still be invoked standalone against an existing finished run
+directory (``python -m rctd_split.stages.qc_report_spatial_v2 ...``)
+for iteration against an already-run summary HTML — useful when
+tweaking panel styling without re-executing the terminal stage. The
+``--raw-h5ad`` and ``--raw-label`` flags let the standalone path
+point at the ``intermediate/adata/<S>_unpurified.h5ad`` fallback that
+``qc_report`` uses on xenium_ranger-only runs (no proseg_raw.h5ad
+produced).
+
+Only *reads* the three h5ads it needs (``backed="r"``); never
+recomputes anything that lives in the baseline HTML — it lifts the
+existing fragments verbatim so numbers and captions are
+byte-identical to what ``qc_report`` emitted.
 
 **This is a superset of the existing report, not a replacement — and
 its section ORDER matches ``summary_report.html`` exactly.** An
@@ -442,7 +454,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>QC summary (v2) — {sample_id}</title>
+<title>QC summary — {sample_id}</title>
 <style>
   body {{ font-family: -apple-system, "Segoe UI", "Helvetica Neue",
          Arial, sans-serif; max-width: 1500px; margin: 2em auto;
@@ -476,14 +488,15 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 </style>
 </head>
 <body>
-<h1>QC summary (v2) — {sample_id}</h1>
+<h1>QC summary — {sample_id}</h1>
 <p class="banner">
-  Draft layout for review, generated outside the pipeline
-  (<code>qc_report_spatial_v2.py</code>, not wired into any stage).
-  <b>Superset</b> of <code>{sample_id}_summary_report.html</code>, same
-  section order as that file: tables, histograms (now a row), UMAPs
-  (now a row), Provenance — then two new spatial sections appended at
-  the end. That file is untouched. Tracking: settylab/msetty-nexus#41.
+  <b>Summary HTML with spatial panels</b>. Tables, histograms,
+  UMAPs and Provenance are carried over verbatim from the base
+  <code>qc_report</code> output; two spatial sections (broad
+  overview + per-metric QC in space) are appended at the bottom.
+  To regenerate this report over an existing run without
+  re-executing upstream stages: re-run
+  <code>--stages qc_report --force-rerun</code>.
 </p>
 <p class="meta">
   Run: <code>{run_id}</code><br>
@@ -525,8 +538,8 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   range simply saturate at the end color.
 </p>
 <div class="row small">
-  <div class="plot"><img src="{img_small_raw}" alt="Spatial proseg_raw total_counts, color clipped 1st-99th percentile">
-    <div class="caption">proseg_raw: total_counts</div></div>
+  <div class="plot"><img src="{img_small_raw}" alt="Spatial {raw_label} total_counts, color clipped 1st-99th percentile">
+    <div class="caption">{raw_label}: total_counts</div></div>
   <div class="plot"><img src="{img_small_xenium}" alt="Spatial xenium_ranger total_counts, color clipped 1st-99th percentile">
     <div class="caption">xenium_ranger: total_counts</div></div>
   <div class="plot"><img src="{img_small_purified}" alt="Spatial proseg_purified nCount_Proseg, color clipped 1st-99th percentile">
@@ -547,6 +560,7 @@ def build_report(
     plots_dir: Path,
     existing_html_path: Path,
     out_path: Path,
+    raw_label: str = "proseg_raw",
 ) -> None:
     import anndata as ad
 
@@ -612,17 +626,20 @@ def build_report(
         plt, xy_pur, ncount_pur, title="purified: nCount_Proseg",
     )
 
-    print(f"[qc_report_spatial_v2] reading {raw_h5ad}")
+    print(f"[qc_report_spatial_v2] reading {raw_label} h5ad {raw_h5ad}")
     raw = ad.read_h5ad(raw_h5ad, backed="r")
     if "total_counts" not in raw.obs.columns:
         raise SystemExit(
-            "[qc_report_spatial_v2] proseg_raw.h5ad missing "
+            f"[qc_report_spatial_v2] {raw_label} h5ad missing "
             "obs['total_counts']."
         )
-    print("[qc_report_spatial_v2] rendering small proseg_raw total_counts panel (clipped 1st-99th %ile)")
+    print(
+        f"[qc_report_spatial_v2] rendering small {raw_label} total_counts "
+        "panel (clipped 1st-99th %ile)"
+    )
     img_small_raw = _small_spatial_continuous(
         plt, raw.obsm["spatial"], raw.obs["total_counts"].to_numpy(),
-        title="proseg_raw: total_counts",
+        title=f"{raw_label}: total_counts",
     )
 
     print(f"[qc_report_spatial_v2] reading {xenium_h5ad}")
@@ -653,6 +670,7 @@ def build_report(
         img_small_raw=img_small_raw,
         img_small_xenium=img_small_xenium,
         img_small_purified=img_small_purified,
+        raw_label=html.escape(raw_label),
         hist_blob=lifted["hist"],
         umap_row=lifted["umap_row"],
         tabular_blob=lifted["tabular"],
@@ -674,6 +692,16 @@ def _main(argv: list[str] | None = None) -> None:
                          "(`{sample_id}_<stem>.h5ad`). Default "
                          "`proseg_purified`; set to e.g. "
                          "`xenium_ranger_purified` on xr-source runs.")
+    p.add_argument("--raw-h5ad", type=Path, default=None,
+                    help="Explicit raw-side h5ad path; defaults to "
+                         "`<run-dir>/spatial_adata/<sample-id>_proseg_raw.h5ad`. "
+                         "Override to e.g. the `intermediate/adata/<S>_"
+                         "unpurified.h5ad` fallback on xenium_ranger-only "
+                         "runs (no proseg_raw.h5ad produced).")
+    p.add_argument("--raw-label", default="proseg_raw",
+                    help="Label used in the small raw total_counts panel's "
+                         "title/caption/alt (e.g. `unpurified` on the "
+                         "xenium_ranger-only fallback). Default `proseg_raw`.")
     args = p.parse_args(argv)
 
     sample_id = args.sample_id
@@ -682,11 +710,16 @@ def _main(argv: list[str] | None = None) -> None:
     summary_dir = run_dir / "summary"
     plots_dir = summary_dir / "plots"
 
+    raw_h5ad = args.raw_h5ad or (
+        spatial_dir / f"{sample_id}_proseg_raw.h5ad"
+    )
+
     build_report(
         sample_id=sample_id,
         run_id=run_dir.name,
         xenium_h5ad=spatial_dir / f"{sample_id}_xenium_ranger.h5ad",
-        raw_h5ad=spatial_dir / f"{sample_id}_proseg_raw.h5ad",
+        raw_h5ad=raw_h5ad,
+        raw_label=args.raw_label,
         purified_h5ad=spatial_dir / f"{sample_id}_{args.purified_h5ad_stem}.h5ad",
         plots_dir=plots_dir,
         existing_html_path=summary_dir / f"{sample_id}_summary_report.html",
