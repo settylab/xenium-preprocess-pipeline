@@ -232,3 +232,118 @@ def test_celltype_writeback_fails_on_missing_reference_col(tmp_path):
             h5ad_compression="gzip", force_rerun=False,
         )
     assert "first_type" in str(exc.value)
+
+
+# ---------------------------------------------------------------------
+# v0.2.9: RCTD results + filter provenance writeback on the
+# xenium_ranger-only path (settylab/TracyY123-nexus#40).
+# ---------------------------------------------------------------------
+
+def test_celltype_writeback_v0_2_9_folds_rctd_results(tmp_path, monkeypatch):
+    """When ``rctd_results_rds`` is supplied, celltype_writeback also
+    writes the 12 rctd_* obs columns + ``in_rctd_input`` +
+    ``in_purified`` booleans onto xenium_ranger.h5ad. Monkeypatches the
+    R-side extractor since sandbox CI doesn't have spacexr/SPLIT; the
+    schema the fake extractor returns is the exact shape the real one
+    emits (see ``packages/rctd-split/src/rctd_split/r/rctd_results_to_csv.R``).
+    """
+    import anndata as ad
+    import pandas as pd
+    import numpy as np
+    from rctd_split.stages.celltype_writeback import run_celltype_writeback
+
+    output_root, sample_id, run_id, _, query_p = _setup_run(tmp_path)
+
+    # Fake rctd_results covers 4 of the 6 query cells; 2 cells (Q4, Q5)
+    # are NOT in the RCTD input set — they should get fillers ("" / NaN)
+    # and ``in_rctd_input = False``.
+    synth = pd.DataFrame(
+        {
+            "spot_class":          ["singlet", "doublet_certain",
+                                    "doublet_uncertain", "reject"],
+            "first_type":          ["tumor", "stroma", "immune", "endo"],
+            "second_type":         ["", "immune", "", ""],
+            "min_score":           [0.9, 0.85, 0.6, 0.3],
+            "singlet_score":       [0.95, 0.4, 0.5, 0.1],
+            "purification_status": ["purified", "raw", "raw", "rejected"],
+        },
+        index=pd.Index([f"Q{i}" for i in range(4)], name="cell_id"),
+    )
+
+    def _fake_extract(*, rctd_results_rds, rscript_bin, r_lib_paths,
+                      tmp_csv=None):
+        return synth
+
+    import rctd_split.stages.celltype_writeback as _cw
+    monkeypatch.setattr(_cw, "extract_rctd_results_df", _fake_extract)
+    # Also patch the underlying module in case helper calls it directly.
+    import rctd_split._internal.rctd_results as _rr
+    monkeypatch.setattr(_rr, "extract_rctd_results_df", _fake_extract)
+
+    run_celltype_writeback(
+        sample_id=sample_id, run_id=run_id, output_root=output_root,
+        xenium_ranger_h5ad=None, reference_label_col="first_type",
+        reference_x_col="centroid_x", reference_y_col="centroid_y",
+        k=1, algorithm="auto", metric="euclidean", tiebreak="min_dist",
+        distance_threshold=None, unmatched_policy="nearest_label",
+        celltype_col="celltype", distance_col="celltype_source_distance",
+        h5ad_compression="gzip", force_rerun=True,
+        # v0.2.9 new args:
+        rctd_results_rds=tmp_path / "fake_rctd_results.rds",  # bypassed
+        rctd_obs_prefix="rctd_",
+    )
+
+    q = ad.read_h5ad(query_p)
+
+    # All 6 rctd_* cols land, with the right fill behavior on Q4/Q5.
+    for col in ("rctd_spot_class", "rctd_first_type", "rctd_second_type",
+                "rctd_min_score", "rctd_singlet_score",
+                "rctd_purification_status"):
+        assert col in q.obs.columns, col
+
+    # Cells Q0..Q3 carry real values; Q4/Q5 carry the fillers.
+    assert list(q.obs["rctd_spot_class"].iloc[:4]) == [
+        "singlet", "doublet_certain", "doublet_uncertain", "reject",
+    ]
+    assert list(q.obs["rctd_spot_class"].iloc[4:]) == ["", ""]
+    assert list(q.obs["rctd_first_type"].iloc[:4]) == [
+        "tumor", "stroma", "immune", "endo",
+    ]
+    # Numeric fill is NaN.
+    assert np.isnan(q.obs["rctd_min_score"].iloc[4:]).all()
+
+    # Provenance flags.
+    assert list(q.obs["in_rctd_input"]) == [True, True, True, True, False, False]
+    # in_purified: the reference h5ad has REF0..REF3; none of the Q*
+    # cell_ids match, so in_purified is False for every query cell.
+    assert list(q.obs["in_purified"]) == [False, False, False, False, False, False]
+
+
+def test_celltype_writeback_v0_2_9_back_compat_without_rctd(tmp_path):
+    """When ``rctd_results_rds=None`` (the default — xenium-preprocess
+    ran without a rctd_run pass), behavior is identical to v0.2.8 and
+    none of the new columns appear.
+    """
+    import anndata as ad
+    from rctd_split.stages.celltype_writeback import run_celltype_writeback
+
+    output_root, sample_id, run_id, _, query_p = _setup_run(tmp_path)
+
+    run_celltype_writeback(
+        sample_id=sample_id, run_id=run_id, output_root=output_root,
+        xenium_ranger_h5ad=None, reference_label_col="first_type",
+        reference_x_col="centroid_x", reference_y_col="centroid_y",
+        k=1, algorithm="auto", metric="euclidean", tiebreak="min_dist",
+        distance_threshold=None, unmatched_policy="nearest_label",
+        celltype_col="celltype", distance_col="celltype_source_distance",
+        h5ad_compression="gzip", force_rerun=False,
+        rctd_results_rds=None,  # explicit — same as not passing
+    )
+
+    q = ad.read_h5ad(query_p)
+    added = set(q.obs.columns)
+    # Only the v0.2.8 cols land; no rctd_* or in_* appear.
+    assert any(c.startswith("celltype") for c in added)
+    assert not any(c.startswith("rctd_") for c in added)
+    assert "in_rctd_input" not in added
+    assert "in_purified" not in added

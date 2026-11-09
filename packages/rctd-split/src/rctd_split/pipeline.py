@@ -475,6 +475,22 @@ def run(cfg: dict, stages: list[str], argv: list[str]) -> int:
                 "h5ad_compression", mh_cfg.get("h5ad_compression", "gzip"),
             ),
             force_rerun=force_rerun,
+            # v0.2.9: pass through the already-resolved rctd_results_rds
+            # (pipeline resolves it once; celltype_writeback picks it up)
+            # so per-cell RCTD results + filter provenance land on
+            # xenium_ranger.h5ad on xr-only runs where no proseg_unpurified
+            # exists to carry them. Defaults to None → v0.2.8 behavior
+            # (celltype + distance only). settylab/TracyY123-nexus#40.
+            rctd_results_rds=(
+                rctd_results_rds
+                if ct_cfg.get("write_rctd_results_to_xenium_ranger", True)
+                else None
+            ),
+            rscript_bin=ct_cfg.get(
+                "rscript_bin", rr_cfg.get("rscript_bin", "Rscript"),
+            ),
+            r_lib_paths=cfg.get("r_lib_paths", []) or [],
+            rctd_obs_prefix=ct_cfg.get("rctd_obs_prefix", "rctd_"),
         )
         banner(f"stage {idx}/{n_stages}: celltype_writeback — "
                f"complete in {time.time()-t0:.1f}s")
