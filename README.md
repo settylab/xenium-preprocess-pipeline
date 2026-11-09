@@ -459,13 +459,18 @@ pytest scripts/tests
 
 ## Release notes
 
-### v0.2.7 — 2026-11-06
+### v0.2.8 — 2026-11-09
 
 End-to-end support for xenium_ranger-source runs through all 8 rctd-split
-stages. Previously the pipeline was proseg-first; xenium_ranger-source
-runs had latent gaps that only surfaced after the 11-hour `rctd_run`
-stage. This release closes four of them and documents how to tune the
-purified-side QC threshold.
+stages, plus spatial plots in the summary HTML. Previously the pipeline
+was proseg-first; xenium_ranger-source runs had latent gaps that only
+surfaced after the 11-hour `rctd_run` stage. This release closes four
+of them, folds spatial panels into the `qc_report` output, and documents
+how to tune the purified-side QC threshold.
+
+(Branch note: upstream `v0.2.7` already names an unrelated historical
+refactor branch, so this patch ships as `v0.2.8` even though its content
+was first prototyped on a local `v0.2.7` branch.)
 
 **Fixes**
 
@@ -496,6 +501,17 @@ purified-side QC threshold.
   `<S>_proseg_purified.h5ad`. Also settable via
   `rctd_split.purified_h5ad_stem` in the YAML config. Default
   preserves back-compat with proseg pipelines.
+- `rctd-split.qc_report`: the summary HTML now includes spatial
+  panels, folded in at the end of the terminal `qc_report` stage. Two
+  broad panels from the purified h5ad (leiden clusters, SPLIT-inferred
+  cell type) plus three small per-metric panels (raw total_counts —
+  proseg_raw or unpurified-fallback — xenium_ranger total_counts,
+  purified nCount_Proseg; color scale clipped per-panel to its own
+  1st/99th percentile so a handful of extreme cells can't flatten the
+  visible variation). Section order preserved verbatim from the base
+  report, then spatial panels appended at the bottom. Re-running
+  `--stages qc_report --force-rerun` is the summary-only path to add
+  these to an existing finished run (no upstream stages re-executed).
 
 **How to tune the purified-side QC threshold** (`sc.pp.filter_cells`
 `min_counts`, default 50, applied by `postprocess` on the purified
