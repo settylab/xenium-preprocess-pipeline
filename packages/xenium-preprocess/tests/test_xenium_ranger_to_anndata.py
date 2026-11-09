@@ -115,6 +115,17 @@ def test_xenium_ranger_to_anndata_shape_and_spatial(tmp_path: Path):
 
 
 def test_xenium_ranger_to_anndata_missing_bundle_fails_loud(tmp_path: Path):
+    # Match the skip-guard pattern used by the three sibling tests in
+    # this file. The stage body does `import scanpy` BEFORE validating
+    # the `xenium_ranger_dir=None` argument, so in envs without scanpy
+    # the ModuleNotFoundError would mask the SystemExit the test is
+    # actually asserting on — skip cleanly rather than fail.
+    try:
+        import anndata  # noqa: F401
+        import scanpy  # noqa: F401
+    except ImportError as e:
+        pytest.skip(f"missing dep: {e.name}")
+
     from xenium_preprocess.stages.xenium_ranger_to_anndata import (
         run_xenium_ranger_to_anndata,
     )
