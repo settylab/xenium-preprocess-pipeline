@@ -274,9 +274,18 @@ def test_celltype_writeback_v0_2_9_folds_rctd_results(tmp_path, monkeypatch):
                       tmp_csv=None):
         return synth
 
-    import rctd_split.stages.celltype_writeback as _cw
-    monkeypatch.setattr(_cw, "extract_rctd_results_df", _fake_extract)
-    # Also patch the underlying module in case helper calls it directly.
+    # `_fold_rctd_results_onto_query` imports `extract_rctd_results_df`
+    # LAZILY at function-body scope via
+    # `from rctd_split._internal.rctd_results import extract_rctd_results_df`.
+    # The lazy import resolves the symbol out of the
+    # `rctd_split._internal.rctd_results` module at CALL time, so patching
+    # THAT module replaces the function the lazy import will grab.
+    # Prior attempt to also patch
+    # `rctd_split.stages.celltype_writeback.extract_rctd_results_df`
+    # errored at setup because the name isn't bound at the stage-module
+    # level (monkeypatch.setattr raises AttributeError by default when the
+    # attribute is missing, taking down the whole test before the real
+    # patch ran). Skeptic pass on branch v0.2.9 (depth 1) caught this.
     import rctd_split._internal.rctd_results as _rr
     monkeypatch.setattr(_rr, "extract_rctd_results_df", _fake_extract)
 
