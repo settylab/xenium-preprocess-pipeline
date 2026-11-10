@@ -459,6 +459,102 @@ pytest scripts/tests
 
 ## Release notes
 
+### v0.2.9 — 2026-11-09
+
+Persist RCTD results + per-stage filter provenance on the pre-SPLIT
+`xenium_ranger.h5ad` so analysts can trace every cell through the
+pipeline without the pruned `intermediate/` directory. Prior to
+v0.2.9 only the NN-mapped `celltype` + `celltype_source_distance`
+columns made it back to `xenium_ranger.h5ad` on xenium_ranger-source
+runs; `writeback_to_raw`'s proseg-side equivalent had no analogous
+target because there's no `proseg_raw.h5ad` to carry the provenance
+onto.
+
+**New obs columns on `xenium_ranger.h5ad`** (all additive — the
+v0.2.8 columns and shape are preserved byte-for-byte):
+
+- 11 `rctd_*` payload columns from `rctd_results.rds` after
+  `SPLIT::run_post_process_RCTD` (`rctd_spot_class`,
+  `rctd_first_type`, `rctd_second_type`, `rctd_first_class`,
+  `rctd_second_class`, `rctd_min_score`, `rctd_singlet_score`,
+  `rctd_conv_all`, `rctd_conv_doublet`, `rctd_w1_larger_w2`,
+  `rctd_same_class`). Empty string / `NaN` on cells without a
+  result.
+- `rctd_purification_status` sourced from the purified h5ad's
+  `obs['purification_status']` (populated by `SPLIT::purify`,
+  preserved through `mtx_to_h5ad` + `postprocess`). Empty string
+  on cells not in the purified h5ad. The authoritative source is
+  the purified h5ad, not `rctd_results.rds` (the SPLIT-assigned
+  value only lands on `results_df` after `SPLIT::purify`, not
+  `SPLIT::run_post_process_RCTD`).
+- 3 provenance booleans tracking the pipeline flow:
+    - `in_rctd_input`    — cell was SUBMITTED to RCTD (= in
+      `split_prep/<S>*_barcodes.tsv.gz`). On the reference
+      `MH8_2_BR_2453` xenium_ranger-source run this gives
+      299,585/322,690 cells after `split_prep.qc_filter(min_counts=10)`.
+    - `has_rctd_result` — cell has a row in `rctd_results_df`. On
+      the same run this gives 255,661 cells; the 43,924-cell gap vs
+      `in_rctd_input` is spacexr's own cell gate — `UMI_min=10`
+      applied AFTER the 5,001 → 4,837 common-gene restriction
+      (cells with ≥10 counts across all Xenium genes but < 10
+      across the RCTD-reference overlap are dropped by `create.RCTD`).
+    - `in_purified`     — cell is in the purified h5ad after
+      `SPLIT::purify` + `postprocess.qc_filter`. 186,080 cells on
+      the reference run.
+
+Invariants: `has_rctd_result ⊆ in_rctd_input`, `in_purified ⊆
+in_rctd_input`.
+
+**Pipeline integration**
+
+- The augmented `celltype_writeback` stage autodiscovers the
+  `split_prep/<S>*_barcodes.tsv.gz` file under the run's
+  `split_prep/` directory (unique match required; 0 or >1 matches
+  → None → `in_rctd_input` falls back to `has_rctd_result` with a
+  WARN log line).
+- New YAML overrides on `celltype_writeback`:
+  `rctd_input_barcodes_path` (explicit barcodes path) and
+  `write_rctd_results_to_xenium_ranger` (opt-out; default `True`).
+- Back-compat: when `rctd_results_rds=None` (either via the opt-out
+  YAML key or an explicit `None`), behavior is byte-identical to
+  v0.2.8 — only the NN-mapped `celltype` + `celltype_source_distance`
+  are written.
+
+**Hotfix for existing finished runs**
+
+For an existing v0.2.8-era run where you want the new provenance
+columns without re-running the 12 h pipeline:
+
+```
+sbatch MH8_2_<sample>_hotfix_v2_part1.sbatch          # see assets/40 on the
+                                                     # internal tracking repo
+```
+
+(Or invoke `scripts/hotfix_rctd_writeback_v2.py` directly.) The
+hotfix backs up the pre-rewrite `xenium_ranger.h5ad` to a sibling
+`.pre-v0.2.9-part1.h5ad.bak` file before overwriting; pass
+`--backup-suffix ''` to skip the backup if you don't want the
+~95 MB sibling.
+
+**Known limitation — `rctd_purification_status` on hotfix runs**
+
+Cells with `has_rctd_result=True` AND `in_purified=False` on a
+hotfix run have LOST their SPLIT-assigned `purification_status`.
+The column is only populated by `SPLIT::purify` on the
+`intermediate/split/unpurified.rds` object, which the terminal
+`qc_report` stage auto-prunes. Fresh pipeline runs starting from
+v0.2.9 preserve the value for every cell.
+
+**Follow-up improvements (deferred)**
+
+- Mirror proseg's 4-boolean provenance (`passed_rctd`,
+  `passed_split_purify`, `filtered_by_purification`,
+  `passed_purification`) on the xr-only path.
+- Collapse the `rctd_` prefix divergence between the proseg
+  writeback (`writeback_to_raw`, unprefixed) and the xr-only
+  writeback (`celltype_writeback`, `rctd_` prefixed) into a single
+  schema — intentional namespacing today, re-visited for v0.3.0.
+
 ### v0.2.8 — 2026-11-09
 
 End-to-end support for xenium_ranger-source runs through all 8 rctd-split
