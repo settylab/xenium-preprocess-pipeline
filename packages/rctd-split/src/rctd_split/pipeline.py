@@ -491,6 +491,19 @@ def run(cfg: dict, stages: list[str], argv: list[str]) -> int:
             ),
             r_lib_paths=cfg.get("r_lib_paths", []) or [],
             rctd_obs_prefix=ct_cfg.get("rctd_obs_prefix", "rctd_"),
+            # v0.2.9 Part 1 (c6755625444): point at the split_prep
+            # barcodes.tsv.gz so `in_rctd_input` picks up the actual
+            # "submitted-to-RCTD" cell set, not what came out of RCTD.
+            # Autodiscover via glob (split_prep's name_suffix lives in
+            # xenium-preprocess config, not this pipeline's). If
+            # neither 0 nor exactly 1 match → None, and celltype_writeback
+            # logs a WARN + falls back to in_rctd_input == has_rctd_result.
+            rctd_input_barcodes_path=(
+                ct_cfg.get("rctd_input_barcodes_path")
+                or _autodiscover_split_prep_barcodes(
+                    output_root, sample_id, run_id,
+                )
+            ),
         )
         banner(f"stage {idx}/{n_stages}: celltype_writeback — "
                f"complete in {time.time()-t0:.1f}s")
@@ -532,3 +545,32 @@ def run(cfg: dict, stages: list[str], argv: list[str]) -> int:
     banner(f"rctd-split done in {time.time()-pipeline_t0:.1f}s "
            f"-> {the_run_dir}/")
     return 0
+
+
+def _autodiscover_split_prep_barcodes(
+    output_root: Path, sample_id: str, run_id: str,
+) -> Path | None:
+    """Return the path to ``split_prep/*_barcodes.tsv.gz`` for the
+    current run when there's exactly one match; otherwise None.
+
+    The ``split_prep`` stage runs in `xenium-preprocess`, with a
+    configurable ``name_suffix`` (default `_lowCountThreshold`; for
+    xenium_ranger runs the operator typically overrides to
+    `_xenium_ranger`). The barcodes file lives at
+    ``<run_dir>/split_prep/<sample_id>{name_suffix}_barcodes.tsv.gz``.
+    Rather than re-derive ``name_suffix`` from xenium-preprocess's
+    config side, glob for any barcode file under split_prep/. If
+    ambiguous (0 or >1 matches), return None → celltype_writeback
+    logs a warning and falls back to the "has_rctd_result" set for
+    ``in_rctd_input`` (which overstates, but is the v0.2.9-prior
+    behavior so there's no regression).
+    """
+    from rctd_split._internal.layout import run_dir
+    run_d = run_dir(output_root, sample_id, run_id)
+    sp = run_d / "split_prep"
+    if not sp.exists():
+        return None
+    matches = sorted(sp.glob(f"{sample_id}*_barcodes.tsv.gz"))
+    if len(matches) == 1:
+        return matches[0]
+    return None

@@ -19,23 +19,67 @@ direct-cell-id-assign, no ``mark_unassigned`` default (per (request on
 When ``rctd_results_rds`` is non-None (v0.2.9, for the
 xenium_ranger-only case where no ``proseg_unpurified.h5ad`` exists to
 carry the RCTD results onto, settylab/TracyY123-nexus#40), ALSO writes
-these obs columns on xenium_ranger.h5ad:
+these obs columns on xenium_ranger.h5ad.
 
-  RCTD per-cell (``rctd_`` prefix, carries SPLIT post-process cols too):
+The provenance schema (v0.2.9 Part 1, c6755625444 — the
+investigation-grounded split between "submitted to RCTD" and
+"returned a result") tracks every cell through the 7 pipeline
+filter stages, counts verified end-to-end on
+``MH8_2_BR_2453`` v0.3:
+
+  Stage                                          | N cells
+  -----------------------------------------------|---------
+  xenium_ranger_to_anndata                       | 322,690
+  split_prep.qc_filter (min_counts=10)           | 299,585    <- in_rctd_input=True
+  rctd_prep                                      | 299,585
+  rctd_run (spacexr create.RCTD + run.RCTD,      |
+     drops cells with <10 common-gene counts     |
+     after the 5001->4837 gene restriction)      | 255,661    <- has_rctd_result=True
+  split_purify.AddMetaData -> unpurified         | 299,585    (NaN meta for the 43,924 w/o rctd_result)
+  SPLIT::purify (DO_purify_singlets=TRUE)        | 187,836    (purification_status populated here)
+  postprocess qc_filter (min_counts cfg)         | 186,080    <- in_purified=True
+
+Obs columns written on xenium_ranger.h5ad:
+
+  RCTD per-cell (``rctd_`` prefix, 11 cols — sourced from the
+  ``@results$results_df`` of the rctd_results.rds AFTER
+  ``SPLIT::run_post_process_RCTD``):
     ``rctd_spot_class``, ``rctd_first_type``, ``rctd_second_type``,
     ``rctd_first_class``, ``rctd_second_class``, ``rctd_min_score``,
     ``rctd_singlet_score``, ``rctd_conv_all``, ``rctd_conv_doublet``,
-    ``rctd_purification_status``, ``rctd_w1_larger_w2``,
-    ``rctd_same_class`` — the subset of these actually present in the
-    .rds (older runs may lack some SPLIT-emitted columns).
+    ``rctd_w1_larger_w2``, ``rctd_same_class``. Columns absent from
+    the .rds are silently omitted.
 
-  Filter provenance (``in_`` prefix):
-    ``in_rctd_input`` (bool): cell was in RCTD's input set.
-    ``in_purified``   (bool): cell survived all the way through to the
-                              post-postprocess purified h5ad.
+  RCTD purification outcome (``rctd_`` prefix, sourced from the
+  purified h5ad's ``obs['purification_status']`` which was
+  populated by ``SPLIT::purify``):
+    ``rctd_purification_status`` — ``"singlet"`` / etc. for the
+    186,080 purified cells; empty string for every other cell.
+    LIMITATION: cells with has_rctd_result=True but in_purified=False
+    (= 69,581 cells on MH8_2) have LOST ``purification_status``
+    because the ``intermediate/split/unpurified.rds`` that would
+    carry it is auto-pruned by the terminal qc_report stage. The
+    hotfix can't recover this.
 
-Cells NOT in the RCTD results carry empty strings for categorical RCTD
-columns, NaN for numerics, False for in_rctd_input / in_purified.
+  Filter provenance (``in_`` prefix, 3 bools):
+    ``in_rctd_input``    : cell was SUBMITTED to RCTD (i.e. in the
+                           test_object.rds / split_prep barcodes).
+                           Sourced from split_prep barcodes.tsv.gz
+                           when ``rctd_input_barcodes_path`` is
+                           supplied. Fall-back when not supplied:
+                           equals ``has_rctd_result`` (OVERSTATES
+                           by the spacexr-dropped cells — see Part 2
+                           of settylab/TracyY123-nexus#40 c6755625444).
+    ``has_rctd_result``  : cell has a row in rctd_results_df (=
+                           what v0.2.9-prior called in_rctd_input).
+    ``in_purified``      : cell survived SPLIT::purify + postprocess
+                           qc_filter.
+
+Fill behavior on cells NOT in the rctd_input set / NOT in the
+results_df:
+  - categorical rctd_* cols -> empty string
+  - numeric    rctd_* cols -> NaN
+  - in_* bools -> False
 
 Idempotent: re-running overwrites the columns in place (never appends
 suffixes, never grows adata dims).
@@ -76,6 +120,7 @@ def run_celltype_writeback(
     rscript_bin: str = "Rscript",
     r_lib_paths: list[str] | list[Path] | None = None,
     rctd_obs_prefix: str = "rctd_",
+    rctd_input_barcodes_path: Path | None = None,
 ) -> Path:
     """NN-map celltype from purified.h5ad onto xenium_ranger.h5ad.
 
@@ -204,6 +249,7 @@ def run_celltype_writeback(
             rscript_bin=rscript_bin,
             r_lib_paths=r_lib_paths,
             rctd_obs_prefix=rctd_obs_prefix,
+            rctd_input_barcodes_path=rctd_input_barcodes_path,
         )
 
     log(f"[celltype_writeback] writing augmented {xenium_ranger_h5ad}")
@@ -231,16 +277,23 @@ def _fold_rctd_results_onto_query(
     rscript_bin: str,
     r_lib_paths,
     rctd_obs_prefix: str,
+    rctd_input_barcodes_path: Path | None = None,
 ) -> None:
-    """Fold per-cell RCTD results + in_rctd_input / in_purified bool
-    provenance columns onto query.obs IN PLACE.
+    """Fold per-cell RCTD results + filter-provenance provenance
+    columns onto query.obs IN PLACE. v0.2.9 Part 1 schema (see the
+    module docstring for the full semantics table + the c6755625444
+    investigation).
 
-    Cells NOT in the RCTD results:
+    Writes 11 ``rctd_*`` payload columns + ``rctd_purification_status``
+    (from the purified h5ad) + 3 provenance booleans:
+        * ``in_rctd_input``   — cell submitted to RCTD
+        * ``has_rctd_result`` — cell has a row in rctd_results_df
+        * ``in_purified``     — cell in the purified h5ad
+
+    Fill behavior (same as v0.2.9-prior):
         - categorical rctd_ cols -> "" (empty string)
         - numeric    rctd_ cols -> NaN
-        - in_rctd_input -> False
-    Cells NOT in the purified reference h5ad:
-        - in_purified -> False
+        - in_* bools            -> False
     """
     import anndata as ad
     import numpy as np
@@ -274,25 +327,94 @@ def _fold_rctd_results_onto_query(
             filled = series.astype(object).fillna("").astype(str)
             query.obs[f"{rctd_obs_prefix}{col}"] = filled.to_numpy()
 
-    n_in_rctd = int(rctd_df.index.isin(query_ids).sum())
+    n_in_rctd_df = int(rctd_df.index.isin(query_ids).sum())
     log(f"[celltype_writeback]   wrote {len(rctd_df.columns)} "
         f"{rctd_obs_prefix}* columns onto query.obs "
-        f"(n_cells_with_rctd={n_in_rctd}/{query.n_obs})")
+        f"(n_cells_with_rctd_result={n_in_rctd_df}/{query.n_obs})")
 
-    # in_rctd_input: cell is in the RCTD input set (i.e. has a row in
-    # rctd_results_df).
-    # `query_ids` is a pandas Index (from obs_names.astype(str)); its
-    # `.isin(...)` returns a plain numpy bool array, which assigns
-    # directly to adata.obs — no `.to_numpy()` needed.
-    query.obs["in_rctd_input"] = query_ids.isin(rctd_df.index)
+    # ----- provenance booleans -------------------------------------
+    # v0.2.9 Part 1 (c6755625444): the semantic split between
+    # "submitted to RCTD" (test_object universe, pre-spacexr-drops)
+    # and "returned a result" (rctd_results_df, post-spacexr-drops).
+    # See the module docstring's end-to-end counts table.
+
+    # has_rctd_result: cell has a row in rctd_results_df.
+    # On MH8_2 v0.3 this = 255,661.
+    # `query_ids.isin(...)` returns a plain numpy bool array — assigns
+    # directly to adata.obs, no `.to_numpy()` needed.
+    query.obs["has_rctd_result"] = query_ids.isin(rctd_df.index)
+
+    # in_rctd_input: cell was SUBMITTED to RCTD = cell_id in
+    # split_prep barcodes.tsv.gz (= test_object.rds barcodes).
+    # On MH8_2 v0.3 this = 299,585. Fall-back when the caller didn't
+    # supply the path: equal has_rctd_result (OVERSTATES by the
+    # spacexr-dropped cells on xr-only runs; is correct on
+    # all-cells-reach-RCTD runs).
+    if rctd_input_barcodes_path is not None:
+        rctd_input_barcodes_path = Path(rctd_input_barcodes_path)
+        log(f"[celltype_writeback]   loading rctd input barcodes "
+            f"{rctd_input_barcodes_path}")
+        rctd_input_ids = _read_barcodes_tsv(rctd_input_barcodes_path)
+        query.obs["in_rctd_input"] = query_ids.isin(rctd_input_ids)
+    else:
+        log("[celltype_writeback]   WARN: no rctd_input_barcodes_path "
+            "supplied; in_rctd_input falls back to has_rctd_result "
+            "(see TracyY123-nexus#40 c6755625444 — this OVERSTATES "
+            "by the spacexr-dropped cells on xenium_ranger runs).")
+        query.obs["in_rctd_input"] = query.obs["has_rctd_result"]
 
     # in_purified: cell survived SPLIT::purify + postprocess qc_filter
-    # (i.e. is in the purified reference h5ad).
-    log(f"[celltype_writeback]   loading purified index {reference_h5ad}")
-    pur_ids = set(ad.read_h5ad(reference_h5ad, backed="r").obs_names.astype(str))
-    query.obs["in_purified"] = np.asarray([cid in pur_ids for cid in query_ids])
+    # (i.e. is in the purified reference h5ad). On MH8_2 v0.3 this
+    # = 186,080.
+    log(f"[celltype_writeback]   loading purified h5ad {reference_h5ad}")
+    pur_adata = ad.read_h5ad(reference_h5ad, backed="r")
+    pur_ids_set = set(pur_adata.obs_names.astype(str))
+    query.obs["in_purified"] = np.asarray([cid in pur_ids_set for cid in query_ids])
 
-    log(f"[celltype_writeback]   in_rctd_input=True : "
+    # rctd_purification_status: sourced from purified.h5ad's obs
+    # (populated by SPLIT::purify, preserved through mtx_to_h5ad +
+    # postprocess). Only the 186,080 purified cells carry a value;
+    # every other cell gets an empty string. LIMITATION, documented
+    # in the module docstring + the v0.2.9 release notes: cells with
+    # has_rctd_result=True but in_purified=False have LOST
+    # purification_status (intermediate/split/unpurified.rds is
+    # pruned by the terminal qc_report stage), so the hotfix can't
+    # recover it.
+    pstatus_col_name = f"{rctd_obs_prefix}purification_status"
+    if "purification_status" in pur_adata.obs.columns:
+        pstatus_series = pd.Series(
+            pur_adata.obs["purification_status"].astype(str).to_numpy(),
+            index=pur_adata.obs_names.astype(str),
+        )
+        joined_pstatus = (
+            pstatus_series.reindex(query_ids)
+            .astype(object).fillna("").astype(str)
+        )
+        query.obs[pstatus_col_name] = joined_pstatus.to_numpy()
+        log(f"[celltype_writeback]   wrote {pstatus_col_name} from purified "
+            f"h5ad's obs['purification_status'] "
+            f"(n_non_empty={int((joined_pstatus != '').sum())}/{query.n_obs})")
+    else:
+        log(f"[celltype_writeback]   purified h5ad has no "
+            f"obs['purification_status']; skipping {pstatus_col_name}")
+
+    log(f"[celltype_writeback]   in_rctd_input=True   : "
         f"{int(query.obs['in_rctd_input'].sum())}/{query.n_obs}")
-    log(f"[celltype_writeback]   in_purified=True   : "
+    log(f"[celltype_writeback]   has_rctd_result=True : "
+        f"{int(query.obs['has_rctd_result'].sum())}/{query.n_obs}")
+    log(f"[celltype_writeback]   in_purified=True     : "
         f"{int(query.obs['in_purified'].sum())}/{query.n_obs}")
+
+
+def _read_barcodes_tsv(path: Path) -> set[str]:
+    """Read a 10x-style ``barcodes.tsv[.gz]`` → set of cell_id strings.
+
+    One cell_id per line; blank lines ignored. Gzip is picked by
+    suffix.
+    """
+    import gzip
+
+    path = Path(path)
+    opener = gzip.open if path.suffix == ".gz" else open
+    with opener(path, "rt") as f:
+        return {line.strip() for line in f if line.strip()}
